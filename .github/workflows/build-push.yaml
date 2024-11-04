@@ -1,0 +1,67 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # - name: Build and push base image
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: ./src/BaseImage
+      #     file: ./src/BaseImage/Dockerfile
+      #     push: true
+      #     tags: ghcr.io/${{ github.repository_owner }}/base:latest
+
+      # - name: Build and push worker image
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: ./src/Worker
+      #     file: ./src/Worker/Dockerfile
+      #     push: true
+      #     tags: ghcr.io/${{ github.repository_owner }}/worker:latest
+
+      # - name: Build and push data processor image
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: ./src/DataProcessor
+      #     file: ./src/DataProcessor/Dockerfile
+      #     push: true
+      #     tags: ghcr.io/${{ github.repository_owner }}/data_processor:latest
+
+      # - name: Build and push job processor image
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: ./src/JobProcessor
+      #     file: ./src/JobProcessor/Dockerfile
+      #     push: true
+      #     tags: ghcr.io/${{ github.repository_owner }}/job_processor:latest
+
+      # - name: Build and push logger image
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: ./src/Logger
+      #     file: ./src/Logger/Dockerfile
+      #     push: true
+      #     tags: ghcr.io/${{ github.repository_owner }}/logger:latest
