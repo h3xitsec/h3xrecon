@@ -39,15 +39,15 @@ jobs:
       - name: Build and push first Docker image
         run: |
           docker build \
-            --cache-from ${{ github.repository_owner }}/h3xrecon_base:cache \
-            --tag ${{ github.repository_owner }}/h3xrecon_base:latest \
+            --cache-from ghcr.io/${{ github.repository_owner }}/h3xrecon_base:cache \
+            --tag ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest \
             build/BaseImage
-          docker push ${{ github.repository_owner }}/h3xrecon_base:latest
+          docker push ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest
 
       - name: Update cache for first build-push
         run: |
-          docker tag ${{ github.repository_owner }}/h3xrecon_base:latest ${{ github.repository_owner }}/h3xrecon_base:cache
-          docker push ${{ github.repository_owner }}/h3xrecon_base:cache
+          docker tag ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest ghcr.io/${{ github.repository_owner }}/h3xrecon_base:cache
+          docker push ghcr.io/${{ github.repository_owner }}/h3xrecon_base:cache
       
       # - name: Build and push base image
       #   uses: docker/build-push-action@v4
