@@ -1,0 +1,106 @@
+services:
+  redis:
+    image: redis:6.2-alpine
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --protected-mode no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "6379:6379"  # Updated for local mode
+
+  pgsql:
+    image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
+    environment:
+      - POSTGRES_PASSWORD=
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_db_password
+      - POSTGRES_USER=h3xrecon
+      - POSTGRES_DB=h3xrecon
+    secrets:
+      - postgresql_db_password
+    volumes:
+      - pgsql_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"  # Updated for local mode
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U h3xrecon -d h3xrecon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  nats:
+    image: ghcr.io/h3xitsec/h3xrecon_nats:latest
+    volumes:
+      - nats_data:/data
+    ports:
+      - "4222:4222"  # Updated for local mode
+    healthcheck:
+      test: ["CMD-SHELL", "nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_EXECUTE' && nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_OUTPUT' && nats stream ls --server=nats://localhost:4222 | grep -q 'RECON_DATA'"]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+
+  logger:
+    image: ghcr.io/h3xitsec/h3xrecon_logger:latest
+    env_file: .env
+    environment:
+      - LOGURU_LEVEL=INFO
+    secrets:
+      - postgresql_db_password
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  job_processor:
+    image: ghcr.io/h3xitsec/h3xrecon_jobprocessor:latest
+    env_file: .env
+    environment:
+      - LOGURU_LEVEL=INFO
+    secrets:
+      - postgresql_db_password
+    depends_on:
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  data_processor:
+    image: ghcr.io/h3xitsec/h3xrecon_dataprocessor:latest
+    env_file: .env
+    environment:
+      - LOGURU_LEVEL=INFO
+    secrets:
+      - postgresql_db_password
+    depends_on:
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: ghcr.io/h3xitsec/h3xrecon_worker:latest
+    env_file: .env
+    environment:
+      - LOGURU_LEVEL=INFO
+    secrets:
+      - postgresql_db_password
+    depends_on:
+      nats:
+        condition: service_healthy
+
+volumes:
+  pgsql_data:
+  redis_data:
+  nats_data:
+  tailscale_state:
+
+secrets:
+  postgresql_db_password:
+    environment: H3XRECON_DB_PASS

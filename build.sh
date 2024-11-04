@@ -12,6 +12,8 @@ echo "------------------------------------"
 sudo rm -rf build/*
 mkdir -p ./build
 
+cp src/docker-compose.yaml ./build/
+
 cp -r src/BaseImage ./build/
 cp -r src/Worker ./build/
 cp -r src/DatabaseManager build/Worker/
@@ -39,6 +41,13 @@ echo " Staging build directory completed  "
 echo "------------------------------------"
 
 if [ -z "$GITHUB_ACTIONS" ]; then
+    echo "===================================="
+    echo "      Setup for local dev           "
+    echo "===================================="
+
+    cp src/docker-compose.local.yaml build/
+    cp .env build/
+
     echo "===================================="
     echo "      Building docker images        "
     echo "===================================="

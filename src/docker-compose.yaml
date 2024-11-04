@@ -137,4 +137,4 @@ volumes:
 
 secrets:
   postgresql_db_password:
-    file: ./secrets/postgresql_db_password.txt
+    environment: H3XRECON_DB_PASS
