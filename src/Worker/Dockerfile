@@ -4,7 +4,7 @@ ENV PATH="$PATH:/root/go/bin:/root/.pdtm/go/bin:/usr/lib/go-1.15/bin"
 
 RUN apt-get update && apt-get install -y \
     git \
-    golang-1.15 \
+    golang-go \
     jq \
     prips \
     nmap \
