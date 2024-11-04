@@ -244,38 +244,14 @@ $$;
 
 -- Insert the program 'h3xit'
 INSERT INTO programs (name) VALUES ('h3xit') ON CONFLICT (name) DO NOTHING;
-INSERT INTO programs (name) VALUES ('desjardins') ON CONFLICT (name) DO NOTHING;
 INSERT INTO programs (name) VALUES ('test') ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO program_cidrs (program_id, cidr) VALUES 
-((SELECT id FROM programs WHERE name = 'desjardins'), '142.195.0.0/16');
+
 
 -- Insert the scope regexes for 'h3xit
 INSERT INTO program_scopes (program_id, regex) VALUES 
 ((SELECT id FROM programs WHERE name = 'h3xit'), '(.*\.)?h3x\.it$'),
 ((SELECT id FROM programs WHERE name = 'h3xit'), '(.*\.)?h3xit\.io$'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*desjardins.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*dsf-dfs.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*duproprio.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*disnat.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*bonidollar.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*bonusdollars.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*lapersonnelle.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*desjardinsbank.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*fondsdesjardins.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*desjardinsinsurance.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*desjardinsassurancevie.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*desjardinsgeneralinsurances.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*desjardinsassurancesgenerales.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*duproprio.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*hexavest.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*sfl.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*dfsi.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*investissementdesjardins.*'),
-((SELECT id FROM programs WHERE name = 'desjardins'), '.*sflplacement.*'),
--- ((SELECT id FROM programs WHERE name = 'desjardins'), '(.*\.)?desjardins\.com$'),
--- ((SELECT id FROM programs WHERE name = 'desjardins'), '(.*\.)?dsf-dfs\.com$'),
--- ((SELECT id FROM programs WHERE name = 'desjardins'), '(.*\.)?duproprio\.com$'),
 ((SELECT id FROM programs WHERE name = 'test'), '(.*\.)?test\.com$'),
 ((SELECT id FROM programs WHERE name = 'test'), '(.*\.)?example\.com$'),
 ((SELECT id FROM programs WHERE name = 'test'), '(.*\.)?example\.net$');

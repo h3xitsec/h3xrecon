@@ -56,7 +56,7 @@ services:
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_db_password
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
-    image: 127.0.0.1:5000/pgsql:latest
+    image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
     secrets:
       - postgresql_db_password
     volumes:
@@ -80,7 +80,7 @@ services:
           - node.labels.h3xrecon_role == processor
 
   nats:
-    image: 127.0.0.1:5000/nats:latest
+    image: ghcr.io/h3xitsec/h3xrecon_nats:latest
     volumes:
       - nats_data:/data
       - ${PWD}/Processor/nats/init.sh:/init.sh
@@ -101,11 +101,9 @@ services:
   
   logger:
     env_file: .env
-    image: 127.0.0.1:5000/logger:latest
+    image: ghcr.io/h3xitsec/h3xrecon_logger:latest
     secrets:
       - postgresql_db_password
-    volumes:
-      - ${PWD}/Processor/Logger:/app
     depends_on:
     - nats:service_healthy
     - pgsql:service_healthy
@@ -118,12 +116,9 @@ services:
   
   job_processor:
     env_file: .env
-    image: 127.0.0.1:5000/job_processor:latest
+    image: ghcr.io/h3xitsec/h3xrecon_jobprocessor:latest
     secrets:
       - postgresql_db_password
-    volumes:
-      - ${PWD}/Processor/JobProcessor:/app/JobProcessor
-      - ${PWD}/Processor/QueueManager:/app/QueueManager
     depends_on:
     - tailscale:service_healthy
     - nats:service_healthy
@@ -139,12 +134,9 @@ services:
   
   data_processor:
     env_file: .env
-    image: 127.0.0.1:5000/data_processor:latest
+    image: ghcr.io/h3xitsec/h3xrecon_dataprocessor:latest
     secrets:
       - postgresql_db_password
-    volumes:
-      - ${PWD}/Processor/DataProcessor:/app/DataProcessor
-      - ${PWD}/Processor/QueueManager:/app/QueueManager
     depends_on:
       - tailscale:service_healthy
       - nats:service_healthy
@@ -160,11 +152,7 @@ services:
   
   worker:
     env_file: .env
-    image: 127.0.0.1:5000/worker:latest
-    volumes:
-      - /home/ubuntu/h3xrecon/Worker:/app/Worker
-      - /home/ubuntu/h3xrecon/Worker/QueueManager:/app/QueueManager
-      - /home/ubuntu/h3xrecon/Worker/DatabaseManager:/app/DatabaseManager
+    image: ghcr.io/h3xitsec/h3xrecon_worker:latest
     depends_on:
     - tailscale:service_healthy
     environment:

@@ -11,6 +11,20 @@ cp -r src/DatabaseManager build/Worker/
 cp -r src/QueueManager build/Worker/
 cp src/requirements_workers.txt build/Worker/requirements.txt
 
+cp -r src/DataProcessor ./build/
+cp -r src/DatabaseManager build/DataProcessor/
+cp -r src/QueueManager build/DataProcessor/
+cp src/requirements_processor.txt build/Worker/requirements.txt
+
+cp -r src/JobProcessor ./build/
+cp -r src/DatabaseManager build/JobProcessor/
+cp -r src/QueueManager build/JobProcessor/
+cp src/requirements_processor.txt build/Worker/requirements.txt
+
+
+cp -r src/nats build/nats
+cp -r src/pgsql build/pgsql
+
 #docker buildx build --file ./src/Worker/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_worker:latest ./src/Worker
 
 

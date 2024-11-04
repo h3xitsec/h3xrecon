@@ -9,6 +9,7 @@ secrets/
 build/
 vault.yaml
 tailscale_vault.yaml
+dev/
 *.key
 *.pub
 # Byte-compiled / optimized / DLL files
