@@ -1,8 +1,8 @@
-FROM 127.0.0.1:5000/base:latest
+FROM ghcr.io/h3xitsec/h3xrecon_base:latest
 
-COPY ./DataProcessor /app/DataProcessor
+COPY . /app
 COPY ./QueueManager /app/QueueManager
 
 ENV NAME=DataProcessor
 
-CMD ["python", "./DataProcessor/start_data_processor.py"]
+CMD ["python", "start_data_processor.py"]

@@ -10,8 +10,8 @@ RUN wget https://github.com/nats-io/natscli/releases/download/v0.1.5/nats-0.1.5-
     && rm -rf nats-0.1.5-linux-amd64*
 
 # Copy scripts
-COPY init.sh /init.sh
-COPY entrypoint.sh /entrypoint.sh
+COPY ./init.sh /init.sh
+COPY ./entrypoint.sh /entrypoint.sh
 RUN chmod +x /init.sh /entrypoint.sh
 
 CMD ["/entrypoint.sh"]

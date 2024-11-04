@@ -12,4 +12,10 @@ COPY requirements.txt /app/requirements.txt
 
 ENV PYTHONPATH="/app"
 
-RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org --no-cache-dir -r requirements.txt
+RUN pip install \
+        --upgrade \
+        --trusted-host pypi.org \
+        --trusted-host pypi.python.org \
+        --trusted-host files.pythonhosted.org \
+        --no-cache-dir \
+        -r requirements.txt

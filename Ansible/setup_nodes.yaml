@@ -48,11 +48,11 @@
       path: "{{ h3xrecon_target_directory }}/"
       state: absent
 
-  - name: Sync codebase
-    ansible.builtin.synchronize:
-      src: "{{ h3xrecon_source_directory }}"
-      dest: "{{ h3xrecon_target_directory }}"
-      rsync_opts: '--exclude=.git --exclude="**/__pycache__/*" --exclude=venv'
+  # - name: Sync codebase
+  #   ansible.builtin.synchronize:
+  #     src: "{{ h3xrecon_source_directory }}"
+  #     dest: "{{ h3xrecon_target_directory }}"
+  #     rsync_opts: '--exclude=.git --exclude="**/__pycache__/*" --exclude=venv'
 
   - name: Setup Python Virtual Environment
     ansible.builtin.pip:
@@ -67,9 +67,9 @@
       groups: docker
       append: yes
   
-  - name: Enable arm64 image building
-    become: true
-    ansible.builtin.shell: docker run --privileged --rm tonistiigi/binfmt --install all
+  # - name: Enable arm64 image building
+  #   become: true
+  #   ansible.builtin.shell: docker run --privileged --rm tonistiigi/binfmt --install all
 
-  - name: Build Images
-    ansible.builtin.include_tasks: tasks/build_container_images.yaml
+  # - name: Build Images
+  #   ansible.builtin.include_tasks: tasks/build_container_images.yaml
