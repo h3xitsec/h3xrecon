@@ -4,15 +4,18 @@ echo "Building h3xrecon"
 
 sudo rm -rf build/*
 
+pwd
+ls -la .
 cp -r src/BaseImage build/
-
+ls -la ./build
 cp -r src/Worker build/
+ls -la ./build/Worker
 cp -r src/DatabaseManager build/Worker/
 cp -r src/QueueManager build/Worker/
 cp src/requirements_workers.txt build/Worker/requirements.txt
 
 echo "Directory tree"
-find . | sed -e "s/[^-][^\/]*\//  |/g" -e "s/|\([^ ]\)/|-\1/"
+# find . | sed -e "s/[^-][^\/]*\//  |/g" -e "s/|\([^ ]\)/|-\1/"
 
 # cp src/docker-compose_swarm.yaml build/docker-compose.yaml
 # cp src/requirements_node.txt build/requirements.txt
