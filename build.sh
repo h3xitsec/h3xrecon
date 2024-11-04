@@ -14,13 +14,18 @@ cp src/requirements_workers.txt build/Worker/requirements.txt
 cp -r src/DataProcessor ./build/
 cp -r src/DatabaseManager build/DataProcessor/
 cp -r src/QueueManager build/DataProcessor/
-cp src/requirements_processor.txt build/Worker/requirements.txt
+cp src/requirements_processor.txt build/DataProcessor/requirements.txt
 
 cp -r src/JobProcessor ./build/
 cp -r src/DatabaseManager build/JobProcessor/
 cp -r src/QueueManager build/JobProcessor/
-cp src/requirements_processor.txt build/Worker/requirements.txt
+cp src/requirements_processor.txt build/JobProcessor/requirements.txt
 
+
+cp -r src/Logger ./build/
+cp -r src/DatabaseManager build/Logger/
+cp -r src/QueueManager build/Logger/
+cp src/requirements_processor.txt build/Logger/requirements.txt
 
 cp -r src/nats build/nats
 cp -r src/pgsql build/pgsql
