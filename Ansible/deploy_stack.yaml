@@ -1,0 +1,23 @@
+- name: Start h3xrecon stack
+  hosts: processor
+  vars_files:
+    - vault.yaml
+  tasks:
+    - delegate_to: localhost
+      ansible.builtin.copy:
+        dest: /tmp/h3xrecon_processor.key
+        content: "{{ PROCESSOR_PRIVATE_KEY }}"
+        mode: 0600
+    - name: Deploy Docker stack
+      delegate_to: localhost
+      community.docker.docker_stack:
+        state: present
+        name: h3xrecon
+        compose:
+          - ../deploy/docker-compose.yaml
+      environment:
+        DOCKER_HOST: ssh://{{ ansible_host }}
+    - delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/h3xrecon_processor.key
+        state: absent

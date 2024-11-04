@@ -246,8 +246,6 @@ $$;
 INSERT INTO programs (name) VALUES ('h3xit') ON CONFLICT (name) DO NOTHING;
 INSERT INTO programs (name) VALUES ('test') ON CONFLICT (name) DO NOTHING;
 
-
-
 -- Insert the scope regexes for 'h3xit
 INSERT INTO program_scopes (program_id, regex) VALUES 
 ((SELECT id FROM programs WHERE name = 'h3xit'), '(.*\.)?h3x\.it$'),

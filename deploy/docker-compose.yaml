@@ -1,36 +1,4 @@
 services:
-  # tailscale:
-  #   image: tailscale/tailscale:latest
-  #   environment:
-  #     - TS_AUTH_KEY_FILE=/run/secrets/tailscale_auth_key
-  #     - TS_AUTH_KEY=
-  #     - TS_HOSTNAME=processor
-  #     - TS_STATE_DIR=/var/lib/tailscale
-  #     - TS_EXTRA_ARGS=--reset
-  #     - TS_USERSPACE=false
-  #     - TS_SERVE_CONFIG=./serve.yaml
-  #     - TS_SERVE_PORT_RANGES=4222,5432,6379
-  #   volumes:
-  #     - tailscale_state:/var/lib/tailscale
-  #     - /dev/net/tun:/dev/net/tun
-  #     - ./tailscale/serve.yaml:/var/lib/tailscale/serve.yaml
-  #     - ./tailscale/entrypoint.sh:/entrypoint.sh
-  #   cap_add:
-  #     - net_admin
-  #     - sys_module
-  #   secrets:
-  #     - tailscale_auth_key
-  #   restart: unless-stopped
-  #   entrypoint: ["/bin/sh", "/entrypoint.sh"]
-  #   # logging:
-  #   #   driver: "none"
-  #   privileged: true
-  #   healthcheck:
-  #     test: ["CMD", "tailscale", "status"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 3
-
   redis:
     image: redis:6.2-alpine
     volumes:
@@ -106,7 +74,7 @@ services:
     - nats:service_healthy
     - pgsql:service_healthy
     environment:
-      - LOGURU_LEVEL=DEBUG
+      - LOGURU_LEVEL=INFO
     deploy:
       placement:
         constraints:
@@ -122,7 +90,7 @@ services:
     - nats:service_healthy
     - redis:service_healthy
     environment:
-      - LOGURU_LEVEL=DEBUG
+      - LOGURU_LEVEL=INFO
     deploy:
       mode: replicated
       replicas: 1
@@ -140,7 +108,7 @@ services:
       - nats:service_healthy
       - redis:service_healthy
     environment:
-      - LOGURU_LEVEL=DEBUG
+      - LOGURU_LEVEL=INFO
     deploy:
       mode: replicated
       replicas: 1
@@ -154,7 +122,7 @@ services:
     depends_on:
     - tailscale:service_healthy
     environment:
-      - LOGURU_LEVEL=DEBUG
+      - LOGURU_LEVEL=INFO
     secrets:
       - postgresql_db_password
     deploy:
@@ -171,7 +139,5 @@ volumes:
   tailscale_state: {}
 
 secrets:
-  tailscale_auth_key:
-    file: ./secrets/tailscale_auth_key_processor.txt
   postgresql_db_password:
     file: ./secrets/postgresql_db_password.txt

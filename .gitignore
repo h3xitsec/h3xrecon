@@ -10,7 +10,7 @@ build/
 shell.nix
 vault.yaml
 tailscale_vault.yaml
-dev/
+old_keep/
 *.key
 *.pub
 # Byte-compiled / optimized / DLL files
