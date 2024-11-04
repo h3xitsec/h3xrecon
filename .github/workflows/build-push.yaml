@@ -86,3 +86,25 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+      
+      - name: Build and push nats image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/nats
+          file: ./build/nats/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_nats:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+      
+      - name: Build and push pgsql image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/pgsql
+          file: ./build/pgsql/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64

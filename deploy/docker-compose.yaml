@@ -61,7 +61,6 @@ services:
       - postgresql_db_password
     volumes:
       - pgsql_data:/var/lib/postgresql/data
-      - ${PWD}/Processor/pgsql/psql_dump.sql:/docker-entrypoint-initdb.d/psql_dump.sql
     ports:
       - target: 5432
         published: 5432
@@ -83,7 +82,6 @@ services:
     image: ghcr.io/h3xitsec/h3xrecon_nats:latest
     volumes:
       - nats_data:/data
-      - ${PWD}/Processor/nats/init.sh:/init.sh
     ports:
       - target: 4222
         published: 4222
