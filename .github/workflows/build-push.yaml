@@ -41,7 +41,7 @@ jobs:
           docker build \
             --cache-from ${{ github.repository_owner }}/h3xrecon_base:cache \
             --tag ${{ github.repository_owner }}/h3xrecon_base:latest \
-            first-image-directory
+            build/BaseImage
           docker push ${{ github.repository_owner }}/h3xrecon_base:latest
 
       - name: Update cache for first build-push
