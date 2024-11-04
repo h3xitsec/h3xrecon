@@ -26,10 +26,7 @@ RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
     cd /opt/ctfr && \
     pip install -r requirements.txt
 
-ENV GOROOT=/usr/lib/go-1.15
-ENV GO111MODULE=on
-
-RUN go get github.com/Josue87/gotator@latest
+RUN go install github.com/Josue87/gotator@latest
 
 COPY . /app
 
