@@ -10,7 +10,7 @@ echo "src content"
 ls -la ./src
 echo ""
 
-cp -r src/BaseImage build/
+cp -r src/BaseImage/ build/
 
 echo "build content"
 ls -la ./build
