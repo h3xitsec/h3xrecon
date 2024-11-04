@@ -30,7 +30,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Run build script
-        run: ./build.sh
+        run: bash build.sh
       
       - name: Build and push base image
         uses: docker/build-push-action@v4
@@ -46,8 +46,8 @@ jobs:
       - name: Build and push worker image
         uses: docker/build-push-action@v4
         with:
-          context: ./src/Worker
-          file: ./src/Worker/Dockerfile
+          context: ./build/Worker
+          file: ./build/Worker/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_worker:latest
           cache-from: type=gha
