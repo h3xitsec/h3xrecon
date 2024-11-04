@@ -1,0 +1,110 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+permissions:
+  packages: write
+  contents: read
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Run build script
+        run: bash build.sh
+      
+      - name: Build and push base image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/BaseImage
+          file: ./build/BaseImage/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/Worker
+          file: ./build/Worker/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_worker:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Build and push data processor image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/DataProcessor
+          file: ./build/DataProcessor/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_dataprocessor:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Build and push job processor image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/JobProcessor
+          file: ./build/JobProcessor/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_jobprocessor:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Build and push logger image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/Logger
+          file: ./build/Logger/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_logger:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+      
+      - name: Build and push nats image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/nats
+          file: ./build/nats/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_nats:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+      
+      - name: Build and push pgsql image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/pgsql
+          file: ./build/pgsql/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64

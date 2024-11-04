@@ -1,0 +1,21 @@
+venv/
+notes.md
+.env
+.psqlpass
+*.log
+env.sh
+.env
+secrets/
+build/
+shell.nix
+vault.yaml
+tailscale_vault.yaml
+old_keep/
+*.key
+*.pub
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# C extensions
+*.so
