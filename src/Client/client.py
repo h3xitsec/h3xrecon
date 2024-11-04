@@ -3,7 +3,7 @@
 """H3XRecon Client
 
 Usage:
-    client.py (domains | ips | urls) [-p <program>]
+    client.py (domains | ips | urls | programs) [-p <program>]
 
 Options:
     -p --program     Program to work on.
@@ -13,7 +13,9 @@ import os
 import sys
 import json
 import re
+import asyncio
 from urllib.parse import urlparse
+from DatabaseManager import DatabaseManager
 from docopt import docopt
 
 VERSION = "0.0.1"
@@ -22,20 +24,23 @@ class H3XReconClient:
     arguments = None
     
     def __init__(self, arguments):
+        self.db = DatabaseManager()
         # Initialize arguments only if properly parsed by docopt
         if arguments:
             self.arguments = arguments
         else:
             raise ValueError("Invalid arguments provided.")
 
-    def run(self):
+    async def run(self):
         # Execute based on parsed arguments
         if self.arguments.get('domains'):
-            print(f'domains  {self.arguments['<program>'][0]}')
+            [print(p) for p in await self.db.list_domains(self.arguments['<program>'])]
         elif self.arguments.get('ips'):
-            print('ips')
+            [print(p) for p in await self.db.list_ips(self.arguments['<program>'])]
         elif self.arguments.get('urls'):
-            print('urls')
+            [print(p) for p in await self.db.list_urls(self.arguments['<program>'])]
+        elif self.arguments.get('programs'):
+            [print(p) for p in await self.db.list_programs()]
         else:
             raise ValueError("No valid argument found in 'domains', 'ips', or 'urls'.")
 
@@ -49,7 +54,7 @@ def main():
         arguments = docopt(__doc__, argv=sys.argv[1:], version=VERSION)
         # Pass parsed arguments to H3XReconClient
         client = H3XReconClient(arguments)
-        client.run()
+        asyncio.run(client.run())
     except Exception as e:
         print('[ERROR] ' + str(e))
             
