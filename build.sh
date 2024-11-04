@@ -10,7 +10,6 @@ cp -r src/Worker build/
 cp -r src/DatabaseManager build/Worker/
 cp -r src/QueueManager build/Worker/
 cp src/requirements_workers.txt build/Worker/requirements.txt
-cp -r secrets build/Worker
 
 # cp src/docker-compose_swarm.yaml build/docker-compose.yaml
 # cp src/requirements_node.txt build/requirements.txt
