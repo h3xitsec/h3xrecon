@@ -10,20 +10,20 @@ echo "src content"
 ls -la ./src
 echo ""
 
-cp -r src/BaseImage/ build/
+cp -r src/BaseImage build/BaseImage
 
 echo "build content"
 ls -la ./build
 echo ""
 
-cp -r src/Worker build/
+cp -r src/Worker build/Worker
 
 echo "build/Worker content"
 ls -la ./build/Worker
 echo ""
 
-cp -r src/DatabaseManager build/Worker/
-cp -r src/QueueManager build/Worker/
+cp -r src/DatabaseManager build/Worker/DatabaseManager
+cp -r src/QueueManager build/Worker/QueueManager
 cp src/requirements_workers.txt build/Worker/requirements.txt
 
 echo "build content"
