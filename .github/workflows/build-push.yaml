@@ -35,7 +35,7 @@ jobs:
           context: ./src/BaseImage
           file: ./src/BaseImage/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/base:latest
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest
 
       # - name: Build and push worker image
       #   uses: docker/build-push-action@v4
@@ -43,7 +43,7 @@ jobs:
       #     context: ./src/Worker
       #     file: ./src/Worker/Dockerfile
       #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/worker:latest
+      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_worker:latest
 
       # - name: Build and push data processor image
       #   uses: docker/build-push-action@v4
@@ -51,7 +51,7 @@ jobs:
       #     context: ./src/DataProcessor
       #     file: ./src/DataProcessor/Dockerfile
       #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/data_processor:latest
+      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_data_processor:latest
 
       # - name: Build and push job processor image
       #   uses: docker/build-push-action@v4
@@ -59,7 +59,7 @@ jobs:
       #     context: ./src/JobProcessor
       #     file: ./src/JobProcessor/Dockerfile
       #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/job_processor:latest
+      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_job_processor:latest
 
       # - name: Build and push logger image
       #   uses: docker/build-push-action@v4
@@ -67,4 +67,4 @@ jobs:
       #     context: ./src/Logger
       #     file: ./src/Logger/Dockerfile
       #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/logger:latest
+      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_logger:latest
