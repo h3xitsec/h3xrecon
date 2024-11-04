@@ -52,11 +52,9 @@ ENV GO111MODULE=on
 
 RUN go get github.com/Josue87/gotator@latest
 
-COPY ./Worker /Worker/app
-COPY ./QueueManager /app/QueueManager
-COPY ./DatabaseManager /app/DatabaseManager
+COPY . /app
 
 ENV NAME=Worker
 
 # Run worker.py when the container launches
-CMD ["python", "Worker/Worker/start_worker.py"]
+CMD ["python", "start_worker.py"]

@@ -28,12 +28,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
+      
+      - name: Run build script
+        run: ./build.sh
+      
       - name: Build and push base image
         uses: docker/build-push-action@v4
         with:
-          context: ./src/BaseImage
-          file: ./src/BaseImage/Dockerfile
+          context: ./build/BaseImage
+          file: ./build/BaseImage/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest
 

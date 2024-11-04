@@ -4,6 +4,14 @@ echo "Building h3xrecon"
 
 sudo rm -rf build/*
 
+cp -r src/BaseImage build/
+
+cp -r src/Worker build/
+cp -r src/DatabaseManager build/Worker/
+cp -r src/QueueManager build/Worker/
+cp src/requirements_workers.txt build/Worker/requirements.txt
+cp -r secrets build/Worker
+
 # cp src/docker-compose_swarm.yaml build/docker-compose.yaml
 # cp src/requirements_node.txt build/requirements.txt
 # cp -r src/BaseImage build/BaseImage
@@ -12,32 +20,32 @@ sudo rm -rf build/*
 # cat .env >> build/.env
 
 
-echo "Building Processor Package"
+# echo "Building Processor Package"
 
-sudo rm -rf build/JobProcessor
-sudo rm -rf build/BaseImage
-sudo rm -rf build/DataProcessor
-sudo rm -rf build/Logger
-sudo rm -rf build/Nats
-sudo rm -rf build/Postgres
+# sudo rm -rf build/JobProcessor
+# sudo rm -rf build/BaseImage
+# sudo rm -rf build/DataProcessor
+# sudo rm -rf build/Logger
+# sudo rm -rf build/Nats
+# sudo rm -rf build/Postgres
 
-mkdir build/BaseImage
-mkdir build/JobProcesor
-mkdir build/DataProcessor
-mkdir build/Logger
-mkdir build/nats
-mkdir build/pgsql
+# mkdir build/BaseImage
+# mkdir build/JobProcesor
+# mkdir build/DataProcessor
+# mkdir build/Logger
+# mkdir build/nats
+# mkdir build/pgsql
 
-mkdir build/DatabaseManager
-mkdir build/QueueManager
+# mkdir build/DatabaseManager
+# mkdir build/QueueManager
 
-## Processor
-# Job Processor
-cp -r src/JobProcessor build/
-cp -r src/DatabaseManager build/JobProcessor/
-cp -r src/QueueManager build/JobProcessor/
-cp -r secrets build/JobProcessor
-cp src/requirements_processor.txt build/JobProcessor/requirements.txt
+# ## Processor
+# # Job Processor
+# cp -r src/JobProcessor build/
+# cp -r src/DatabaseManager build/JobProcessor/
+# cp -r src/QueueManager build/JobProcessor/
+# cp -r secrets build/JobProcessor
+# cp src/requirements_processor.txt build/JobProcessor/requirements.txt
 
 # cp -r src/Logger build/JobProcessor/
 # cp -r src/pgsql build/Processor/
