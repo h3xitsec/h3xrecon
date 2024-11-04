@@ -39,6 +39,7 @@ jobs:
           file: ./build/BaseImage/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest
+          platforms: linux/amd64,linux/arm64
 
       # - name: Build and push worker image
       #   uses: docker/build-push-action@v4
