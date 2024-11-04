@@ -34,7 +34,7 @@ jobs:
       
       - name: Pull cache image for first build-push
         run: |
-          docker pull ${{ github.repository_owner }}/h3xrecon_base:cache || echo "No cache image found for first build-push"
+          docker pull ghcr.io/${{ github.repository_owner }}/h3xrecon_base:cache || echo "No cache image found for first build-push"
 
       - name: Build and push first Docker image
         run: |
