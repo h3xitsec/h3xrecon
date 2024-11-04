@@ -1,7 +1,8 @@
-- name: Start h3xrecon stack
+- name: Remove h3xrecon stack
   hosts: processor
   vars_files:
-    - vault.yaml
+    - vaults/vault.yaml
+  
   tasks:
     - delegate_to: localhost
       ansible.builtin.copy:
@@ -11,7 +12,7 @@
     - name: Deploy Docker stack
       delegate_to: localhost
       community.docker.docker_stack:
-        state: present
+        state: absent
         name: h3xrecon
         compose:
           - ../deploy/docker-compose.yaml

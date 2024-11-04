@@ -12,7 +12,6 @@ services:
     ports:
       - target: 6379
         published: 6379
-        mode: host
     deploy:
       placement:
         constraints:
@@ -32,7 +31,6 @@ services:
     ports:
       - target: 5432
         published: 5432
-        mode: host
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U h3xrecon -d h3xrecon"]
       interval: 10s
@@ -53,7 +51,6 @@ services:
     ports:
       - target: 4222
         published: 4222
-        mode: host
     healthcheck:
       test: nats stream ls --server=nats://localhost:4222 | grep -q "FUNCTION_EXECUTE" && nats stream ls --server=nats://localhost:4222 | grep -q "FUNCTION_OUTPUT" && nats stream ls --server=nats://localhost:4222 | grep -q "RECON_DATA"
       interval: 2s

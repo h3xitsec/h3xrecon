@@ -11,6 +11,7 @@ shell.nix
 vault.yaml
 tailscale_vault.yaml
 old_keep/
+dev_tools/
 *.key
 *.pub
 # Byte-compiled / optimized / DLL files

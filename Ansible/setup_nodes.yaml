@@ -4,13 +4,14 @@
   max_fail_percentage: 0
   
   vars_files:
-  - vault.yaml
+  - vaults/vault.yaml
   
   vars:
     linux_apt_packages:
     - docker.io
     - "{{ h3xrecon_dockercompose_pkg }}"
     - python3-venv
+    - python3-jsondiff
   tasks:
   - ansible.builtin.include_tasks: tasks/test_all_nodes.yaml
 
