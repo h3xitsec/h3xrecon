@@ -54,26 +54,35 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-      # - name: Build and push data processor image
-      #   uses: docker/build-push-action@v4
-      #   with:
-      #     context: ./src/DataProcessor
-      #     file: ./src/DataProcessor/Dockerfile
-      #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_dataprocessor:latest
+      - name: Build and push data processor image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/DataProcessor
+          file: ./build/DataProcessor/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_dataprocessor:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
-      # - name: Build and push job processor image
-      #   uses: docker/build-push-action@v4
-      #   with:
-      #     context: ./src/JobProcessor
-      #     file: ./src/JobProcessor/Dockerfile
-      #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_jobprocessor:latest
+      - name: Build and push job processor image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/JobProcessor
+          file: ./build/JobProcessor/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_jobprocessor:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
-      # - name: Build and push logger image
-      #   uses: docker/build-push-action@v4
-      #   with:
-      #     context: ./src/Logger
-      #     file: ./src/Logger/Dockerfile
-      #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_logger:latest
+      - name: Build and push logger image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./build/Logger
+          file: ./build/Logger/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_logger:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
