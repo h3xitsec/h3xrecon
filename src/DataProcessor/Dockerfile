@@ -1,4 +1,4 @@
-FROM 127.0.0.1:5000/base:latest
+FROM ghcr.io/h3xitsec/h3xrecon_base:latest
 
 COPY ./DataProcessor /app/DataProcessor
 COPY ./QueueManager /app/QueueManager
