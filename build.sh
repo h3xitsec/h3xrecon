@@ -11,7 +11,7 @@ cp -r src/DatabaseManager build/Worker/
 cp -r src/QueueManager build/Worker/
 cp src/requirements_workers.txt build/Worker/requirements.txt
 
-docker buildx build --file ./src/Worker/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_worker:latest ./src/Worker
+#docker buildx build --file ./src/Worker/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_worker:latest ./src/Worker
 
 
 #echo "Directory tree"
