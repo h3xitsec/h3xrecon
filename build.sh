@@ -1,4 +1,4 @@
-#!/etc/profiles/per-user/h3x/bin/bash
+#!/bin/bash
 
 echo "Building h3xrecon"
 
