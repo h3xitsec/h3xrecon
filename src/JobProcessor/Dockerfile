@@ -6,4 +6,4 @@ COPY ./QueueManager /app/QueueManager
 
 ENV NAME=JobProcessor
 
-CMD ["python", "./start_job_processor.py"]
+CMD ["python", "start_job_processor.py"]

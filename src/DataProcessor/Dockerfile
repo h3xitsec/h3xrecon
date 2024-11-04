@@ -6,4 +6,4 @@ COPY ./QueueManager /app/QueueManager
 
 ENV NAME=DataProcessor
 
-CMD ["python", "./DataProcessor/start_data_processor.py"]
+CMD ["python", "start_data_processor.py"]
