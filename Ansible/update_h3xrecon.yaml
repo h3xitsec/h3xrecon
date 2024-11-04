@@ -1,0 +1,19 @@
+- name: Sync Project Packages
+  hosts: processor
+  gather_facts: false
+  max_fail_percentage: 0
+  
+  vars_files:
+  - vault.yaml
+  
+  vars:
+    linux_apt_packages:
+    - docker.io
+    - "{{ h3xrecon_dockercompose_pkg }}"
+    - python3-venv
+  
+  tasks:
+  - ansible.builtin.include_tasks: tasks/test_all_nodes.yaml
+  - ansible.builtin.include_tasks: tasks/build_project.yaml
+  - ansible.builtin.include_tasks: tasks/sync_project.yaml
+  - ansible.builtin.include_tasks: tasks/build_container_images.yaml

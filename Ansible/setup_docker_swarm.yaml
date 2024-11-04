@@ -1,0 +1,151 @@
+- name: Setup Nodes for h3xrecon
+  hosts: all
+  become: true
+  gather_facts: false
+  
+  vars_files:
+  - tailscale_vault.yaml
+  vars:
+    tailscale_subnet_routes: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    docker_swarm_interface: "tailscale0"
+
+  tasks:
+    - ansible.builtin.include_tasks: tasks/test_all_nodes.yaml
+    - name: Install required system packages
+      ansible.builtin.apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+          - python3-setuptools
+        state: present
+        update_cache: yes
+
+    - name: Install Docker and Docker Compose Python libraries
+      ansible.builtin.pip:
+        name: 
+          - docker
+          - docker-compose
+        state: present
+        break_system_packages: true
+
+    - name: Install Tailscale
+      block:
+        - name: Add Tailscale repository key
+          ansible.builtin.apt_key:
+            url: https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg
+            state: present
+
+        - name: Add Tailscale repository
+          ansible.builtin.apt_repository:
+            repo: deb https://pkgs.tailscale.com/stable/ubuntu noble main
+            filename: tailscale
+            state: present
+
+        - name: Install Tailscale package
+          ansible.builtin.apt:
+            name: tailscale
+            state: present
+            update_cache: yes
+
+        - name: Authenticate and enable Tailscale
+          ansible.builtin.command: >
+            tailscale up 
+            --authkey="{{ tailscale_auth_key }}"
+            --advertise-routes="{{ tailscale_subnet_routes }}" 
+            --accept-routes=true
+          no_log: true
+          register: tailscale_result
+          changed_when: false
+
+    - name: Install Docker
+      block:
+        - name: Add Docker official GPG key
+          ansible.builtin.apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+        - name: Add Docker repository
+          ansible.builtin.apt_repository:
+            repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+            filename: docker
+            state: present
+
+        - name: Install Docker packages
+          ansible.builtin.apt:
+            pkg:
+              - docker.io
+            state: present
+            update_cache: yes
+
+        - name: Ensure Docker service is running
+          ansible.builtin.systemd:
+            name: docker
+            state: started
+            enabled: yes
+
+    - name: Configure Docker Swarm
+      block:
+        - name: Get Tailscale IP
+          ansible.builtin.command: tailscale ip -4
+          register: tailscale_ip
+          changed_when: false
+
+        - name: Initialize Swarm on first host
+          community.docker.docker_swarm:
+            state: present
+            advertise_addr: "{{ tailscale_ip.stdout }}"
+          when: inventory_hostname == groups['processor'][0]
+          register: swarm_init
+
+        - name: Get Swarm join token for workers
+          community.docker.docker_swarm_info:
+            nodes: yes
+          register: swarm_info
+          delegate_to: "{{ groups['processor'][0] }}"
+          when: inventory_hostname != groups['processor'][0]
+
+        - name: Join Swarm as worker
+          community.docker.docker_swarm:
+            state: join
+            advertise_addr: "{{ tailscale_ip.stdout }}"
+            join_token: "{{ swarm_info.swarm_facts.JoinTokens.Worker }}"
+            remote_addrs: [ "{{ hostvars[groups['processor'][0]]['tailscale_ip']['stdout'] }}" ]
+          when: inventory_hostname != groups['processor'][0]
+      
+    - name: Tag Swarm Nodes
+      block:
+        - name: Tag processor node
+          ansible.builtin.shell: docker node update --label-add h3xrecon_role=processor {{ groups['processor'][0] }}
+          when: 
+            - inventory_hostname == groups['processor'][0]
+          delegate_to: "{{ groups['processor'][0] }}"
+
+        - name: Tag worker nodes
+          ansible.builtin.shell: docker node update --label-add h3xrecon_role=worker {{ item }}
+          loop: "{{ groups['workers'] }}"
+          run_once: true
+          when: 
+            - inventory_hostname == groups['processor'][0]
+          delegate_to: "{{ groups['processor'][0] }}"
+
+  handlers:
+    - name: Restart Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+
+  post_tasks:
+    - name: Verify Swarm cluster
+      community.docker.docker_swarm_info:
+      register: swarm_status
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Display Swarm cluster info
+      ansible.builtin.debug:
+        var: swarm_status
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true

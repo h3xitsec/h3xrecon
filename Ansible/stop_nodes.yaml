@@ -1,0 +1,3 @@
+---
+- ansible.builtin.import_playbook: "stop_processor.yaml"
+- ansible.builtin.import_playbook: "stop_workers.yaml"

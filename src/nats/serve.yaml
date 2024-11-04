@@ -1,0 +1,15 @@
+# serve.yaml
+funnel: true
+servers:
+  - hostname: processor
+    port: 4222
+    description: NATS Server
+    proto: tcp
+  - hostname: processor
+    port: 6379
+    description: Redis Server
+    proto: tcp
+  - hostname: processor
+    port: 5432
+    description: PostgreSQL Server
+    proto: tcp

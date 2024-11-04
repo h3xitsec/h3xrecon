@@ -1,0 +1,134 @@
+---
+- hosts: all
+  become: yes
+  gather_facts: false
+  
+  tasks:
+    - name: Remove all Docker Swarm services
+      block:
+        - name: List all Swarm services
+          ansible.builtin.command: docker service ls -q
+          register: service_list
+          changed_when: false
+          ignore_errors: true
+          delegate_to: "{{ groups['processor'][0] }}"
+          run_once: true
+
+        - name: Remove all services
+          ansible.builtin.command: "docker service rm {{ item }}"
+          loop: "{{ service_list.stdout_lines }}"
+          when: service_list.stdout_lines | length > 0
+          delegate_to: "{{ groups['processor'][0] }}"
+          run_once: true
+          ignore_errors: true
+
+    - name: Leave Swarm cluster
+      block:
+        - name: Remove worker nodes from Swarm
+          community.docker.docker_swarm:
+            state: absent
+            force: yes
+          when: inventory_hostname not in groups['processor']
+
+        - name: Remove manager node from Swarm
+          community.docker.docker_swarm:
+            state: absent
+            force: yes
+          when: inventory_hostname == groups['processor'][0]
+
+    - name: Clean up Docker Swarm configuration
+      block:
+        - name: Remove Swarm-related files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /etc/docker/swarm
+            - /var/lib/docker/swarm
+            - /var/run/docker/swarm
+          ignore_errors: true
+
+    - name: Reset Docker to non-Swarm state
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+
+    - name: Remove Tailscale
+      block:
+        - name: Stop Tailscale service
+          ansible.builtin.systemd:
+            name: tailscaled
+            state: stopped
+            enabled: no
+          ignore_errors: true
+
+        - name: Logout from Tailscale network
+          ansible.builtin.command: tailscale logout
+          changed_when: false
+          ignore_errors: true
+
+        - name: Remove Tailscale package
+          ansible.builtin.apt:
+            name: tailscale
+            state: absent
+            purge: yes
+
+        - name: Remove Tailscale repository
+          ansible.builtin.file:
+            path: /etc/apt/sources.list.d/tailscale.list
+            state: absent
+
+        - name: Remove Tailscale GPG key
+          ansible.builtin.apt_key:
+            id: 458CA832957F5868
+            state: absent
+          ignore_errors: true
+
+        - name: Remove Tailscale configuration and data
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /var/lib/tailscale
+            - /var/run/tailscale
+            - /etc/tailscale
+          ignore_errors: true
+
+        - name: Remove Tailscale network interface
+          ansible.builtin.command: ip link delete tailscale0
+          ignore_errors: true
+          changed_when: false
+
+    - name: Clean system
+      block:
+        - name: Update package cache after repository removal
+          ansible.builtin.apt:
+            update_cache: yes
+          ignore_errors: true
+
+        - name: Remove leftover dependencies
+          ansible.builtin.apt:
+            autoremove: yes
+          ignore_errors: true
+
+    - name: Verify removal
+      block:
+        - name: Check Docker Swarm status
+          ansible.builtin.command: docker info
+          register: docker_info
+          changed_when: false
+          failed_when: false
+
+        - name: Display Docker info
+          ansible.builtin.debug:
+            var: docker_info.stdout_lines
+
+        - name: Check Tailscale status
+          ansible.builtin.command: which tailscale
+          register: tailscale_check
+          changed_when: false
+          failed_when: false
+
+        - name: Display Tailscale removal status
+          ansible.builtin.debug:
+            msg: "Tailscale {{ 'is completely removed' if tailscale_check.rc != 0 else 'might still have some components installed' }}"

@@ -1,0 +1,9 @@
+---
+- name: check connectivity to hosts
+  ansible.builtin.ping:
+  register: conn_test_output
+- name: Check if ansible_play_hosts == ansible_play_hosts_all (means UNREACHABLE hosts detected)
+  run_once: True
+  ansible.builtin.assert:
+    that:
+      - ansible_play_hosts == ansible_play_hosts_all

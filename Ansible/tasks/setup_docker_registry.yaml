@@ -1,0 +1,12 @@
+- name: Setup docker registry
+  community.docker.docker_swarm_service:
+    name: registry
+    image: registry:2
+    publish:
+      - published_port: 5000
+        target_port: 5000
+- name: Fix hosts file
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: ::1		localhost ip6-localhost ip6-loopback
+    state: absent

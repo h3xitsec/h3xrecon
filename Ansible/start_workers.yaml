@@ -1,0 +1,14 @@
+- name: Start h3xrecon workers
+  hosts: workers
+  tasks:
+    - name: Sync Project
+      ansible.builtin.synchronize:
+        src: "{{ h3xrecon_source_directory }}"
+        dest: "{{ h3xrecon_target_directory }}"
+        rsync_opts: '--exclude=.git --exclude="**/__pycache__/*" --exclude=venv'
+
+    - name: Start Recon Workers
+      community.docker.docker_compose_v2:
+        project_src: "{{ h3xrecon_target_directory }}"
+        build: never
+        state: present

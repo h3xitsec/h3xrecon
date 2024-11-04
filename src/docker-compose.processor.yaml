@@ -1,0 +1,179 @@
+name: h3xrecon_processor
+services:
+  baseimage:
+    build: ./BaseImage
+    image: h3xrecon/base
+  
+  tailscale:
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_AUTH_KEY_FILE=/run/secrets/tailscale_auth_key
+      - TS_AUTH_KEY=
+      - TS_HOSTNAME=processor
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_EXTRA_ARGS=--reset
+      - TS_USERSPACE=false
+      - TS_SERVE_CONFIG=./serve.yaml
+      - TS_SERVE_PORT_RANGES=4222,5432,6379
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+      - ./tailscale/serve.yaml:/var/lib/tailscale/serve.yaml
+      - ./tailscale/entrypoint.sh:/entrypoint.sh
+    cap_add:
+      - net_admin
+      - sys_module
+    secrets:
+      - tailscale_auth_key
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    # logging:
+    #   driver: "none"
+    privileged: true
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:6.2-alpine
+    network_mode: service:tailscale
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --protected-mode no
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+  
+  pgsql:
+    environment:
+      - POSTGRES_PASSWORD=
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_db_password
+      - POSTGRES_USER=h3xrecon
+      - POSTGRES_DB=h3xrecon
+    build:
+      context: ./pgsql
+      dockerfile: Dockerfile
+    secrets:
+      - postgresql_db_password
+    network_mode: service:tailscale
+    volumes:
+      - pgsql_data:/var/lib/postgresql/data
+      - ./pgsql/psql_dump.sql:/docker-entrypoint-initdb.d/psql_dump.sql
+    #hostname: pgsql-server
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U h3xrecon -d h3xrecon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  nats:
+    build:
+      context: ./nats
+      dockerfile: Dockerfile
+    network_mode: service:tailscale
+    #hostname: nats-server
+    volumes:
+      - nats_data:/data
+      - ./nats/init.sh:/init.sh
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    healthcheck:
+      test: nats stream ls --server=nats://localhost:4222 | grep -q "FUNCTION_EXECUTE" && nats stream ls --server=nats://localhost:4222 | grep -q "FUNCTION_OUTPUT" && nats stream ls --server=nats://localhost:4222 | grep -q "RECON_DATA"
+      interval: 2s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+  
+  logger:
+    env_file: .env
+    build:
+      context: ./Logger
+      dockerfile: Dockerfile
+    secrets:
+      - postgresql_db_password
+    network_mode: service:tailscale
+    volumes:
+      - ./Logger:/app
+    depends_on:
+      tailscale:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      pgsql:
+        condition: service_healthy
+    environment:
+      - LOGURU_LEVEL=DEBUG
+  
+  job_processor:
+    env_file: .env
+    build:
+      context: ./
+      dockerfile: ./JobProcessor/Dockerfile
+    secrets:
+      - postgresql_db_password
+    network_mode: service:tailscale
+    #hostname: job-processor
+    volumes:
+      - ./JobProcessor:/app/JobProcessor
+      - ./QueueManager:/app/QueueManager
+    depends_on:
+      tailscale:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - LOGURU_LEVEL=DEBUG
+
+    deploy:
+      mode: replicated
+      replicas: 1
+  
+  data_processor:
+    env_file: .env
+    build:
+      context: ./
+      dockerfile: ./DataProcessor/Dockerfile
+    secrets:
+      - postgresql_db_password
+    network_mode: service:tailscale
+    volumes:
+      - ./DataProcessor:/app/DataProcessor
+      - ./QueueManager:/app/QueueManager
+    depends_on:
+      tailscale:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      pgsql:
+        condition: service_healthy
+    environment:
+      - LOGURU_LEVEL=DEBUG
+    deploy:
+      mode: replicated
+      replicas: 1
+
+volumes:
+  pgsql_data: {}
+  redis_data: {}
+  nats_data: {}
+  tailscale_state: {}
+
+secrets:
+  tailscale_auth_key:
+    file: ./secrets/tailscale_auth_key_processor.txt
+  postgresql_db_password:
+    file: ./secrets/postgresql_db_password.txt

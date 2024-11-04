@@ -1,0 +1,66 @@
+name: h3xrecon_worker
+services:
+  baseimage:
+    build: ./BaseImage
+    image: h3xrecon/base
+  
+  tailscale:
+    env_file: .env
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_AUTH_KEY_FILE=/run/secrets/tailscale_auth_key
+      - TS_AUTH_KEY=
+      - TS_HOSTNAME=worker
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_EXTRA_ARGS=--reset
+      - TS_USERSPACE=false
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+      - ./tailscale/entrypoint.sh:/entrypoint.sh
+    secrets:
+      - tailscale_auth_key
+    cap_add:
+      - net_admin
+      - sys_module
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    privileged: true
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    env_file: .env
+    build:
+      context: ./
+      dockerfile: ./Worker/Dockerfile
+    network_mode: service:tailscale
+    volumes:
+      - ./Worker:/app/Worker
+      - ./QueueManager:/app/QueueManager
+      - ./DatabaseManager:/app/DatabaseManager
+    depends_on:
+      tailscale:
+        condition: service_healthy
+        restart: true
+      baseimage:
+        condition: service_completed_successfully
+    environment:
+      - LOGURU_LEVEL=DEBUG
+    secrets:
+      - postgresql_db_password
+    deploy:
+      mode: replicated
+      replicas: 5
+
+volumes:
+  tailscale_state: {}
+
+secrets:
+  tailscale_auth_key:
+    file: ./secrets/tailscale_auth_key_worker.txt
+  postgresql_db_password:
+    file: ./secrets/postgresql_db_password.txt

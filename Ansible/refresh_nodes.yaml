@@ -1,0 +1,7 @@
+- hosts: processor
+  gather_facts: false
+
+  tasks:
+    - ansible.builtin.include_tasks: tasks/test_all_nodes.yaml
+    - ansible.builtin.include_tasks: tasks/build_project.yaml
+    - ansible.builtin.include_tasks: tasks/sync_project.yaml

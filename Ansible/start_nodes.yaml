@@ -1,0 +1,4 @@
+---
+- ansible.builtin.import_playbook: "build_project.yaml"
+- ansible.builtin.import_playbook: "start_processor.yaml"
+- ansible.builtin.import_playbook: "start_workers.yaml"
