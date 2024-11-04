@@ -1,28 +1,7 @@
-# Use an official Python runtime as a parent image
-FROM python:3.9.16-slim
-
-WORKDIR /app
-
-# Install additional system dependencies
-RUN apt-get update && apt-get install -y \
-    dnsutils \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt /app/requirements.txt
-
-ENV PYTHONPATH="/app"
-
-RUN pip install \
-        --upgrade \
-        --trusted-host pypi.org \
-        --trusted-host pypi.python.org \
-        --trusted-host files.pythonhosted.org \
-        --no-cache-dir \
-        -r requirements.txt
+FROM ghcr.io/h3xitsec/h3xrecon_base:latest
 
 ENV PATH="$PATH:/root/go/bin:/root/.pdtm/go/bin:/usr/lib/go-1.15/bin"
 
-# Install additional system dependencies
 RUN apt-get update && apt-get install -y \
     git \
     golang-1.15 \
@@ -56,5 +35,4 @@ COPY . /app
 
 ENV NAME=Worker
 
-# Run worker.py when the container launches
 CMD ["python", "start_worker.py"]
