@@ -108,7 +108,11 @@ class H3XReconClient:
                         await self.db.add_program_cidr(self.arguments['<program>'], i)
             
             elif self.arguments.get('scope'):
-                await self.db.add_program_scope(self.arguments['<program>'], self.arguments['<item>'][0])
+                if isinstance(self.arguments['<item>'], str):
+                    await self.db.add_program_scope(self.arguments['<program>'], self.arguments['<item>'])
+                if self.arguments.get('-'):
+                    for i in [u.rstrip() for u in process_stdin()]:
+                        await self.db.add_program_scope(self.arguments['<program>'], i)
         
             elif self.arguments.get('program'):
                 await self.db.add_program(self.arguments['<program>'])

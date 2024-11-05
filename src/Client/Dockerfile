@@ -4,6 +4,8 @@ COPY . /app
 COPY ./QueueManager /app/QueueManager
 COPY ./DatabaseManager /app/DatabaseManager
 
-ENV NAME=DataProcessor
+ENV NAME=Client
 
-CMD ["python", "start_data_processor.py"]
+RUN pip install -r /app/requirements.txt
+
+ENTRYPOINT ["python", "/app/client.py"]
