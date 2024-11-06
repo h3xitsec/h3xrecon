@@ -1,0 +1,4 @@
+- add field to function json to tell it come from the cli and push the result to an additional queue for cli to get the output
+- add field to data json to tell dataprocessor to not trigger new jobs
+- add amass intel -cidr cidr -ipv4 as plugin and trigger a job each cidr for program
+- 

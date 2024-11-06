@@ -6,9 +6,9 @@ Usage:
     client.py ( program ) ( add | del ) ( <program> )
     client.py [ -p <program> ] ( config ) ( add | del ) ( cidr | scope ) ( - | <item> )
     client.py [ -p <program> ] ( config ) ( list ) ( cidr | scope )
-    client.py ( system ) ( queue ) ( show | messages | flush ) ( <queue_name> )
+    client.py ( system ) ( queue ) ( show | messages | flush ) ( worker | job | data )
     client.py [ -p <program> ] ( list ) ( domains | ips ) [--resolved] [--unresolved]
-    client.py [ -p <program> ] ( list ) ( urls | services )
+    client.py [ -p <program> ] ( list ) ( urls | services ) [--details]
     client.py [ -p <program> ] ( add | del ) ( domain | ip | url ) ( - | <item> )
     client.py [ -p <program> ] ( sendjob ) ( <function> ) ( <target> ) [--force]
 
@@ -17,14 +17,17 @@ Options:
     --resolved       Show only resolved items.
     --unresolved    Show only unresolved items.
     --force         Force execution of job.
+    --details       Show details about URLs.
 """
 
 import os
 import sys
 import re
 import asyncio
+import json
 from urllib.parse import urlparse
 from DatabaseManager import DatabaseManager
+from loguru import logger
 from tabulate import tabulate
 from QueueManager import QueueManager
 from docopt import docopt
@@ -49,7 +52,7 @@ class H3XReconClient:
             self.arguments = arguments
         else:
             raise ValueError("Invalid arguments provided.")
-
+    
     async def send_job(self, function_name: str, program_name: str, target: str, force: bool):
         """Send a job to the worker using QueueManager"""
         program_id = await self.db.get_program_id(program_name)
@@ -71,6 +74,23 @@ class H3XReconClient:
             message=message
         )
         await self.qm.close()
+
+    async def get_urls_details(self, program_name: str = None):
+        """Get details about URLs in a program"""
+        if program_name:
+            query = """
+            SELECT 
+                u.url, 
+                httpx_data->>'title' as title,
+                httpx_data->>'status_code' as status_code,
+                httpx_data->>'tech' as technologies,
+                httpx_data->>'body_preview' as body_preview,
+                p.name as program_name
+            FROM urls u
+            JOIN programs p ON u.program_id = p.id
+            WHERE p.name = $1
+            """
+            return await self.db.execute_query(query, program_name)
     
     async def add_item(self, item_type: str, program_name: str, items: list):
         """Add items (domains, IPs, or URLs) to a program through the queue"""
@@ -294,15 +314,28 @@ class H3XReconClient:
         elif self.arguments.get('system'):
             if self.arguments.get('queue'):
                 if self.arguments.get('show'):
-                    result = await self.get_stream_info(self.arguments['<queue_name>'])
+                    if self.arguments['worker']:
+                        result = await self.get_stream_info('FUNCTION_EXECUTE')
+                    elif self.arguments['job']:
+                        result = await self.get_stream_info('FUNCTION_OUTPUT')
+                    elif self.arguments['data']:
+                        result = await self.get_stream_info('RECON_DATA')
                     headers = result[0].keys()
                     rows = [x.values() for x in result]
                     print(tabulate(rows, headers=headers, tablefmt='grid'))
+
                 elif self.arguments.get('messages'):
-                    result = await self.get_stream_messages(self.arguments['<queue_name>'])
+                    if self.arguments['worker']:
+                        stream = 'FUNCTION_EXECUTE'
+                    elif self.arguments['job']:
+                        stream = 'FUNCTION_OUTPUT'
+                    elif self.arguments['data']:
+                        stream = 'RECON_DATA'
+                    result = await self.get_stream_messages(stream)
                     headers = result[0].keys()
                     rows = [x.values() for x in result]
                     print(tabulate(rows, headers=headers, tablefmt='grid'))
+
                 elif self.arguments.get('flush'):
                     result = await self.flush_stream(self.arguments['<queue_name>'])
                     print(result)
@@ -347,8 +380,16 @@ class H3XReconClient:
                     [print(r['ip']) for r in await self.db.get_ips(self.arguments['<program>'])]
 
             elif self.arguments.get('urls'):
-                [print(r['url']) for r in await self.db.get_urls(self.arguments['<program>'])]
-            
+                if self.arguments.get('--details'):
+                    result = await self.get_urls_details(self.arguments['<program>'])
+                    headers = result[0].keys()
+                    rows = [x.values() for x in result]
+                    print(tabulate(rows, headers=headers, tablefmt='grid'))
+
+                else:
+                    result = await self.db.get_urls(self.arguments['<program>'])
+                    [print(r['url']) for r in await self.db.get_urls(self.arguments['<program>'])]
+                
             elif self.arguments.get('services'):
                 [print(f"{r.get('protocol')}:{r.get('ip')}:{r.get('port')}") for r in await self.db.get_services(self.arguments['<program>'])]
 

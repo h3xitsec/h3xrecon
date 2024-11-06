@@ -58,6 +58,18 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error formatting JSON output: {str(e)}")
             return json.dumps({"error": "Failed to format records"})
+    
+    async def get_urls(self, program_name: str = None):
+        if program_name:
+            query = """
+        SELECT 
+           *
+        FROM urls u
+        JOIN programs p ON u.program_id = p.id
+        WHERE p.name = $1
+        """
+        result = await self.execute_query(query, program_name)
+        return await self.format_json_output(result)
 
     async def get_resolved_domains(self, program_name: str = None):
         query = """
@@ -293,18 +305,6 @@ class DatabaseManager:
                 *
             FROM ips i
             JOIN programs p ON i.program_id = p.id
-            WHERE p.name = $1
-            """
-            result = await self.execute_query(query, program_name)
-            return await self.format_json_output(result)
-
-    async def get_urls(self, program_name: str = None):
-        if program_name:
-            query = """
-            SELECT 
-                *
-            FROM urls u
-            JOIN programs p ON u.program_id = p.id
             WHERE p.name = $1
             """
             result = await self.execute_query(query, program_name)
