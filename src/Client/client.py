@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 """H3XRecon Client
 
@@ -6,6 +6,7 @@ Usage:
     client.py ( program ) ( add | del ) ( <program> )
     client.py [ -p <program> ] ( config ) ( add | del ) ( cidr | scope ) ( - | <item> )
     client.py [ -p <program> ] ( config ) ( list ) ( cidr | scope )
+    client.py ( system ) ( queue ) ( show | messages | flush ) ( <queue_name> )
     client.py [ -p <program> ] ( list ) ( domains | ips ) [--resolved] [--unresolved]
     client.py [ -p <program> ] ( list ) ( urls | services )
     client.py [ -p <program> ] ( add | del ) ( domain | ip | url ) ( - | <item> )
@@ -20,13 +21,14 @@ Options:
 
 import os
 import sys
-import json
 import re
 import asyncio
 from urllib.parse import urlparse
 from DatabaseManager import DatabaseManager
+from tabulate import tabulate
 from QueueManager import QueueManager
 from docopt import docopt
+from nats.aio.client import Client as NATS
 
 VERSION = "0.0.1"
 
@@ -36,6 +38,12 @@ class H3XReconClient:
     def __init__(self, arguments):
         self.db = DatabaseManager()
         self.qm = QueueManager()
+        self.nc = NATS()
+        self.nats_options = {
+            "servers": [f"nats://{os.getenv('H3XRECON_NATS_SERVER')}:{os.getenv('H3XRECON_NATS_PORT')}"],
+            "connect_timeout": 5,  # 5 seconds timeout
+            "max_reconnect_attempts": 3
+        }
         # Initialize arguments only if properly parsed by docopt
         if arguments:
             self.arguments = arguments
@@ -116,6 +124,152 @@ class H3XReconClient:
         await self.qm.close()
         return True
 
+
+    async def get_stream_info(self, stream_name: str = None):
+        """Get information about NATS streams"""
+        try:
+
+            
+            await self.nc.connect(**self.nats_options)
+            js = self.nc.jetstream()
+            
+            if stream_name:
+                # Get info for specific stream
+                stream = await js.stream_info(stream_name)
+                consumers = await js.consumers_info(stream_name)
+                
+                # Calculate unprocessed messages across all consumers
+                unprocessed_messages = 0
+                for consumer in consumers:
+                    unprocessed_messages += consumer.num_pending
+                
+                return [{
+                    "stream": stream.config.name,
+                    "subjects": stream.config.subjects,
+                    "messages": stream.state.messages,
+                    "bytes": stream.state.bytes,
+                    "consumer_count": stream.state.consumer_count,
+                    "unprocessed_messages": unprocessed_messages,
+                    "first_seq": stream.state.first_seq,
+                    "last_seq": stream.state.last_seq,
+                    "deleted_messages": stream.state.deleted,
+                    "storage_type": stream.config.storage,
+                    "retention_policy": stream.config.retention,
+                    "max_age": stream.config.max_age
+                }]
+            else:
+                # Get info for all streams
+                streams = await js.streams_info()
+                result = []
+                for s in streams:
+                    consumers = await js.consumers_info(s.config.name)
+                    unprocessed_messages = sum(c.num_pending for c in consumers)
+                    
+                    result.append({
+                        "stream": s.config.name,
+                        "subjects": s.config.subjects,
+                        "messages": s.state.messages,
+                        "bytes": s.state.bytes,
+                        "consumer_count": s.state.consumer_count,
+                        "unprocessed_messages": unprocessed_messages,
+                        "first_seq": s.state.first_seq,
+                        "last_seq": s.state.last_seq,
+                        "deleted_messages": s.state.deleted,
+                        "storage_type": s.config.storage,
+                        "retention_policy": s.config.retention,
+                        "max_age": s.config.max_age
+                    })
+                return result
+        except Exception as e:
+            print(f"NATS connection error: {str(e)}")
+            return []
+        finally:
+            try:
+                await self.nc.close()
+            except:
+                pass
+    
+    async def get_stream_messages(self, stream_name: str, subject: str = None, batch_size: int = 100):
+        """Get messages from a specific NATS stream"""
+        try:
+            await self.nc.connect(**self.nats_options)
+            js = self.nc.jetstream()
+            
+            # Create a consumer with explicit configuration
+            consumer_config = {
+                "deliver_policy": "all",  # Get all messages
+                "ack_policy": "explicit",
+                "replay_policy": "instant",
+                "inactive_threshold": 300000000000  # 5 minutes in nanoseconds
+            }
+            
+            # If subject is provided, use it for subscription
+            subscribe_subject = subject if subject else ">"
+            
+            consumer = await js.pull_subscribe(
+                subscribe_subject,
+                durable=None,
+                stream=stream_name
+            )
+            
+            messages = []
+            try:
+                # Fetch messages
+                fetched = await consumer.fetch(batch_size)
+                for msg in fetched:
+                    # Get stream info for message counts
+                    stream_info = await js.stream_info(stream_name)
+                    
+                    message_data = {
+                        'subject': msg.subject,
+                        'data': msg.data.decode() if msg.data else None,
+                        'sequence': msg.metadata.sequence.stream if msg.metadata else None,
+                        'time': msg.metadata.timestamp if msg.metadata else None,
+                        'delivered_count': msg.metadata.num_delivered if msg.metadata else None,
+                        'pending_count': msg.metadata.num_pending if msg.metadata else None,
+                        'stream_total': stream_info.state.messages if stream_info.state else None,
+                        'is_redelivered': msg.metadata.num_delivered > 1 if msg.metadata else False
+                    }
+                    messages.append(message_data)
+                    
+            except Exception as e:
+                print(f"Error fetching messages: {str(e)}")
+            
+            return messages
+            
+        except Exception as e:
+            print(f"NATS connection error: {str(e)}")
+            return []
+        finally:
+            try:
+                await self.nc.close()
+            except:
+                pass
+    
+    async def flush_stream(self, stream_name: str):
+        """Flush all messages from a NATS stream
+        Args:
+            stream_name (str): Name of the stream to flush
+        """
+        try:
+            await self.nc.connect(**self.nats_options)
+            js = self.nc.jetstream()
+            
+            try:
+                # Purge all messages from the stream
+                await js.purge_stream(stream_name)
+                return {"status": "success", "message": f"Stream {stream_name} flushed successfully"}
+            except Exception as e:
+                return {"status": "error", "message": f"Error flushing stream: {str(e)}"}
+            
+        except Exception as e:
+            return {"status": "error", "message": f"NATS connection error: {str(e)}"}
+        finally:
+            try:
+                await self.nc.close()
+            except:
+                pass
+
     async def run(self):
         #import pprint
         #pp = pprint.PrettyPrinter(indent=4)
@@ -136,6 +290,22 @@ class H3XReconClient:
                     [print(r) for r in await self.db.get_program_scope(self.arguments['<program>'])]
                 elif self.arguments.get('cidr'):
                     [print(r) for r in await self.db.get_program_cidr(self.arguments['<program>'])]
+
+        elif self.arguments.get('system'):
+            if self.arguments.get('queue'):
+                if self.arguments.get('show'):
+                    result = await self.get_stream_info(self.arguments['<queue_name>'])
+                    headers = result[0].keys()
+                    rows = [x.values() for x in result]
+                    print(tabulate(rows, headers=headers, tablefmt='grid'))
+                elif self.arguments.get('messages'):
+                    result = await self.get_stream_messages(self.arguments['<queue_name>'])
+                    headers = result[0].keys()
+                    rows = [x.values() for x in result]
+                    print(tabulate(rows, headers=headers, tablefmt='grid'))
+                elif self.arguments.get('flush'):
+                    result = await self.flush_stream(self.arguments['<queue_name>'])
+                    print(result)
 
         elif self.arguments.get('add'):
             if any(self.arguments.get(t) for t in ['domain', 'ip', 'url']):

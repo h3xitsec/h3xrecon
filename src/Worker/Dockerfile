@@ -33,6 +33,8 @@ COPY . /app
 COPY ./DatabaseManager /app/DatabaseManager
 COPY ./QueueManager /app/QueueManager
 
-ENV NAME=Worker
+#ENV NAME=Worker
+
+ENV H3XRECON_ROLE=worker
 
 CMD ["python", "start_worker.py"]

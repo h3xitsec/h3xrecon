@@ -32,7 +32,7 @@ class DataProcessor:
     def __init__(self):
         self.qm = QueueManager()
         self.db_manager = DatabaseManager()
-        self.dataprocessor_id = os.getenv('DATAPROCESSOR_ID', 'data-processor-1')
+        self.dataprocessor_id = f"dataprocessor-{os.getenv('HOSTNAME')}"
         self.data_type_processors = {
             "ip": self.process_ip,
             "domain": self.process_domain,

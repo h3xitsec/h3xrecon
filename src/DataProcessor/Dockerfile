@@ -4,6 +4,7 @@ COPY . /app
 COPY ./QueueManager /app/QueueManager
 COPY ./DatabaseManager /app/DatabaseManager
 
-ENV NAME=DataProcessor
+#ENV NAME=DataProcessor
+ENV H3XRECON_ROLE=dataprocessor
 
 CMD ["python", "start_data_processor.py"]

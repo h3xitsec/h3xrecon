@@ -13,7 +13,7 @@ class JobProcessor:
     def __init__(self):
         self.db_manager = DatabaseManager()
         self.qm = QueueManager()
-        self.worker_id = os.getenv('WORKER_ID', 'worker-1')
+        self.worker_id = f"jobprocessor-{os.getenv('HOSTNAME')}"
         self.redis_client = redis.Redis(host=os.getenv('H3XRECON_REDIS_SERVER', 'localhost'), port=os.getenv('H3XRECON_REDIS_PORT', '6379'), db=0)
 
     async def start(self):

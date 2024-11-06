@@ -11,5 +11,6 @@ COPY . /app
 COPY ./DatabaseManager /app/DatabaseManager
 COPY ./QueueManager /app/QueueManager
 
+
 # Command to run the application
 CMD ["python", "Logger.py"]

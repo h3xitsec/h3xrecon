@@ -1,9 +1,7 @@
-import json
 import os
 import sys
 from loguru import logger
 from FunctionExecutor import FunctionExecutor
-import traceback
 import uuid
 import asyncio
 from datetime import datetime, timezone, timedelta
@@ -17,7 +15,7 @@ class Worker:
     def __init__(self):
         self.qm = QueueManager()
         self.db = DatabaseManager()
-        self.worker_id = os.getenv('WORKER_ID', 'worker-1')
+        self.worker_id = f"worker-{os.getenv('HOSTNAME')}"
         self.function_executor = None
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
