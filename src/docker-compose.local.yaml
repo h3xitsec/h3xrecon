@@ -49,7 +49,7 @@ services:
     image: ghcr.io/h3xitsec/h3xrecon_logger:latest
     env_file: .env
     environment:
-      - LOGURU_LEVEL=INFO
+      - LOGURU_LEVEL=DEBUG
     secrets:
       - postgresql_db_password
     depends_on:
@@ -62,9 +62,11 @@ services:
     image: ghcr.io/h3xitsec/h3xrecon_jobprocessor:latest
     env_file: .env
     environment:
-      - LOGURU_LEVEL=INFO
+      - LOGURU_LEVEL=DEBUG
     secrets:
       - postgresql_db_password
+    volumes:
+      - $PWD/JobProcessor:/app
     depends_on:
       nats:
         condition: service_healthy
@@ -75,9 +77,11 @@ services:
     image: ghcr.io/h3xitsec/h3xrecon_dataprocessor:latest
     env_file: .env
     environment:
-      - LOGURU_LEVEL=INFO
+      - LOGURU_LEVEL=DEBUG
     secrets:
       - postgresql_db_password
+    volumes:
+      - $PWD/DataProcessor:/app
     depends_on:
       nats:
         condition: service_healthy
@@ -88,9 +92,11 @@ services:
     image: ghcr.io/h3xitsec/h3xrecon_worker:latest
     env_file: .env
     environment:
-      - LOGURU_LEVEL=INFO
+      - LOGURU_LEVEL=DEBUG
     secrets:
       - postgresql_db_password
+    volumes:
+      - $PWD/Worker:/app
     depends_on:
       nats:
         condition: service_healthy

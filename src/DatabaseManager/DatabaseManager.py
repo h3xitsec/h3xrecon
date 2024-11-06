@@ -2,8 +2,11 @@ import asyncpg
 import os
 import json
 import re
+import asyncpg
+import uuid
 from typing import List, Dict, Any
 from loguru import logger
+from datetime import datetime
 
 DB_CONFIG = {
     'user': os.getenv('H3XRECON_DB_USER'),
@@ -56,6 +59,73 @@ class DatabaseManager:
             logger.error(f"Error formatting JSON output: {str(e)}")
             return json.dumps({"error": "Failed to format records"})
 
+    async def get_resolved_domains(self, program_name: str = None):
+        query = """
+        SELECT 
+            d.domain,
+            array_agg(i.ip) as resolved_ips
+        FROM domains d
+        JOIN programs p ON d.program_id = p.id
+        JOIN ips i ON i.id = ANY(d.ips)
+        WHERE d.ips IS NOT NULL 
+        AND array_length(d.ips, 1) > 0
+        """
+        if program_name:
+            query += " AND p.name = $1 GROUP BY d.domain"
+            result = await self.execute_query(query, program_name)
+        else:
+            query += " GROUP BY d.domain"
+            result = await self.execute_query(query)
+        return await self.format_json_output(result)
+
+    async def get_unresolved_domains(self, program_name: str = None):
+        query = """
+        SELECT 
+            d.*
+        FROM domains d
+        JOIN programs p ON d.program_id = p.id
+        WHERE (d.ips IS NULL 
+        OR array_length(d.ips, 1) = 0 
+        OR d.ips = '{}')
+        """
+        if program_name:
+            query += " AND p.name = $1"
+            result = await self.execute_query(query, program_name)
+        else:
+            result = await self.execute_query(query)
+        return await self.format_json_output(result)
+
+    async def get_reverse_resolved_ips(self, program_name: str = None):
+        query = """
+        SELECT 
+            i.*
+        FROM ips i
+        JOIN programs p ON i.program_id = p.id
+        WHERE i.ptr IS NOT NULL
+        AND i.ptr != ''
+        """
+        if program_name:
+            query += " AND p.name = $1"
+            result = await self.execute_query(query, program_name)
+        else:
+            result = await self.execute_query(query)
+        return await self.format_json_output(result)
+
+    async def get_not_reverse_resolved_ips(self, program_name: str = None):
+        query = """
+        SELECT 
+            i.*
+        FROM ips i
+        JOIN programs p ON i.program_id = p.id
+        WHERE i.ptr IS NULL
+        OR i.ptr = ''
+        """
+        if program_name:
+            query += " AND p.name = $1"
+            result = await self.execute_query(query, program_name)
+        else:
+            result = await self.execute_query(query)
+        return await self.format_json_output(result)
 
     async def check_domain_regex_match(self, domain: str, program_id: int) -> bool:
         await self.ensure_connected()
@@ -174,7 +244,49 @@ class DatabaseManager:
         """
         await self.execute_query(query, program_id, cidr)
 
+    async def remove_program(self, program_name: str):
+        """Remove a program and all its associated data"""
+        query = """
+        DELETE FROM programs 
+        WHERE name = $1
+        RETURNING id
+        """
+        result = await self.execute_query(query, program_name)
+        if result:
+            logger.info(f"Program removed: {program_name}")
+            return True
+        return False
+
+    async def remove_program_scope(self, program_name: str, scope: str):
+        """Remove a specific scope regex from a program"""
+        query = """
+        DELETE FROM program_scopes 
+        WHERE program_id = (SELECT id FROM programs WHERE name = $1)
+        AND regex = $2
+        RETURNING id
+        """
+        result = await self.execute_query(query, program_name, scope)
+        if result:
+            logger.info(f"Scope removed from program {program_name}: {scope}")
+            return True
+        return False
+
+    async def remove_program_cidr(self, program_name: str, cidr: str):
+        """Remove a specific CIDR from a program"""
+        query = """
+        DELETE FROM program_cidrs 
+        WHERE program_id = (SELECT id FROM programs WHERE name = $1)
+        AND cidr = $2
+        RETURNING id
+        """
+        result = await self.execute_query(query, program_name, cidr)
+        if result:
+            logger.info(f"CIDR removed from program {program_name}: {cidr}")
+            return True
+        return False
+
     async def get_ips(self, program_name: str = None):
+        print(program_name)
         if program_name:
             query = """
             SELECT 
@@ -449,7 +561,7 @@ class DatabaseManager:
             async with self.pool.acquire() as conn:
                 await conn.execute('''
                     INSERT INTO out_of_scope_domains (domain, program_ids)
-                    VALUES ($1, ARRAY[$2])
+                    VALUES ($1, ARRAY[$2]::integer[])
                     ON CONFLICT (domain) 
                     DO UPDATE SET program_ids = 
                         CASE 
@@ -471,3 +583,45 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error executing query: {e}")
             return []
+
+    async def remove_domain(self, program_name: str, domain: str):
+        """Remove a specific domain from a program"""
+        query = """
+        DELETE FROM domains 
+        WHERE program_id = (SELECT id FROM programs WHERE name = $1)
+        AND domain = $2
+        RETURNING id
+        """
+        result = await self.execute_query(query, program_name, domain)
+        if result:
+            logger.info(f"Domain removed from program {program_name}: {domain}")
+            return True
+        return False
+
+    async def remove_ip(self, program_name: str, ip: str):
+        """Remove a specific IP from a program"""
+        query = """
+        DELETE FROM ips 
+        WHERE program_id = (SELECT id FROM programs WHERE name = $1)
+        AND ip = $2
+        RETURNING id
+        """
+        result = await self.execute_query(query, program_name, ip)
+        if result:
+            logger.info(f"IP removed from program {program_name}: {ip}")
+            return True
+        return False
+
+    async def remove_url(self, program_name: str, url: str):
+        """Remove a specific URL from a program"""
+        query = """
+        DELETE FROM urls 
+        WHERE program_id = (SELECT id FROM programs WHERE name = $1)
+        AND url = $2
+        RETURNING id
+        """
+        result = await self.execute_query(query, program_name, url)
+        if result:
+            logger.info(f"URL removed from program {program_name}: {url}")
+            return True
+        return False

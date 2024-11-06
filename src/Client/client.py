@@ -3,14 +3,19 @@
 """H3XRecon Client
 
 Usage:
-    client.py ( add | remove ) ( program ) ( <program> )
-    client.py ( list ) ( program | domains | ips | urls | services )
-    client.py [-p <program>] ( add ) ( cidr | scope ) ( - | <item> )
-    client.py [-p <program>] ( list ) ( domains | ips | urls | services | cidr | scope )
-    client.py [-p <program>] ( sendjob ) ( <function> ) ( <target> ) [--force]
+    client.py ( program ) ( add | del ) ( <program> )
+    client.py [ -p <program> ] ( config ) ( add | del ) ( cidr | scope ) ( - | <item> )
+    client.py [ -p <program> ] ( config ) ( list ) ( cidr | scope )
+    client.py [ -p <program> ] ( list ) ( domains | ips ) [--resolved] [--unresolved]
+    client.py [ -p <program> ] ( list ) ( urls | services )
+    client.py [ -p <program> ] ( add | del ) ( domain | ip | url ) ( - | <item> )
+    client.py [ -p <program> ] ( sendjob ) ( <function> ) ( <target> ) [--force]
 
 Options:
     -p --program     Program to work on.
+    --resolved       Show only resolved items.
+    --unresolved    Show only unresolved items.
+    --force         Force execution of job.
 """
 
 import os
@@ -58,68 +63,133 @@ class H3XReconClient:
             message=message
         )
         await self.qm.close()
+    
+    async def add_item(self, item_type: str, program_name: str, items: list):
+        """Add items (domains, IPs, or URLs) to a program through the queue"""
+        program_id = await self.db.get_program_id(program_name)
+        if not program_id:
+            print(f"Error: Program '{program_name}' not found")
+            return
+
+        # Format message based on item type
+        if isinstance(items, str):
+            items = [items]
+
+        for item in items:
+            message = {
+                "program_id": program_id,
+                "data_type": item_type,
+                "data": {
+                    "url": item
+                }
+            }
+
+            # For URLs, we need to format the data differently
+            await self.qm.connect()
+            await self.qm.publish_message(
+                subject="recon.data",
+                stream="RECON_DATA",
+                message=message
+            )
+            await self.qm.close()
+
+    async def remove_item(self, item_type: str, program_name: str, item: str) -> bool:
+        """Remove an item (domain, IP, or URL) from a program"""
+        program_id = await self.db.get_program_id(program_name)
+        if not program_id:
+            print(f"Error: Program '{program_name}' not found")
+            return False
+
+        message = {
+            "program_id": program_id,
+            "data_type": item_type,
+            "action": "delete",
+            "data": [item]
+        }
+
+        await self.qm.connect()
+        await self.qm.publish_message(
+            subject="recon.data",
+            stream="RECON_DATA",
+            message=message
+        )
+        await self.qm.close()
+        return True
 
     async def run(self):
         #import pprint
         #pp = pprint.PrettyPrinter(indent=4)
         #pp.pprint(self.arguments)
         # Execute based on parsed arguments
-        if self.arguments.get('list'):
-            if self.arguments.get('domains'):
-                if self.arguments['<program>']:   
-                    [print(r['domain']) for r in await self.db.get_domains(self.arguments['<program>'])]
+        if self.arguments.get('program'):
+            if self.arguments.get('add'):
+                await self.db.add_program(self.arguments['<program>'])
+            elif self.arguments.get('del'):
+                if await self.db.remove_program(self.arguments['<program>']):
+                    print(f"Program '{self.arguments['<program>']}' removed successfully")
                 else:
-                    [print(r['domain']) for r in await self.db.get_domains()]
+                    print(f"Failed to remove program '{self.arguments['<program>']}'")
 
-            elif self.arguments.get('ips'):
-                if self.arguments['<program>']:   
-                    [print(r['ip']) for r in await self.db.get_ips(self.arguments['<program>'])]
-                else:
-                    [print(r['ip']) for r in await self.db.get_ips()]
-
-            elif self.arguments.get('urls'):
-                if self.arguments['<program>']:   
-                    [print(r['url']) for r in await self.db.get_urls(self.arguments['<program>'])]
-                else:
-                    [print(r['url']) for r in await self.db.get_urls()]
-            
-            elif self.arguments.get('services'):
-                if self.arguments['<program>']:   
-                    [print(f"{r.get('protocol')}:{r.get('ip')}:{r.get('port')}") for r in await self.db.get_services(self.arguments['<program>'])]
-                else:
-                    [print(f"{r.get('protocol')}:{r.get('ip')}:{r.get('port')}") for r in await self.db.get_services()]
-
-            elif self.arguments.get('scope'):
-                [print(r) for r in await self.db.get_program_scope(self.arguments['<program>'])]
-
-            elif self.arguments.get('cidr'):
-                [print(r) for r in await self.db.get_program_cidr(self.arguments['<program>'])]
-
-            elif self.arguments.get('program'):
-                [print(r['name']) for r in await self.db.get_programs()]
-
+        elif self.arguments.get('config'):
+            if self.arguments.get('list'):
+                if self.arguments.get('scope'):
+                    [print(r) for r in await self.db.get_program_scope(self.arguments['<program>'])]
+                elif self.arguments.get('cidr'):
+                    [print(r) for r in await self.db.get_program_cidr(self.arguments['<program>'])]
 
         elif self.arguments.get('add'):
-            if self.arguments.get('cidr'):
+            if any(self.arguments.get(t) for t in ['domain', 'ip', 'url']):
+                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t))
+                items = []
                 if isinstance(self.arguments['<item>'], str):
-                    await self.db.add_program_cidr(self.arguments['<program>'], self.arguments['<item>'])
+                    items = [self.arguments['<item>']]
                 if self.arguments.get('-'):
-                    for i in [u.rstrip() for u in process_stdin()]:
-                        await self.db.add_program_cidr(self.arguments['<program>'], i)
-            
-            elif self.arguments.get('scope'):
-                if isinstance(self.arguments['<item>'], str):
-                    await self.db.add_program_scope(self.arguments['<program>'], self.arguments['<item>'])
-                if self.arguments.get('-'):
-                    for i in [u.rstrip() for u in process_stdin()]:
-                        await self.db.add_program_scope(self.arguments['<program>'], i)
-        
-            elif self.arguments.get('program'):
-                await self.db.add_program(self.arguments['<program>'])
+                    items.extend([u.rstrip() for u in process_stdin()])
+                await self.add_item(item_type, self.arguments['<program>'], items)
 
-        elif self.arguments.get('sendjob')  :
-            await self.send_job(function_name=self.arguments['<function>'], program_name=self.arguments['<program>'], target=self.arguments['<target>'], force=self.arguments['--force'])
-        
+        elif self.arguments.get('del'):
+            if any(self.arguments.get(t) for t in ['domain', 'ip', 'url']):
+                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t))
+                if isinstance(self.arguments['<item>'], str):
+                    if await self.remove_item(item_type, self.arguments['<program>'], self.arguments['<item>']):
+                        print(f"{item_type.capitalize()} '{self.arguments['<item>']}' removed from program '{self.arguments['<program>']}'")
+                    else:
+                        print(f"Failed to remove {item_type} '{self.arguments['<item>']}' from program '{self.arguments['<program>']}'")
+                if self.arguments.get('-'):
+                    for i in [u.rstrip() for u in process_stdin()]:
+                        await self.remove_item(item_type, self.arguments['<program>'], i)
+
+        elif self.arguments.get('list'):                
+            if self.arguments.get('domains'):
+                if self.arguments.get('--resolved'):
+                    [print(f"{r['domain']} -> {r['resolved_ips']}") for r in await self.db.get_resolved_domains(self.arguments['<program>'])]
+                elif self.arguments.get('--unresolved'):
+                    [print(r['domain']) for r in await self.db.get_unresolved_domains(self.arguments['<program>'])]
+                else:
+                    [print(r['domain']) for r in await self.db.get_domains(self.arguments['<program>'])]
+
+            elif self.arguments.get('ips'):
+                if self.arguments.get('--resolved'):
+                    [print(f"{r['ip']} -> {r['ptr']}") for r in await self.db.get_reverse_resolved_ips(self.arguments['<program>'])]
+                elif self.arguments.get('--unresolved'):
+                    [print(r['ip']) for r in await self.db.get_not_reverse_resolved_ips(self.arguments['<program>'])]
+                else:
+                    [print(r['ip']) for r in await self.db.get_ips(self.arguments['<program>'])]
+
+            elif self.arguments.get('urls'):
+                [print(r['url']) for r in await self.db.get_urls(self.arguments['<program>'])]
+            
+            elif self.arguments.get('services'):
+                [print(f"{r.get('protocol')}:{r.get('ip')}:{r.get('port')}") for r in await self.db.get_services(self.arguments['<program>'])]
+
+        elif self.arguments.get('sendjob'):
+            await self.send_job(
+                function_name=self.arguments['<function>'],
+                program_name=self.arguments['<program>'],
+                target=self.arguments['<target>'],
+                force=self.arguments['--force']
+            )
+
         else:
             raise ValueError("No valid argument found")
 

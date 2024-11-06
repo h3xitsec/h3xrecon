@@ -182,10 +182,10 @@ class DataProcessor:
                 logger.info(f"Processing URL result for program {msg_data.get('program_id')}: {msg_data.get('data').get('url')}")
                 data = msg_data.get('data', {})
                 logger.debug(msg_data.get('data'))
-                logger.debug(msg_data.get('data').get('httpx_data'))
+                logger.debug(msg_data.get('data', {}).get('httpx_data', {}))
                 await self.db_manager.insert_url(
                     url=msg_data.get('data').get('url'),
-                    httpx_data=msg_data.get('data').get('httpx_data'),
+                    httpx_data=msg_data.get('data', {}).get('httpx_data', {}),
                     program_id=msg_data.get('program_id')
                     # title=msg_data.get('data').get('attributes', {}).get('title'),
                     # chain_status_codes=msg_data.get('data').get('attributes', {}).get('chain_status_codes', []),
@@ -199,6 +199,9 @@ class DataProcessor:
                     # content_length=msg_data.get('data').get('attributes', {}).get('content_length'),
                     # tech=msg_data.get('data').get('attributes', {}).get('tech')
                 )
+                # Send a job to the workers to test the URL if httpx_data is missing
+                if not msg_data.get('data').get('httpx_data'):
+                    await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message={"function": "test_http", "program_id": msg_data.get('program_id'), "params": {"target": msg_data.get('data').get('url')}})
                 
             except Exception as e:
                 logger.error(f"Failed to process URL in program {msg_data.get('program_id')}: {e}")
