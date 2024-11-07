@@ -1,4 +1,5 @@
 venv/
+TODO.md
 notes.md
 .env
 .psqlpass
