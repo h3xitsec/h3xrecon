@@ -44,7 +44,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ./src
-          file: ./src/docker/worker/Dockerfile
+          file: ./src/docker/worker/Dockerfile.worker
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_worker:latest
           cache-from: type=gha
