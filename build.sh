@@ -5,48 +5,6 @@ echo "===================================="
 echo "         Building h3xrecon          "
 echo "===================================="
 
-echo "------------------------------------"
-echo " Staging build directory            "
-echo "------------------------------------"
-
-rm -rf build/*
-mkdir -p ./build
-
-cp src/docker-compose.yaml ./build/
-
-cp -r src/Client ./build/
-cp -r src/DatabaseManager build/Client/
-cp -r src/QueueManager build/Client/
-cp src/requirements_client.txt build/Client/requirements.txt
-
-cp -r src/BaseImage ./build/
-cp -r src/Worker ./build/
-cp -r src/DatabaseManager build/Worker/
-cp -r src/QueueManager build/Worker/
-cp src/requirements_workers.txt build/Worker/requirements.txt
-
-cp -r src/DataProcessor ./build/
-cp -r src/QueueManager build/DataProcessor/
-cp -r src/DatabaseManager build/DataProcessor/
-cp src/requirements_processor.txt build/DataProcessor/requirements.txt
-
-cp -r src/JobProcessor ./build/
-cp -r src/QueueManager build/JobProcessor/
-cp -r src/DatabaseManager build/JobProcessor/
-cp src/requirements_processor.txt build/JobProcessor/requirements.txt
-
-cp -r src/Logger ./build/
-cp -r src/DatabaseManager build/Logger/
-cp -r src/QueueManager build/Logger/
-cp src/requirements_processor.txt build/Logger/requirements.txt
-
-cp -r src/nats build/nats
-cp -r src/pgsql build/pgsql
-
-echo "------------------------------------"
-echo " Staging build directory completed  "
-echo "------------------------------------"
-
 if [ -z "$GITHUB_ACTIONS" ]; then
     echo "===================================="
     echo "      Setup for local dev           "
@@ -70,37 +28,37 @@ if [ -z "$GITHUB_ACTIONS" ]; then
         echo "------------------------------------"
         echo " Building BaseImage                 "
         echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./build/BaseImage/Dockerfile --platform linux/amd64,linux/arm64 --tag ghcr.io/h3xitsec/h3xrecon_base:latest ./build/BaseImage
+        docker buildx build $PUSH_FLAG --file ./new_src/docker/base/Dockerfile.base --platform linux/amd64,linux/arm64 --tag ghcr.io/h3xitsec/h3xrecon-base:latest ./new_src
         
         echo "------------------------------------"
         echo " Building Worker                    "
         echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./build/Worker/Dockerfile --platform linux/amd64,linux/arm64 --tag ghcr.io/h3xitsec/h3xrecon_worker:latest ./build/Worker
+        docker buildx build $PUSH_FLAG --file ./new_src/docker/worker/Dockerfile.worker --platform linux/amd64,linux/arm64 --tag ghcr.io/h3xitsec/h3xrecon-worker:latest ./new_src
         
         echo "------------------------------------"
         echo " Building DataProcessor             "
         echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./build/DataProcessor/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_dataprocessor:latest ./build/DataProcessor
+        docker buildx build $PUSH_FLAG --file ./new_src/docker/processor/Dockerfile.processor --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-dataprocessor:latest ./new_src
         
         echo "------------------------------------"
         echo " Building JobProcessor              "
         echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./build/JobProcessor/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_jobprocessor:latest ./build/JobProcessor
-        
+        docker buildx build $PUSH_FLAG --file ./new_src/docker/processor/Dockerfile.processor --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-jobprocessor:latest ./new_src
+
         echo "------------------------------------"
         echo " Building Logger                    "
         echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./build/Logger/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_logger:latest ./build/Logger
+        docker buildx build $PUSH_FLAG --file ./new_src/docker/logger/Dockerfile.logger --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-logger:latest ./new_src
         
         echo "------------------------------------"
         echo " Building Nats                      "
         echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./build/nats/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_nats:latest ./build/nats
+        docker buildx build $PUSH_FLAG --file ./new_src/docker/nats/Dockerfile.nats --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-nats:latest ./new_src
         
         echo "------------------------------------"
         echo " Building Pgsql                     "
         echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./build/pgsql/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_pgsql:latest ./build/pgsql
+        docker buildx build $PUSH_FLAG --file ./new_src/docker/pgsql/Dockerfile.pgsql --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-pgsql:latest ./new_src
 
         echo "===================================="
         echo " Docker build commands completed!   "
