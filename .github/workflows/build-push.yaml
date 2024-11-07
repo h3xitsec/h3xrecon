@@ -33,7 +33,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ./src
-          file: ./src/docker/base/Dockerfile
+          file: ./src/docker/base/Dockerfile.base
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest
           cache-from: type=gha
