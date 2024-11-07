@@ -23,7 +23,7 @@ services:
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_db_password
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
-    image: ghcr.io/h3xitsec/h3xrecon-pgsql:latest
+    image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
     secrets:
       - postgresql_db_password
     volumes:
@@ -45,7 +45,7 @@ services:
           - node.labels.h3xrecon_role == processor
 
   msgbroker:
-    image: ghcr.io/h3xitsec/h3xrecon-nats:latest
+    image: ghcr.io/h3xitsec/h3xrecon_nats:latest
     volumes:
       - nats_data:/data
     ports:
@@ -64,7 +64,7 @@ services:
   
   logger:
     env_file: .env
-    image: ghcr.io/h3xitsec/h3xrecon-logger:latest
+    image: ghcr.io/h3xitsec/h3xrecon_logger:latest
     secrets:
       - postgresql_db_password
     depends_on:
@@ -79,7 +79,7 @@ services:
   
   jobprocessor:
     env_file: .env
-    image: ghcr.io/h3xitsec/h3xrecon-jobprocessor:latest
+    image: ghcr.io/h3xitsec/h3xrecon_jobprocessor:latest
     secrets:
       - postgresql_db_password
     depends_on:
@@ -96,7 +96,7 @@ services:
   
   dataprocessor:
     env_file: .env
-    image: ghcr.io/h3xitsec/h3xrecon-dataprocessor:latest
+    image: ghcr.io/h3xitsec/h3xrecon_dataprocessor:latest
     secrets:
       - postgresql_db_password
     depends_on:
@@ -113,7 +113,7 @@ services:
   
   worker:
     env_file: .env
-    image: ghcr.io/h3xitsec/h3xrecon-worker:latest
+    image: ghcr.io/h3xitsec/h3xrecon_worker:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy

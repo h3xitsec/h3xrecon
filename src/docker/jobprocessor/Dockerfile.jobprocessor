@@ -1,4 +1,4 @@
-FROM ghcr.io/h3xitsec/h3xrecon-base:latest
+FROM ghcr.io/h3xitsec/h3xrecon_base:latest
 
 ENV H3XRECON_ROLE=jobprocessor
 

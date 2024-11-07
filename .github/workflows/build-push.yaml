@@ -35,7 +35,7 @@ jobs:
           context: ./src
           file: ./src/docker/base/Dockerfile.base
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon-base:latest
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
@@ -46,7 +46,7 @@ jobs:
           context: ./src
           file: ./src/docker/worker/Dockerfile.worker
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon-worker:latest
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
@@ -57,7 +57,7 @@ jobs:
           context: ./src
           file: ./src/docker/dataprocessor/Dockerfile.dataprocessor
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon-dataprocessor:latest
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_dataprocessor:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -68,7 +68,7 @@ jobs:
           context: ./src
           file: ./src/docker/jobprocessor/Dockerfile.jobprocessor
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon-jobprocessor:latest
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_jobprocessor:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -79,7 +79,7 @@ jobs:
       #     context: ./src
       #     file: ./src/docker/logger/Dockerfile
       #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon-logger:latest
+      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_logger:latest
       #     cache-from: type=gha
       #     cache-to: type=gha,mode=max
       #     platforms: linux/amd64
@@ -90,7 +90,7 @@ jobs:
           context: ./src
           file: ./src/docker/nats/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon-nats:latest
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_nats:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -101,7 +101,7 @@ jobs:
           context: ./src
           file: ./src/docker/pgsql/Dockerfile.pgsql
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon-pgsql:latest
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
