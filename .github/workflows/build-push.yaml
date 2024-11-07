@@ -32,8 +32,8 @@ jobs:
       - name: Build and push base image
         uses: docker/build-push-action@v4
         with:
-          context: ./
-          file: ./docker/base/Dockerfile
+          context: ./src
+          file: ./src/src/docker/base/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_base:latest
           cache-from: type=gha
@@ -43,8 +43,8 @@ jobs:
       - name: Build and push worker image
         uses: docker/build-push-action@v4
         with:
-          context: ./
-          file: ./docker/worker/Dockerfile
+          context: ./src
+          file: ./src/docker/worker/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_worker:latest
           cache-from: type=gha
@@ -54,8 +54,8 @@ jobs:
       - name: Build and push data processor image
         uses: docker/build-push-action@v4
         with:
-          context: ./
-          file: ./docker/dataprocessor/Dockerfile.dataprocessor
+          context: ./src
+          file: ./src/docker/dataprocessor/Dockerfile.dataprocessor
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_dataprocessor:latest
           cache-from: type=gha
@@ -65,8 +65,8 @@ jobs:
       - name: Build and push job processor image
         uses: docker/build-push-action@v4
         with:
-          context: ./
-          file: ./docker/jobprocessor/Dockerfile.jobprocessor
+          context: ./src
+          file: ./src/docker/jobprocessor/Dockerfile.jobprocessor
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_jobprocessor:latest
           cache-from: type=gha
@@ -76,8 +76,8 @@ jobs:
       # - name: Build and push logger image
       #   uses: docker/build-push-action@v4
       #   with:
-      #     context: ./
-      #     file: ./docker/logger/Dockerfile
+      #     context: ./src
+      #     file: ./src/docker/logger/Dockerfile
       #     push: true
       #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_logger:latest
       #     cache-from: type=gha
@@ -87,8 +87,8 @@ jobs:
       - name: Build and push nats image
         uses: docker/build-push-action@v4
         with:
-          context: ./
-          file: ./docker/nats/Dockerfile
+          context: ./src
+          file: ./src/docker/nats/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_nats:latest
           cache-from: type=gha
@@ -98,8 +98,8 @@ jobs:
       - name: Build and push pgsql image
         uses: docker/build-push-action@v4
         with:
-          context: ./
-          file: ./docker/pgsql/Dockerfile.pgsql
+          context: ./src
+          file: ./src/docker/pgsql/Dockerfile.pgsql
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:latest
           cache-from: type=gha
