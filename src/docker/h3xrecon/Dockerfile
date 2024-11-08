@@ -7,14 +7,6 @@ RUN apt-get update && apt-get install -y \
     dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PYTHONPATH="/app"
-
-COPY h3xrecon /app/src/h3xrecon
-
-COPY setup.py /app/setup.py
-
-RUN pip install .
-
 ENV PATH="$PATH:/root/go/bin:/root/.pdtm/go/bin:/usr/lib/go-1.15/bin"
 
 RUN apt-get update && apt-get install -y \
@@ -40,7 +32,14 @@ RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
 
 RUN go install github.com/Josue87/gotator@latest
 
+COPY h3xrecon /app/src/h3xrecon
+
+COPY setup.py /app/setup.py
+
+RUN pip install .
+
 COPY entrypoint.sh /entrypoint.sh
+
 RUN chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]
