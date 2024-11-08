@@ -16,25 +16,22 @@ services:
     image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
     env_file: .env.compose
     environment:
-      - POSTGRES_PASSWORD=
-      - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_db_password
-      - POSTGRES_USER=h3xrecon
-      - POSTGRES_DB=h3xrecon
-    secrets:
-      - postgresql_db_password
+      - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
+      - POSTGRES_USER=${H3XRECON_DB_USER}
+      - POSTGRES_DB=${H3XRECON_DB_NAME}
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"  # Updated for local mode
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U h3xrecon -d h3xrecon"]
+      test: ["CMD-SHELL", "pg_isready -U ${H3XRECON_DB_USER} -d ${H3XRECON_DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
   msgbroker:
-    image: ghcr.io/h3xitsec/h3xrecon_nats:latest
+    image: ghcr.io/h3xitsec/h3xrecon_msgbroker:latest
     env_file: .env.compose
     volumes:
       - nats_data:/data
@@ -47,27 +44,22 @@ services:
       retries: 5
       start_period: 5s
 
-  # logger:
-  #   image: ghcr.io/h3xitsec/h3xrecon_logger:latest
-  #   env_file: .env.compose
-  #   environment:
-  #     - LOGURU_LEVEL=DEBUG
-  #   secrets:
-  #     - postgresql_db_password
-  #   depends_on:
-  #     pgsql:
-  #       condition: service_healthy
-  #     nats:
-  #       condition: service_healthy
-
-  jobprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon_jobprocessor:latest
+  logging:
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     env_file: .env.compose
     environment:
-      - LOGURU_LEVEL=DEBUG
-      - H3XRECON_CONFIG_FILE=/app/config.json
-    secrets:
-      - postgresql_db_password
+      - H3XRECON_ROLE=logging
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  jobprocessor:
+    image: ghcr.io/h3xitsec/h3xrecon:latest
+    env_file: .env.compose
+    environment:
+      - H3XRECON_ROLE=jobprocessor
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -75,13 +67,10 @@ services:
         condition: service_healthy
 
   dataprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon_dataprocessor:latest
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     env_file: .env.compose
     environment:
-      - LOGURU_LEVEL=DEBUG
-      - H3XRECON_CONFIG_FILE=/app/config.json
-    secrets:
-      - postgresql_db_password
+      - H3XRECON_ROLE=dataprocessor
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -89,13 +78,10 @@ services:
         condition: service_healthy
 
   worker:
-    image: ghcr.io/h3xitsec/h3xrecon_worker:latest
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     env_file: .env.compose
     environment:
-      - LOGURU_LEVEL=DEBUG
-      - H3XRECON_CONFIG_FILE=/app/config.json
-    secrets:
-      - postgresql_db_password
+      - H3XRECON_ROLE=worker
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -104,7 +90,3 @@ volumes:
   pgsql_data:
   redis_data:
   nats_data:
-
-secrets:
-  postgresql_db_password:
-    environment: H3XRECON_DB_PASS

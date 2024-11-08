@@ -1,0 +1,25 @@
+- name: List all Swarm services
+  ansible.builtin.command: docker service ls -q
+  register: service_list
+  changed_when: false
+  ignore_errors: true
+  delegate_to: "{{ groups['processor'][0] }}"
+  run_once: true
+
+- name: Remove all services
+  ansible.builtin.command: "docker service rm {{ item }}"
+  loop: "{{ service_list.stdout_lines }}"
+  when: service_list.stdout_lines | length > 0
+  delegate_to: "{{ groups['processor'][0] }}"
+  run_once: true
+  ignore_errors: true
+
+- name: Wait for all services to be removed
+  ansible.builtin.command: docker service ls -q
+  register: remaining_services
+  until: remaining_services.stdout_lines | length == 0
+  retries: 10
+  delay: 5
+  delegate_to: "{{ groups['processor'][0] }}"
+  run_once: true
+  when: service_list.stdout_lines | length > 0

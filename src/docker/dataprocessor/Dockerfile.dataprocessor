@@ -1,5 +1,0 @@
-FROM ghcr.io/h3xitsec/h3xrecon_base:latest
-
-ENV H3XRECON_ROLE=dataprocessor
-
-CMD ["python", "-m", "h3xrecon.dataprocessor.main"]

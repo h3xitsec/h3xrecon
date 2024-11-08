@@ -5,67 +5,36 @@ echo "===================================="
 echo "         Building h3xrecon          "
 echo "===================================="
 
-if [ -z "$GITHUB_ACTIONS" ]; then
-    echo "===================================="
-    echo "      Setup for local dev           "
-    echo "===================================="
+echo "===================================="
+echo "      Building docker images        "
+echo "===================================="
 
-    cp src/docker-compose.local.yaml build/
-    cp .env build/
+echo "------------------------------------"
+echo " Building Reconh3x image            "
+echo "------------------------------------"
 
-    if [ "$1" != "--skip-build" ]; then
-        echo "===================================="
-        echo "      Building docker images        "
-        echo "===================================="
-        
-        PUSH_FLAG=""
-        if [ "$1" != "--skip-push" ]; then
-            PUSH_FLAG="--push"
-        else
-            PUSH_FLAG="--output type=docker"
-        fi
-        
-        echo "------------------------------------"
-        echo " Building BaseImage                 "
-        echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./new_src/docker/base/Dockerfile.base --platform linux/amd64,linux/arm64 --tag ghcr.io/h3xitsec/h3xrecon-base:latest ./new_src
-        
-        echo "------------------------------------"
-        echo " Building Worker                    "
-        echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./new_src/docker/worker/Dockerfile.worker --platform linux/amd64,linux/arm64 --tag ghcr.io/h3xitsec/h3xrecon-worker:latest ./new_src
-        
-        echo "------------------------------------"
-        echo " Building DataProcessor             "
-        echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./new_src/docker/processor/Dockerfile.processor --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-dataprocessor:latest ./new_src
-        
-        echo "------------------------------------"
-        echo " Building JobProcessor              "
-        echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./new_src/docker/processor/Dockerfile.processor --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-jobprocessor:latest ./new_src
+cp setup.py ./src/docker/h3xrecon/
+cp -r src/h3xrecon ./src/docker/h3xrecon/
 
-        echo "------------------------------------"
-        echo " Building Logger                    "
-        echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./new_src/docker/logger/Dockerfile.logger --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-logger:latest ./new_src
-        
-        echo "------------------------------------"
-        echo " Building Nats                      "
-        echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./new_src/docker/nats/Dockerfile.nats --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-nats:latest ./new_src
-        
-        echo "------------------------------------"
-        echo " Building Pgsql                     "
-        echo "------------------------------------"
-        docker buildx build $PUSH_FLAG --file ./new_src/docker/pgsql/Dockerfile.pgsql --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon-pgsql:latest ./new_src
+docker buildx build --output type=docker --file ./src/docker/h3xrecon/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon:latest ./src/docker/h3xrecon/
 
-        echo "===================================="
-        echo " Docker build commands completed!   "
-        echo "===================================="
-    else
-        echo "===================================="
-        echo " Skipping docker image builds       "
-        echo "===================================="
-    fi
-fi
+rm -rf ./src/docker/h3xrecon/h3xrecon
+rm ./src/docker/h3xrecon/setup.py
+
+echo "------------------------------------"
+echo " Building Msg Broker                "
+echo "------------------------------------"
+
+docker buildx build --output type=docker --file ./src/docker/msgbroker/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_msgbroker:latest ./src/docker/msgbroker/
+
+echo "------------------------------------"
+echo " Building Pgsql                     "
+echo "------------------------------------"
+
+cp src/h3xrecon/psql_dump.sql ./src/docker/pgsql/
+docker buildx build --output type=docker --file ./src/docker/pgsql/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_pgsql:latest ./src/docker/pgsql/
+rm ./src/docker/pgsql/psql_dump.sql
+
+echo "===================================="
+echo " Docker build commands completed!   "
+echo "===================================="

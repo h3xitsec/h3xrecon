@@ -1,0 +1,80 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: Get Swarm Node Information
+      community.docker.docker_swarm_info:
+      register: swarm_info
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Display Swarm Node Details
+      ansible.builtin.debug:
+        var: swarm_info
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: List Swarm Nodes
+      ansible.builtin.command: docker node ls
+      register: node_list
+      changed_when: false
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Display Swarm Nodes
+      ansible.builtin.debug:
+        var: node_list.stdout_lines
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Create Test Service
+      community.docker.docker_swarm_service:
+        name: validation-service
+        image: nginx
+        state: present
+        replicas: 3
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Wait for service to be fully deployed
+      ansible.builtin.command: "docker service ps validation-service --format {% raw %}'{{.CurrentState}}'{% endraw %}"
+      register: service_state
+      until: service_state.stdout_lines | select('match', '^Running.*') | list | length == 3
+      retries: 30
+      delay: 2
+      changed_when: false
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Verify Test Service
+      ansible.builtin.command: docker service ps validation-service
+      register: service_status
+      changed_when: false
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Display Service Status
+      ansible.builtin.debug:
+        var: service_status.stdout_lines
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Get Service Distribution
+      ansible.builtin.command: "docker service ps validation-service --format {% raw %}'{{.Node}}'{% endraw %}"
+      register: service_distribution
+      changed_when: false
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Display Service Distribution
+      ansible.builtin.debug:
+        var: service_distribution.stdout_lines
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
+
+    - name: Remove Test Service
+      community.docker.docker_swarm_service:
+        name: validation-service
+        state: absent
+      delegate_to: "{{ groups['processor'][0] }}"
+      run_once: true
