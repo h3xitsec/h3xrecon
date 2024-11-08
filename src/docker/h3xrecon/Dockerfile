@@ -36,7 +36,9 @@ COPY h3xrecon /app/src/h3xrecon
 
 COPY setup.py /app/setup.py
 
-RUN pip install .
+RUN python3 -m venv /app/venv && \
+    source /app/venv/bin/activate && \
+    pip install .
 
 COPY entrypoint.sh /entrypoint.sh
 
