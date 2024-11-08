@@ -1,4 +1,4 @@
-#!/etc/profiles/per-user/h3x/bin/bash
+#!/usr/bin/env bash
 trap 'echo Exited!; exit;' SIGINT SIGTERM
 unset DOCKER_HOST
 echo "===================================="
@@ -13,6 +13,7 @@ echo "===================================="
 
 cp setup.py ./src/docker/h3xrecon/
 cp -r src/h3xrecon ./src/docker/h3xrecon/
+cp .src/h3xrecon/psql_dump.sql ./src/docker/pgsql/
 
 if [ -z "$GITHUB_ACTIONS" ]; then
 echo "------------------------------------"
@@ -31,14 +32,12 @@ echo "------------------------------------"
     echo " Building Pgsql                     "
     echo "------------------------------------"
 
-    cp src/h3xrecon/psql_dump.sql ./src/docker/pgsql/
     docker buildx build --output type=docker --file ./src/docker/pgsql/Dockerfile --platform linux/amd64 --tag ghcr.io/h3xitsec/h3xrecon_pgsql:latest ./src/docker/pgsql/
-    rm ./src/docker/pgsql/psql_dump.sql
 
     echo "===================================="
     echo " Docker build commands completed!   "
     echo "===================================="
-    
+
     rm -rf ./src/docker/h3xrecon/h3xrecon
     rm ./src/docker/h3xrecon/setup.py
 fi
