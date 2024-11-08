@@ -14,12 +14,12 @@ services:
 
   database:
     image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
+    env_file: .env.compose
     environment:
       - POSTGRES_PASSWORD=
       - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_db_password
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
-      - H3XRECON_DB_PASS=
     secrets:
       - postgresql_db_password
     volumes:
