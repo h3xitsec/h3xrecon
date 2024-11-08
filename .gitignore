@@ -10,6 +10,7 @@ secrets/
 build/
 shell.nix
 vault.yaml
+h3xrecon.egg-info/
 tailscale_vault.yaml
 old_keep/
 dev_tools/
