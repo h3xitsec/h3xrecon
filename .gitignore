@@ -1,6 +1,9 @@
 venv/
 testenv/
 TODO.md
+src/docker/h3xrecon/h3xrecon/
+src/docker/h3xrecon/setup.py
+src/docker/pgsql/psql_dump.sql
 notes.md
 .env
 .psqlpass

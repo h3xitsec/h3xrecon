@@ -12,3 +12,13 @@
           - ../docker/docker-compose.yaml
       environment:
         DOCKER_HOST: ssh://{{ ansible_host }}
+        H3XRECON_DB_USER: h3xrecon
+        H3XRECON_DB_NAME: h3xrecon
+        H3XRECON_DB_HOST: database
+        H3XRECON_DB_PASS: h3xrecon
+        H3XRECON_REDIS_HOST: cache
+        H3XRECON_REDIS_PORT: 6379
+        H3XRECON_NATS_HOST: msgbroker
+        H3XRECON_NATS_PORT: 4222
+        H3XRECON_LOG_LEVEL: DEBUG
+        H3XRECON_LOG_FILE_PATH: /app/logs/h3xrecon.log

@@ -13,7 +13,7 @@ COPY h3xrecon /app/src/h3xrecon
 
 COPY setup.py /app/setup.py
 
-RUN cd /app && pip install .
+RUN pip install .
 
 ENV PATH="$PATH:/root/go/bin:/root/.pdtm/go/bin:/usr/lib/go-1.15/bin"
 

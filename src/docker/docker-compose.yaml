@@ -19,6 +19,10 @@ services:
   
   database:
     environment:
+      - H3XRECON_DB_USER
+      - H3XRECON_DB_NAME
+      - H3XRECON_DB_HOST
+      - H3XRECON_DB_PASS
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
@@ -60,12 +64,20 @@ services:
           - node.labels.H3XRECON_SWARM_ROLE == processor
   
   logging:
-    env_file: .env.compose
     image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
+      - cache:service_healthy
       - database:service_healthy
     environment:
+      - H3XRECON_DB_USER
+      - H3XRECON_DB_NAME
+      - H3XRECON_DB_HOST
+      - H3XRECON_DB_PASS
+      - H3XRECON_NATS_HOST
+      - H3XRECON_NATS_PORT
+      - H3XRECON_LOG_LEVEL
+      - H3XRECON_LOG_FILE_PATH
       - H3XRECON_ROLE=logging
     deploy:
       placement:
@@ -73,12 +85,22 @@ services:
           - node.labels.H3XRECON_SWARM_ROLE == processor
   
   jobprocessor:
-    env_file: .env.compose
     image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
+      - database:service_healthy
     environment:
+      - H3XRECON_DB_USER
+      - H3XRECON_DB_NAME
+      - H3XRECON_DB_HOST
+      - H3XRECON_DB_PASS
+      - H3XRECON_REDIS_HOST
+      - H3XRECON_REDIS_PORT
+      - H3XRECON_NATS_HOST
+      - H3XRECON_NATS_PORT
+      - H3XRECON_LOG_LEVEL
+      - H3XRECON_LOG_FILE_PATH
       - H3XRECON_ROLE=jobprocessor
     deploy:
       mode: replicated
@@ -88,12 +110,22 @@ services:
           - node.labels.H3XRECON_SWARM_ROLE == processor
   
   dataprocessor:
-    env_file: .env.compose
     image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
+      - database:service_healthy
     environment:
+      - H3XRECON_DB_USER
+      - H3XRECON_DB_NAME
+      - H3XRECON_DB_HOST
+      - H3XRECON_DB_PASS
+      - H3XRECON_REDIS_HOST
+      - H3XRECON_REDIS_PORT
+      - H3XRECON_NATS_HOST
+      - H3XRECON_NATS_PORT
+      - H3XRECON_LOG_LEVEL
+      - H3XRECON_LOG_FILE_PATH
       - H3XRECON_ROLE=dataprocessor
     deploy:
       mode: replicated
@@ -103,12 +135,22 @@ services:
           - node.labels.H3XRECON_SWARM_ROLE == processor
   
   worker:
-    env_file: .env.compose
     image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
+      - database:service_healthy
     environment:
+      - H3XRECON_DB_USER
+      - H3XRECON_DB_NAME
+      - H3XRECON_DB_HOST
+      - H3XRECON_DB_PASS
+      - H3XRECON_REDIS_HOST
+      - H3XRECON_REDIS_PORT
+      - H3XRECON_NATS_HOST
+      - H3XRECON_NATS_PORT
+      - H3XRECON_LOG_LEVEL
+      - H3XRECON_LOG_FILE_PATH
       - H3XRECON_ROLE=worker
     deploy:
       mode: replicated
