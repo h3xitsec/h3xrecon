@@ -35,7 +35,7 @@ services:
 
   msgbroker:
     image: ghcr.io/h3xitsec/h3xrecon_nats:latest
-    env_file: .env
+    env_file: .env.compose
     volumes:
       - nats_data:/data
     ports:
@@ -49,7 +49,7 @@ services:
 
   # logger:
   #   image: ghcr.io/h3xitsec/h3xrecon_logger:latest
-  #   env_file: .env
+  #   env_file: .env.compose
   #   environment:
   #     - LOGURU_LEVEL=DEBUG
   #   secrets:
@@ -62,7 +62,7 @@ services:
 
   jobprocessor:
     image: ghcr.io/h3xitsec/h3xrecon_jobprocessor:latest
-    env_file: .env
+    env_file: .env.compose
     environment:
       - LOGURU_LEVEL=DEBUG
       - H3XRECON_CONFIG_FILE=/app/config.json
@@ -76,7 +76,7 @@ services:
 
   dataprocessor:
     image: ghcr.io/h3xitsec/h3xrecon_dataprocessor:latest
-    env_file: .env
+    env_file: .env.compose
     environment:
       - LOGURU_LEVEL=DEBUG
       - H3XRECON_CONFIG_FILE=/app/config.json
@@ -90,7 +90,7 @@ services:
 
   worker:
     image: ghcr.io/h3xitsec/h3xrecon_worker:latest
-    env_file: .env
+    env_file: .env.compose
     environment:
       - LOGURU_LEVEL=DEBUG
       - H3XRECON_CONFIG_FILE=/app/config.json
