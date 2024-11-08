@@ -14,7 +14,7 @@
         state: present
         name: h3xrecon
         compose:
-          - ../deploy/docker-compose.yaml
+          - ../docker/docker-compose.yaml
       environment:
         DOCKER_HOST: ssh://{{ ansible_host }}
     - delegate_to: localhost

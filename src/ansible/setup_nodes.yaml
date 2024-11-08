@@ -60,17 +60,17 @@
       path: "{{ h3xrecon_target_directory }}"
       state: directory
 
-  - name: Copy requirements.txt
-    ansible.builtin.copy:
-      src: "../../requirements.txt"
-      dest: "{{ h3xrecon_target_directory }}/requirements.txt"
+  # - name: Copy requirements.txt
+  #   ansible.builtin.copy:
+  #     src: "../../requirements.txt"
+  #     dest: "{{ h3xrecon_target_directory }}/requirements.txt"
 
-  - name: Setup Python Virtual Environment
-    ansible.builtin.pip:
-      virtualenv: "{{ h3xrecon_target_directory }}/venv"
-      virtualenv_command: python3 -m venv
-      extra_args: --upgrade
-      requirements: "{{ h3xrecon_target_directory }}/requirements.txt"
+  # - name: Setup Python Virtual Environment
+  #   ansible.builtin.pip:
+  #     virtualenv: "{{ h3xrecon_target_directory }}/venv"
+  #     virtualenv_command: python3 -m venv
+  #     extra_args: --upgrade
+  #     requirements: "{{ h3xrecon_target_directory }}/requirements.txt"
 
   - name: Add ubuntu user to docker group
     ansible.builtin.user:

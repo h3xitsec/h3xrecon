@@ -1,5 +1,5 @@
 services:
-  redis:
+  cache:
     image: redis:6.2-alpine
     volumes:
       - redis_data:/data
@@ -23,8 +23,6 @@ services:
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
     image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
-    secrets:
-      - postgresql_db_password
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:
@@ -61,31 +59,27 @@ services:
         constraints:
           - node.labels.h3xrecon_role == processor
   
-  logger:
-    env_file: .env
-    image: ghcr.io/h3xitsec/h3xrecon_logger:latest
-    secrets:
-      - postgresql_db_password
+  logging:
+    env_file: .env.compose
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - database:service_healthy
     environment:
-      - LOGURU_LEVEL=INFO
+      - H3XRECON_ROLE=logging
     deploy:
       placement:
         constraints:
           - node.labels.h3xrecon_role == processor
   
   jobprocessor:
-    env_file: .env
-    image: ghcr.io/h3xitsec/h3xrecon_jobprocessor:latest
-    secrets:
-      - postgresql_db_password
+    env_file: .env.compose
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
     environment:
-      - LOGURU_LEVEL=INFO
+      - H3XRECON_ROLE=jobprocessor
     deploy:
       mode: replicated
       replicas: 1
@@ -94,15 +88,13 @@ services:
           - node.labels.h3xrecon_role == processor
   
   dataprocessor:
-    env_file: .env
-    image: ghcr.io/h3xitsec/h3xrecon_dataprocessor:latest
-    secrets:
-      - postgresql_db_password
+    env_file: .env.compose
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
     environment:
-      - LOGURU_LEVEL=INFO
+      - H3XRECON_ROLE=dataprocessor
     deploy:
       mode: replicated
       replicas: 1
@@ -111,15 +103,13 @@ services:
           - node.labels.h3xrecon_role == processor
   
   worker:
-    env_file: .env
-    image: ghcr.io/h3xitsec/h3xrecon_worker:latest
+    env_file: .env.compose
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
     environment:
-      - LOGURU_LEVEL=INFO
-    secrets:
-      - postgresql_db_password
+      - H3XRECON_ROLE=worker
     deploy:
       mode: replicated
       replicas: 5
@@ -132,7 +122,3 @@ volumes:
   redis_data: {}
   nats_data: {}
   tailscale_state: {}
-
-secrets:
-  postgresql_db_password:
-    environment: H3XRECON_DB_PASS
