@@ -3,6 +3,7 @@ from h3xrecon.core.config import Config
 from h3xrecon.core.queue import QueueManager
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable
+from loguru import logger
 import os
 import traceback
 import json
@@ -141,9 +142,9 @@ class DataProcessor:
     #     }
     # }
     async def process_domain(self, msg_data: Dict[str, Any]):
-        logger.debug(msg_data)
+        logger.info(msg_data)
         for domain in msg_data.get('data'):
-            #logger.debug(f"Processing domain: {domain}")
+            logger.info(f"Processing domain: {domain}")
             inserted = await self.db_manager.insert_domain(
                 domain=domain, 
                 ips=msg_data.get('attributes', {}).get('ips'), 
@@ -157,7 +158,7 @@ class DataProcessor:
 
     # Input format
     # {
-    #     "data": {
+    #     "data": [{
     #         "attributes": {
     #             "content_length": 80329,
     #             "content_type": "text/html",
@@ -172,39 +173,31 @@ class DataProcessor:
     #             "webserver": "DPS/2.0.0+sha-a9ecb8e"
     #         },
     #         "url": "http://h3x.it:80"
-    #     },
+    #     }],
     #     "data_type": "url",
     #     "program_id": 1
     # }
-    async def process_url(self, msg_data: Dict[str, Any]):
-        if msg_data:
+    async def process_url(self, msg: Dict[str, Any]):
+        if msg:
             try:
-                logger.info(f"Processing URL result for program {msg_data.get('program_id')}: {msg_data.get('data').get('url')}")
-                data = msg_data.get('data', {})
-                logger.debug(msg_data.get('data'))
-                logger.debug(msg_data.get('data', {}).get('httpx_data', {}))
-                await self.db_manager.insert_url(
-                    url=msg_data.get('data').get('url'),
-                    httpx_data=msg_data.get('data', {}).get('httpx_data', {}),
-                    program_id=msg_data.get('program_id')
-                    # title=msg_data.get('data').get('attributes', {}).get('title'),
-                    # chain_status_codes=msg_data.get('data').get('attributes', {}).get('chain_status_codes', []),
-                    # status_code=msg_data.get('data').get('attributes', {}).get('status_code'),
-                    # final_url=msg_data.get('data').get('attributes', {}).get('final_url'),
-                    # program_id=msg_msg_data.get('data').get('program_id'),
-                    # scheme=msg_data.get('data').get('attributes', {}).get('scheme'),
-                    # port=msg_data.get('data').get('attributes', {}).get('port'),
-                    # webserver=msg_data.get('data').get('attributes', {}).get('webserver'),
-                    # content_type=msg_data.get('data').get('attributes', {}).get('content_type'),
-                    # content_length=msg_data.get('data').get('attributes', {}).get('content_length'),
-                    # tech=msg_data.get('data').get('attributes', {}).get('tech')
-                )
-                # Send a job to the workers to test the URL if httpx_data is missing
-                if not msg_data.get('data').get('httpx_data'):
-                    await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message={"function": "test_http", "program_id": msg_data.get('program_id'), "params": {"target": msg_data.get('data').get('url')}})
+                msg_data = msg.get('data', {})
+                
+                logger.debug(msg_data)
+                for data in msg_data:
+                    logger.info(f"Processing URL result for program {msg.get('program_id')}: {data.get('url')}")
+                    await self.db_manager.insert_url(
+                        url=data.get('url'),
+                        httpx_data=data.get('httpx_data', {}),
+                        program_id=msg.get('program_id')
+                    )
+                    # Send a job to the workers to test the URL if httpx_data is missing
+                    if not data.get('httpx_data'):
+                        logger.info(f"Sending job to test URL: {data.get('url')}")
+                        await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message={"function": "test_http", "program_id": msg.get('program_id'), "params": {"target": data.get('url')}})
                 
             except Exception as e:
-                logger.error(f"Failed to process URL in program {msg_data.get('program_id')}: {e}")
+                logger.error(f"Failed to process URL in program {msg.get('program_id')}: {e}")
+                logger.exception(e)
     
     # Input format
     # {

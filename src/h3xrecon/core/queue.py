@@ -4,7 +4,6 @@ from nats.js.api import ConsumerConfig, DeliverPolicy, AckPolicy, ReplayPolicy
 from nats.errors import TimeoutError as NatsTimeoutError
 from loguru import logger
 import json
-import os
 import asyncio
 from datetime import datetime, timezone
 from .config import Config

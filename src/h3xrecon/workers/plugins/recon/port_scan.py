@@ -1,5 +1,5 @@
 from typing import AsyncGenerator, Dict, Any
-from plugins.base import ReconPlugin
+from h3xrecon.workers.plugins.base import ReconPlugin
 from loguru import logger
 import asyncio
 import os

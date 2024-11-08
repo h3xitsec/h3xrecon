@@ -24,7 +24,6 @@ import asyncio
 import sys
 from docopt import docopt
 from h3xrecon.cli.client import H3XReconClient
-from h3xrecon.core.config import Config
 
 VERSION = "0.0.1"
 

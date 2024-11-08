@@ -1,6 +1,6 @@
 import asyncio
 from loguru import logger
-from new_src.h3xrecon.jobprocessor.base import JobProcessor
+from h3xrecon.jobprocessor import JobProcessor
 from h3xrecon.core.config import Config
 
 async def main():

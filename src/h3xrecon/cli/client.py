@@ -20,11 +20,8 @@ Options:
     --details       Show details about URLs.
 """
 
-import os
 import sys
 import re
-import asyncio
-import json
 from urllib.parse import urlparse
 from h3xrecon.core.database import DatabaseManager
 from loguru import logger
@@ -105,24 +102,24 @@ class H3XReconClient:
         # Format message based on item type
         if isinstance(items, str):
             items = [items]
+        logger.info(f"Adding {item_type} items to program {program_name}: {items}")
+        if item_type == 'url':
+            items = [{'url': item} for item in items]
+        #for item in items:
+        message = {
+            "program_id": program_id,
+            "data_type": item_type,
+            "data": items
+        }
 
-        for item in items:
-            message = {
-                "program_id": program_id,
-                "data_type": item_type,
-                "data": {
-                    "url": item
-                }
-            }
-
-            # For URLs, we need to format the data differently
-            await self.qm.connect()
-            await self.qm.publish_message(
-                subject="recon.data",
-                stream="RECON_DATA",
-                message=message
-            )
-            await self.qm.close()
+        # For URLs, we need to format the data differently
+        await self.qm.connect()
+        await self.qm.publish_message(
+            subject="recon.data",
+            stream="RECON_DATA",
+            message=message
+        )
+        await self.qm.close()
 
     async def remove_item(self, item_type: str, program_name: str, item: str) -> bool:
         """Remove an item (domain, IP, or URL) from a program"""

@@ -4,7 +4,7 @@ import json
 import re
 import asyncpg
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from loguru import logger
 from datetime import datetime
 from .config import Config
@@ -16,6 +16,13 @@ class DatabaseManager:
         else:
             self.config = config
         self.pool = None
+
+    async def __aenter__(self):
+        await self.ensure_connected()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
 
     async def ensure_connected(self):
         if self.pool is None:
@@ -29,20 +36,21 @@ class DatabaseManager:
             await self.pool.close()
     
 
-    async def format_json_output(self, records: List[Dict[str, Any]]) -> str:
+    async def format_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Takes a list of database records and formats them as a JSON string
+        Takes a list of database records and formats them for further processing
         
         Args:
             records: List of database record dictionaries
             
         Returns:
-            Formatted JSON string representation of the records
+            List of formatted records with datetime objects converted to ISO format strings
+            Empty list if error occurs
         """
-        try:
             # Convert any datetime objects to strings for JSON serialization
-            formatted_records = []
-            for record in records:
+        formatted_records = []
+        for record in records:
+            try:
                 formatted_record = {}
                 for key, value in record.items():
                     if hasattr(value, 'isoformat'):  # Check if datetime-like
@@ -50,12 +58,9 @@ class DatabaseManager:
                     else:
                         formatted_record[key] = value
                 formatted_records.append(formatted_record)
-                
-            return formatted_records
-            
-        except Exception as e:
-            logger.error(f"Error formatting JSON output: {str(e)}")
-            return json.dumps({"error": "Failed to format records"})
+            except Exception as e:
+                logger.error(f"Error formatting records: {str(e)}")
+        return formatted_records
     
     async def get_urls(self, program_name: str = None):
         if program_name:
@@ -67,7 +72,7 @@ class DatabaseManager:
         WHERE p.name = $1
         """
         result = await self.execute_query(query, program_name)
-        return await self.format_json_output(result)
+        return await self.format_records(result)
 
     async def get_resolved_domains(self, program_name: str = None):
         query = """
@@ -86,7 +91,7 @@ class DatabaseManager:
         else:
             query += " GROUP BY d.domain"
             result = await self.execute_query(query)
-        return await self.format_json_output(result)
+        return await self.format_records(result)
 
     async def get_unresolved_domains(self, program_name: str = None):
         query = """
@@ -103,7 +108,7 @@ class DatabaseManager:
             result = await self.execute_query(query, program_name)
         else:
             result = await self.execute_query(query)
-        return await self.format_json_output(result)
+        return await self.format_records(result)
 
     async def get_reverse_resolved_ips(self, program_name: str = None):
         query = """
@@ -119,7 +124,7 @@ class DatabaseManager:
             result = await self.execute_query(query, program_name)
         else:
             result = await self.execute_query(query)
-        return await self.format_json_output(result)
+        return await self.format_records(result)
 
     async def get_not_reverse_resolved_ips(self, program_name: str = None):
         query = """
@@ -135,7 +140,7 @@ class DatabaseManager:
             result = await self.execute_query(query, program_name)
         else:
             result = await self.execute_query(query)
-        return await self.format_json_output(result)
+        return await self.format_records(result)
 
     async def check_domain_regex_match(self, domain: str, program_id: int) -> bool:
         await self.ensure_connected()
@@ -182,7 +187,7 @@ class DatabaseManager:
             result = await self.execute_query(query, program_name)
         else:
             result = await self.execute_query(query)
-        return await self.format_json_output(result)
+        return await self.format_records(result)
 
     async def get_services(self, program_name: str = None):
         query = """
@@ -200,7 +205,7 @@ class DatabaseManager:
             result = await self.execute_query(query, program_name)
         else:
             result = await self.execute_query(query)
-        return await self.format_json_output(result)
+        return await self.format_records(result)
 
     async def add_program(self, program_name: str, scope: List = None, cidr: List = None):
         query = """
@@ -306,7 +311,7 @@ class DatabaseManager:
             WHERE p.name = $1
             """
             result = await self.execute_query(query, program_name)
-            return await self.format_json_output(result)
+            return await self.format_records(result)
     
     async def get_programs(self):
         """List all reconnaissance programs"""
@@ -317,7 +322,7 @@ class DatabaseManager:
         """
         result = await self.execute_query(query)
         # Extract the name property from each record and return as a list of strings
-        return await self.format_json_output(result)
+        return await self.format_records(result)
 
 
     async def insert_service(self, ip: str, program_id: int, port: int = None, protocol: str = None, service: str = None):
@@ -397,6 +402,7 @@ class DatabaseManager:
         if self.pool is None:
             raise Exception("Database connection pool is not initialized")
         try:
+            logger.debug(f"Checking domain regex match for {domain} in program {program_id}")
             if await self.check_domain_regex_match(domain, program_id):
                 async with self.pool.acquire() as conn:
                     # Get IP IDs
@@ -478,17 +484,39 @@ class DatabaseManager:
             logger.error(f"Error inserting or updating URL in database: {e}")
             logger.exception(e)
     
-    async def check_ip_pattern_match(self, ip: str) -> bool:
-        #logger.debug(f"Checking IP pattern match for {ip}")
+    async def check_domain_regex_match(self, domain: str, program_id: int) -> bool:
+        await self.ensure_connected()
         try:
-            ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
-            if re.match(ip_pattern, ip):
-                octets = ip.split('.')
-                return all(0 <= int(octet) <= 255 for octet in octets)
-            return False
+            if isinstance(domain, dict) and 'subdomain' in domain:
+                domain = domain['subdomain']
+            
+            if not isinstance(domain, str):
+                logger.warning(f"Domain is not a string: {domain}, type: {type(domain)}")
+                return False
+
+            async with self.pool.acquire() as conn:
+                logger.debug("Acquired connection from pool")
+                program_regexes = await conn.fetch(
+                    'SELECT regex FROM program_scopes WHERE program_id = $1',
+                    program_id
+                )
+                for row in program_regexes:
+                    regex = row['regex']
+                    if not isinstance(regex, str):
+                        logger.warning(f"Regex is not a string: {regex}, type: {type(regex)}")
+                        continue
+                    try:
+                        if re.match(regex, domain):
+                            return True
+                    except re.error as e:
+                        logger.error(f"Invalid regex pattern: {regex}. Error: {str(e)}")
+                return False
         except Exception as e:
-            logger.error(f"Error checking IP pattern match: {e}")
+            logger.error(f"Error checking domain regex match: {str(e)}")
+            logger.exception(e)
             return False
+        finally:
+            logger.debug("Exiting check_domain_regex_match method")
 
     async def insert_ip(self, ip: str, ptr: str, program_id: int) -> int:
         await self.ensure_connected()
@@ -577,7 +605,8 @@ class DatabaseManager:
         await self.ensure_connected()
         try:
             async with self.pool.acquire() as conn:
-                return await conn.fetch(query, *args)
+                result = await conn.fetch(query, *args)
+                return await self.format_records(result)
         except Exception as e:
             logger.error(f"Error executing query: {e}")
             return []

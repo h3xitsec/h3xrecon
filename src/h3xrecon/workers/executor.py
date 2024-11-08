@@ -20,23 +20,41 @@ class FunctionExecutor:
     def load_plugins(self):
         """Dynamically load all recon plugins."""
         try:
-            package = importlib.import_module('plugins')
+            package = importlib.import_module('h3xrecon.workers.plugins')
+            logger.debug(f"Found plugin package at: {package.__path__}")
+            
+            # Walk through all subdirectories
+            plugin_modules = []
+            for finder, name, ispkg in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
+                if not name.endswith('.base'):  # Skip the base module
+                    plugin_modules.append(name)
+            
+            logger.debug(f"Discovered modules: {plugin_modules}")
+            
         except ModuleNotFoundError as e:
             logger.error(f"Failed to import 'plugins': {e}")
             return
 
-        for _, module_name, _ in pkgutil.iter_modules(package.__path__):
+        for module_name in plugin_modules:
             try:
-                module = importlib.import_module(f'plugins.{module_name}')
+                logger.debug(f"Attempting to load module: {module_name}")
+                module = importlib.import_module(module_name)
+                
                 for attribute_name in dir(module):
                     attribute = getattr(module, attribute_name)
-                    if isinstance(attribute, type) and issubclass(attribute, ReconPlugin) and attribute is not ReconPlugin:
-                        plugin_instance = attribute()
-                        self.function_map[plugin_instance.name] = plugin_instance.execute
-                        logger.info(f"Loaded plugin: {plugin_instance.name}")
+                    #logger.debug(f"Checking attribute: {attribute_name}, type: {type(attribute)}")
+                    
+                    if not isinstance(attribute, type) or not issubclass(attribute, ReconPlugin) or attribute is ReconPlugin:
+                       continue
+                        
+                    plugin_instance = attribute()
+                    self.function_map[plugin_instance.name] = plugin_instance.execute
+                    logger.info(f"Loaded plugin: {plugin_instance.name}")
+                
+                
             except Exception as e:
-                logger.error(f"Error loading plugin '{module_name}': {e}")
-
+                logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
+        logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
     async def execute_function(self, func_name: str, target: str, program_id: int, execution_id: str, timestamp: str, force_execution: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
         if func_name not in self.function_map:
             logger.error(f"Function '{func_name}' not found in function_map.")

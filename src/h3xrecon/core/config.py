@@ -156,7 +156,7 @@ class Config:
             port=int(os.getenv('H3XRECON_DB_PORT', '5432')),
             database=os.getenv('H3XRECON_DB_NAME', 'h3xrecon'),
             user=os.getenv('H3XRECON_DB_USER', 'postgres'),
-            password=os.getenv('H3XRECON_DB_PASSWORD', ''),
+            password=os.getenv('H3XRECON_DB_PASS', ''),
             min_size=int(os.getenv('H3XRECON_DB_MIN_CONN', '10')),
             max_size=int(os.getenv('H3XRECON_DB_MAX_CONN', '20'))
         )
