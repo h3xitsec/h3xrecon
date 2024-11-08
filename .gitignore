@@ -1,4 +1,5 @@
 venv/
+testenv/
 TODO.md
 notes.md
 .env
@@ -6,6 +7,9 @@ notes.md
 *.log
 env.sh
 .env
+.coverage
+.cursorignore
+*.log
 secrets/
 build/
 shell.nix
