@@ -5,6 +5,7 @@ echo "H3XRECON_ROLE=${H3XRECON_ROLE}"
 
 # Force Python to run in unbuffered mode and forward all output
 export PYTHONUNBUFFERED=1
+export PYTHONPATH=/app:$PYTHONPATH
 
 if [ "$H3XRECON_ROLE" == "worker" ]; then
     echo "Starting worker"
