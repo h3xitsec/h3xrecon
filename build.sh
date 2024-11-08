@@ -10,10 +10,9 @@ echo "      Building docker images        "
 echo "===================================="
 
 
-
 cp setup.py ./src/docker/h3xrecon/
 cp -r src/h3xrecon ./src/docker/h3xrecon/
-cp .src/h3xrecon/psql_dump.sql ./src/docker/pgsql/
+cp psql_dump.sql ./src/docker/pgsql/
 
 if [ -z "$GITHUB_ACTIONS" ]; then
 echo "------------------------------------"

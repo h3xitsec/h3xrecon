@@ -1,7 +1,11 @@
 ---
 - hosts: all
   gather_facts: false
+  vars_files:
+    - vaults/vault.yaml
   tasks:
+    - name: Test communication with Nodes
+      ansible.builtin.include_tasks: tasks/test_all_nodes.yaml
     - name: Get Swarm Node Information
       community.docker.docker_swarm_info:
       register: swarm_info

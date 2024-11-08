@@ -2,7 +2,7 @@ all:
   vars:
     h3xrecon_base_directory: /home/h3x/data/projects/h3xrecon
     h3xrecon_target_directory: /home/{{ ansible_user }}/h3xrecon
-    h3xrecon_source_directory: "{{ h3xrecon_base_directory }}/build/" #{{ h3xrecon_role | capitalize }}/"
+    h3xrecon_source_directory: "{{ h3xrecon_base_directory }}/build/" #{{ H3XRECON_SWARM_ROLE | capitalize }}/"
     h3xrecon_timezone: America/Montreal
 
   ## Hosts Definitions
@@ -12,7 +12,7 @@ all:
 ## Processor Host Group
 processor:
   vars:
-    h3xrecon_role: processor
+    H3XRECON_SWARM_ROLE: processor
   hosts:
     recon:
       ansible_host: 192.168.0.91
@@ -23,48 +23,50 @@ processor:
 ## Workers Hosts Group
 workers:
   vars:
-    h3xrecon_role: worker
+    H3XRECON_SWARM_ROLE: worker
     h3xrecon_dockercompose_pkg: docker-compose-v2
   hosts:
     vps2:
       ansible_host: 155.248.239.74
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-      ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+      ansible_ssh_private_key_file: ./keys/workers.key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
+
     vps4:
       ansible_host: 155.248.233.234
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-      ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+      ansible_ssh_private_key_file: ./keys/workers.key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 
     # vps5:
     #   ansible_host: 155.248.233.111
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+
     gclsrv1:
       ansible_host: 155.248.233.90
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-      ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+      ansible_ssh_private_key_file: ./keys/workers.key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 
     gclsrv2:
       ansible_host: 168.138.90.227
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-      ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+      ansible_ssh_private_key_file: ./keys/workers.key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 
     gclsrv3:
       ansible_host: 155.248.234.26
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-      ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+      ansible_ssh_private_key_file: ./keys/workers.key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 
     gclsrv4:
       ansible_host: 168.138.90.142
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-      ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+      ansible_ssh_private_key_file: ./keys/workers.key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 
     # gclsrv1:
     # gclsrv2:
@@ -89,52 +91,52 @@ workers:
     #   ansible_host: 168.138.88.60
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 
     # kgvps2:
     #   ansible_host: 168.138.71.68
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 
     # kgvps3:
     #   ansible_host: 168.138.70.133
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 
     # kgvps4:
     #   ansible_host: 155.248.228.244
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 
     # kgvps5:
     #   ansible_host: 155.248.226.20
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 
     # kgvps6:
     #   ansible_host: 204.216.109.137
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 
     # kgvps7:
     #   ansible_host: 155.248.226.161
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 
     # kgvps8:
     #   ansible_host: 155.248.226.215
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
 
     # vps6:
     #   ansible_host: 155.248.228.82
     #   ansible_user: ubuntu
     #   ansible_ssh_private_key_file: /mnt/priv/h3xrecon/playbooks/workers/keys/ansible.key
-    #   ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+    #   #ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'

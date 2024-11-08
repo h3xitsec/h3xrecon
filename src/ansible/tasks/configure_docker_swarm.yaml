@@ -33,13 +33,13 @@
 - name: Tag Swarm Nodes
   block:
     - name: Tag processor node
-      ansible.builtin.shell: docker node update --label-add h3xrecon_role=processor {{ groups['processor'][0] }}
+      ansible.builtin.shell: docker node update --label-add H3XRECON_SWARM_ROLE=processor {{ groups['processor'][0] }}
       when: 
         - inventory_hostname == groups['processor'][0]
       delegate_to: "{{ groups['processor'][0] }}"
 
     - name: Tag worker nodes
-      ansible.builtin.shell: docker node update --label-add h3xrecon_role=worker {{ item }}
+      ansible.builtin.shell: docker node update --label-add H3XRECON_SWARM_ROLE=worker {{ item }}
       loop: "{{ groups['workers'] }}"
       run_once: true
       when: 

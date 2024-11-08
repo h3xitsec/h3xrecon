@@ -15,7 +15,7 @@ services:
     deploy:
       placement:
         constraints:
-          - node.labels.h3xrecon_role == processor
+          - node.labels.H3XRECON_SWARM_ROLE == processor
   
   database:
     environment:
@@ -39,7 +39,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.h3xrecon_role == processor
+          - node.labels.H3XRECON_SWARM_ROLE == processor
 
   msgbroker:
     image: ghcr.io/h3xitsec/h3xrecon_msgbroker:latest
@@ -57,7 +57,7 @@ services:
     deploy:
       placement:
         constraints:
-          - node.labels.h3xrecon_role == processor
+          - node.labels.H3XRECON_SWARM_ROLE == processor
   
   logging:
     env_file: .env.compose
@@ -70,7 +70,7 @@ services:
     deploy:
       placement:
         constraints:
-          - node.labels.h3xrecon_role == processor
+          - node.labels.H3XRECON_SWARM_ROLE == processor
   
   jobprocessor:
     env_file: .env.compose
@@ -85,7 +85,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.h3xrecon_role == processor
+          - node.labels.H3XRECON_SWARM_ROLE == processor
   
   dataprocessor:
     env_file: .env.compose
@@ -100,7 +100,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.h3xrecon_role == processor
+          - node.labels.H3XRECON_SWARM_ROLE == processor
   
   worker:
     env_file: .env.compose
@@ -115,7 +115,7 @@ services:
       replicas: 5
       placement:
         constraints:
-          - node.labels.h3xrecon_role == worker
+          - node.labels.H3XRECON_SWARM_ROLE == worker
 
 volumes:
   pgsql_data: {}
