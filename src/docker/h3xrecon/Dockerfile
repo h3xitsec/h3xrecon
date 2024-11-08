@@ -1,4 +1,19 @@
-FROM ghcr.io/h3xitsec/h3xrecon_base:latest
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install additional system dependencies
+RUN apt-get update && apt-get install -y \
+    dnsutils \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONPATH="/app"
+
+COPY h3xrecon /app/src/h3xrecon
+
+COPY setup.py /app/setup.py
+
+RUN cd /app && pip install .
 
 ENV PATH="$PATH:/root/go/bin:/root/.pdtm/go/bin:/usr/lib/go-1.15/bin"
 
@@ -25,6 +40,7 @@ RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
 
 RUN go install github.com/Josue87/gotator@latest
 
-ENV H3XRECON_ROLE=worker
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-CMD ["python", "-m", "h3xrecon.workers.main"]
+CMD ["/entrypoint.sh"]

@@ -19,8 +19,7 @@ services:
   
   database:
     environment:
-      - POSTGRES_PASSWORD=
-      - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_db_password
+      - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
     image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
@@ -45,7 +44,7 @@ services:
           - node.labels.h3xrecon_role == processor
 
   msgbroker:
-    image: ghcr.io/h3xitsec/h3xrecon_nats:latest
+    image: ghcr.io/h3xitsec/h3xrecon_msgbroker:latest
     volumes:
       - nats_data:/data
     ports:
