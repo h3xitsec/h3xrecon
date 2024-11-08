@@ -50,9 +50,9 @@ services:
     environment:
       - H3XRECON_ROLE=logging
     depends_on:
-      pgsql:
+      database:
         condition: service_healthy
-      nats:
+      msgbroker:
         condition: service_healthy
 
   jobprocessor:
