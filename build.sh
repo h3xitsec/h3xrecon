@@ -9,11 +9,13 @@ echo "===================================="
 echo "      Building docker images        "
 echo "===================================="
 
-
+ls -la ./src
+ls -la ./src/h3xrecon
 cp setup.py ./src/docker/h3xrecon/
 cp -r src/h3xrecon ./src/docker/h3xrecon/
 cp psql_dump.sql ./src/docker/pgsql/
-
+ls -l ./src/docker
+ls -l ./src/docker/pgsql
 if [ -z "$GITHUB_ACTIONS" ]; then
 echo "------------------------------------"
     echo " Building Reconh3x image            "
