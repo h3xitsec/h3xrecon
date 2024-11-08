@@ -19,3 +19,9 @@ python3 -m venv venv
 source venv/bin/activate
 pip install .
 ```
+
+### Start Docker Compose services
+
+```bash
+docker compose -f src/docker/docker-compose.local.yaml up -d
+```

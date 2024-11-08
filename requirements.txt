@@ -1,0 +1,14 @@
+asyncio==3.4.3
+asyncpg==0.30.0
+cffi==1.17.1
+cryptography==43.0.3
+docopt==0.6.2
+jsondiff==2.2.1
+loguru==0.7.2
+nats-py==2.9.0
+pexpect==4.9.0
+psycopg2==2.9.10
+python-dotenv==1.0.1
+redis==5.2.0
+setuptools==75.3.0
+tabulate==0.9.0

@@ -26,7 +26,7 @@ setup(
     },
     author="h3xit",
     description="h3xrecon bug bounty reconnaissance automation",
-    long_description=open(readme_path).read(),
+    long_description="h3xrecon bug bounty reconnaissance automation",
     long_description_content_type="text/markdown",
     url="https://github.com/h3xitsec/h3xrecon",  # Your repository URL
     classifiers=[
