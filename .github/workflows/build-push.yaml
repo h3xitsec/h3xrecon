@@ -32,16 +32,16 @@ jobs:
       - name: Run build script
         run: bash build.sh
       
-      # - name: Build and push base image
-      #   uses: docker/build-push-action@v4
-      #   with:
-      #     context: ./src/docker/h3xrecon
-      #     file: ./src/docker/h3xrecon/Dockerfile
-      #     push: true
-      #     tags: ghcr.io/${{ github.repository_owner }}/h3xrecon:latest
-      #     cache-from: type=gha
-      #     cache-to: type=gha,mode=max
-      #     platforms: linux/amd64,linux/arm64
+      - name: Build and push base image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./src/docker/h3xrecon
+          file: ./src/docker/h3xrecon/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
       
       - name: Build and push database image
         uses: docker/build-push-action@v4
@@ -57,8 +57,8 @@ jobs:
       - name: Build and push msgbroker image
         uses: docker/build-push-action@v4
         with:
-          context: ./src/docker/pgsql
-          file: ./src/docker/pgsql/Dockerfile
+          context: ./src/docker/msgbroker
+          file: ./src/docker/msgbroker/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_msgbroker:latest
           cache-from: type=gha
