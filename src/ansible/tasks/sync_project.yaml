@@ -4,6 +4,11 @@
     path: "{{ h3xrecon_target_directory }}/"
     state: absent
 
+- name: Create target directory
+  ansible.builtin.file:
+    path: "{{ h3xrecon_target_directory }}"
+    state: directory
+
 - name: Sync Project
   ansible.builtin.synchronize:
     src: "{{ h3xrecon_source_directory }}"

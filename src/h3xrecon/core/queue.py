@@ -19,6 +19,7 @@ class QueueManager:
             self.config = Config().nats
         else:
             self.config = config
+        logger.debug(f"NATS config: {self.config.url}")
         self._subscriptions = {}
     
     async def connect(self) -> None:

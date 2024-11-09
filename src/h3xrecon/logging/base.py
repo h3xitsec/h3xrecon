@@ -31,6 +31,21 @@ class LoggingService:
         await self.db_manager.connect()
         logger.info("Connected to the database and ensured 'logs' table exists")
 
+    async def log_message(self, log_entry: Dict[str, Any]):
+        logger.debug(f"Logging message: {log_entry}")
+        # Convert timestamp string to datetime object
+        timestamp = datetime.fromisoformat(log_entry.get("timestamp"))
+        await self.db_manager.execute_query('INSERT INTO logs (execution_id, timestamp, level, component, message, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
+            log_entry.get("execution_id"),
+            timestamp,
+            log_entry.get("level"),
+            log_entry.get("component"),
+            log_entry.get("message"),
+            json.dumps(log_entry.get("metadata", {}))
+            )
+        logger.debug(f"Inserted log entry: {log_entry['execution_id']}")
+
+
     async def message_handler(self, msg):
         try:
             log_entry = json.loads(msg.data.decode())
@@ -38,19 +53,7 @@ class LoggingService:
             if not required_fields.issubset(log_entry.keys()):
                 logger.error("Received log entry with missing fields")
                 return
-
-            # Convert timestamp string to datetime object
-            timestamp = datetime.fromisoformat(log_entry.get("timestamp"))
-    
-            await self.db_manager.execute_query('INSERT INTO logs (execution_id, timestamp, level, component, message, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
-                log_entry.get("execution_id"),
-                timestamp,
-                log_entry.get("level"),
-                log_entry.get("component"),
-                log_entry.get("message"),
-                json.dumps(log_entry.get("metadata", {}))
-                )
-            logger.debug(f"Inserted log entry: {log_entry['execution_id']}")
+            await self.log_message(log_entry)
         except Exception as e:
             logger.exception(f"Failed to process log entry: {e}")
 

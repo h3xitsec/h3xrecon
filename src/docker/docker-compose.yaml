@@ -1,4 +1,59 @@
+configs:
+  grafana-dashboards:
+    file: ./grafana/provisioning/dashboards/logs-dashboard.json
+  grafana-dashboard-config:
+    file: ./grafana/provisioning/dashboards/dashboard.yml
+  grafana-datasources:
+    file: ./grafana/provisioning/datasources/datasource.yml
+  promtail-config:
+    file: ./grafana/provisioning/promtail/config.yml
+
 services:
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - target: 3100
+        published: 3100
+    command: -config.file=/etc/loki/local-config.yaml
+    deploy:
+      placement:
+        constraints:
+          - node.labels.H3XRECON_SWARM_ROLE == processor
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    configs:
+      - source: promtail-config
+        target: /etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    deploy:
+      mode: global
+      
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - target: 3000
+        published: 3000
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    configs:
+      - source: grafana-dashboards
+        target: /etc/grafana/provisioning/dashboards/logs-dashboard.json
+      - source: grafana-dashboard-config
+        target: /etc/grafana/provisioning/dashboards/dashboard.yml
+      - source: grafana-datasources
+        target: /etc/grafana/provisioning/datasources/datasource.yml
+    deploy:
+      placement:
+        constraints:
+          - node.labels.H3XRECON_SWARM_ROLE == processor
+
   cache:
     image: redis:6.2-alpine
     volumes:
@@ -26,7 +81,7 @@ services:
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
-    image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
+    image: h3xrecontest/h3xrecon_pgsql:latest
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:
@@ -46,7 +101,7 @@ services:
           - node.labels.H3XRECON_SWARM_ROLE == processor
 
   msgbroker:
-    image: ghcr.io/h3xitsec/h3xrecon_msgbroker:latest
+    image: h3xrecontest/h3xrecon_msgbroker:latest
     volumes:
       - nats_data:/data
     ports:
@@ -62,9 +117,15 @@ services:
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == processor
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
   
   logging:
-    image: ghcr.io/h3xitsec/h3xrecon:latest
+    image: h3xrecontest/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -83,9 +144,15 @@ services:
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == processor
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
   
   jobprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon:latest
+    image: h3xrecontest/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -108,9 +175,15 @@ services:
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == processor
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
   
   dataprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon:latest
+    image: h3xrecontest/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -133,6 +206,12 @@ services:
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == processor
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
   
   worker:
     image: ghcr.io/h3xitsec/h3xrecon:latest
@@ -158,6 +237,12 @@ services:
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == worker
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
 
 volumes:
   pgsql_data: {}

@@ -15,6 +15,7 @@ class DatabaseManager:
             self.config = Config().database.to_dict()
         else:
             self.config = config
+        logger.debug(f"Database config: {self.config}")
         self.pool = None
 
     async def __aenter__(self):

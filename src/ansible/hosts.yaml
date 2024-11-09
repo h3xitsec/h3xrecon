@@ -1,8 +1,8 @@
 all:
   vars:
-    h3xrecon_base_directory: /home/h3x/data/projects/h3xrecon
-    h3xrecon_target_directory: /home/{{ ansible_user }}/h3xrecon
-    h3xrecon_source_directory: "{{ h3xrecon_base_directory }}/build/" #{{ H3XRECON_SWARM_ROLE | capitalize }}/"
+    h3xrecon_base_directory: ./
+    h3xrecon_target_directory: /home/{{ ansible_user }}/data/projects/h3xrecon/
+    h3xrecon_source_directory: "{{ h3xrecon_base_directory }}/../.." #{{ H3XRECON_SWARM_ROLE | capitalize }}/"
     h3xrecon_timezone: America/Montreal
 
   ## Hosts Definitions
