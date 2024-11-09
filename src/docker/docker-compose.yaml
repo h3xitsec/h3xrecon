@@ -7,6 +7,8 @@ configs:
     file: ./grafana/provisioning/datasources/datasource.yml
   promtail-config:
     file: ./grafana/provisioning/promtail/config.yml
+  postgres-init:
+    file: ../h3xrecon/psql_dump.sql
 
 services:
   loki:
@@ -81,7 +83,10 @@ services:
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
-    image: h3xrecontest/h3xrecon_pgsql:latest
+    image: postgres #ghcr.io/h3xitsec/h3xrecon_pgsql:latest
+    configs:
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/psql_dump.sql
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:
@@ -101,7 +106,7 @@ services:
           - node.labels.H3XRECON_SWARM_ROLE == processor
 
   msgbroker:
-    image: h3xrecontest/h3xrecon_msgbroker:latest
+    image: ghcr.io/h3xitsec/h3xrecon_msgbroker:latest
     volumes:
       - nats_data:/data
     ports:
@@ -125,7 +130,7 @@ services:
         tag: "{{.Name}}"
   
   logging:
-    image: h3xrecontest/h3xrecon:latest
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -152,7 +157,7 @@ services:
         tag: "{{.Name}}"
   
   jobprocessor:
-    image: h3xrecontest/h3xrecon:latest
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -183,7 +188,7 @@ services:
         tag: "{{.Name}}"
   
   dataprocessor:
-    image: h3xrecontest/h3xrecon:latest
+    image: ghcr.io/h3xitsec/h3xrecon:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -233,7 +238,7 @@ services:
       - H3XRECON_ROLE=worker
     deploy:
       mode: replicated
-      replicas: 5
+      replicas: 1
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == worker

@@ -84,3 +84,16 @@ This playbook will deploy the docker stack on the cluster
 ```bash
 ansible-playbook -i src/ansible/hosts.yaml src/ansible/deploy_h3xrecon_stack.yaml
 ```
+## Dashboards
+
+### Grafana
+
+The Grafana dashboard is available at http://<grafana-host>:3000.
+
+Use the following credentials to login:
+- Username: admin
+- Password: admin
+
+### Docker Swarm Dashboard
+
+The Docker Swarm dashboard is available at http://<swarm-manager-host>:8080.
