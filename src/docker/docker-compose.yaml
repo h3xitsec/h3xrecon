@@ -83,7 +83,7 @@ services:
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
-    image: postgres #ghcr.io/h3xitsec/h3xrecon_pgsql:latest
+    image: postgres
     configs:
       - source: postgres-init
         target: /docker-entrypoint-initdb.d/psql_dump.sql
@@ -118,33 +118,6 @@ services:
       timeout: 2s
       retries: 5
       start_period: 5s
-    deploy:
-      placement:
-        constraints:
-          - node.labels.H3XRECON_SWARM_ROLE == processor
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.Name}}"
-  
-  logging:
-    image: ghcr.io/h3xitsec/h3xrecon:latest
-    depends_on:
-      - msgbroker:service_healthy
-      - cache:service_healthy
-      - database:service_healthy
-    environment:
-      - H3XRECON_DB_USER
-      - H3XRECON_DB_NAME
-      - H3XRECON_DB_HOST
-      - H3XRECON_DB_PASS
-      - H3XRECON_NATS_HOST
-      - H3XRECON_NATS_PORT
-      - H3XRECON_LOG_LEVEL
-      - H3XRECON_LOG_FILE_PATH
-      - H3XRECON_ROLE=logging
     deploy:
       placement:
         constraints:

@@ -47,9 +47,9 @@ echo "------------------------------------"
     echo " Pushing images to local server     "
     echo "------------------------------------"
 
-    docker save h3xrecontest/h3xrecon:latest | bzip2 | pv | ssh recon docker load
-    docker save h3xrecontest/h3xrecon_pgsql:latest | bzip2 | pv | ssh recon docker load
-    docker save h3xrecontest/h3xrecon_msgbroker:latest | bzip2 | pv | ssh recon docker load
+    #docker save h3xrecontest/h3xrecon:latest | bzip2 | pv | ssh recon docker load
+    #docker save h3xrecontest/h3xrecon_pgsql:latest | bzip2 | pv | ssh recon docker load
+    #docker save h3xrecontest/h3xrecon_msgbroker:latest | bzip2 | pv | ssh recon docker load
 
     echo "===================================="
     echo " Docker build commands completed!   "

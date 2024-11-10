@@ -218,6 +218,9 @@ class DatabaseManager:
             await self.add_program_scope(program_name, scope)
         if cidr:
             await self.add_program_cidr(program_name, cidr)
+        if result:
+            return True
+        return False
 
     async def get_program_id(self, program_name: str) -> int:
         query = """

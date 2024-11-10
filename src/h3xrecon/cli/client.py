@@ -1,25 +1,5 @@
 #!/usr/bin/env python3
 
-"""H3XRecon Client
-
-Usage:
-    client.py ( program ) ( add | del ) ( <program> )
-    client.py [ -p <program> ] ( config ) ( add | del ) ( cidr | scope ) ( - | <item> )
-    client.py [ -p <program> ] ( config ) ( list ) ( cidr | scope )
-    client.py ( system ) ( queue ) ( show | messages | flush ) ( worker | job | data )
-    client.py [ -p <program> ] ( list ) ( domains | ips ) [--resolved] [--unresolved]
-    client.py [ -p <program> ] ( list ) ( urls | services ) [--details]
-    client.py [ -p <program> ] ( add | del ) ( domain | ip | url ) ( - | <item> )
-    client.py [ -p <program> ] ( sendjob ) ( <function> ) ( <target> ) [--force]
-
-Options:
-    -p --program     Program to work on.
-    --resolved       Show only resolved items.
-    --unresolved    Show only unresolved items.
-    --force         Force execution of job.
-    --details       Show details about URLs.
-"""
-
 import sys
 import re
 from urllib.parse import urlparse
@@ -39,7 +19,6 @@ class H3XReconClient:
     def __init__(self, arguments):
         self.config = Config()
         self.db = DatabaseManager(self.config.database.to_dict())
-        print(self.config.database.to_dict())
         self.qm = QueueManager(self.config.nats)
         self.nc = NATS()
         self.nats_options = {
@@ -52,6 +31,63 @@ class H3XReconClient:
             self.arguments = arguments
         else:
             raise ValueError("Invalid arguments provided.")
+            
+    async def add_program_config(self, program_name: str, config_type: str, items: list):
+        """Add scope or CIDR configuration to a program
+        Args:
+            program_name (str): Name of the program
+            config_type (str): Type of config ('scope' or 'cidr')
+            items (list): List of items to add
+        """
+        logger.debug(f"Adding {config_type} configuration to program {program_name}: {items}")
+        try:
+            program_id = await self.db.get_program_id(program_name)
+            logger.debug(f"Program ID: {program_id}")
+        except Exception as e:
+            print(f"Error: Program '{program_name}' not found")
+            return
+
+        table_name = f"program_{config_type}s"
+        column_name = "regex" if config_type == "scope" else "cidr"
+        if isinstance(items, str):
+            items = [items]
+        for item in items:
+            # First check if the item already exists
+            check_query = f"""
+            SELECT id FROM {table_name}
+            WHERE program_id = $1 AND {column_name} = $2
+            """
+            existing = await self.db.execute_query(check_query, program_id, item)
+            
+            if not existing:
+                # Only insert if it doesn't exist
+                insert_query = f"""
+                INSERT INTO {table_name} (program_id, {column_name})
+                VALUES ($1, $2)
+                """
+                await self.db.execute_query(insert_query, program_id, item)
+
+    async def remove_program_config(self, program_name: str, config_type: str, items: list):
+        """Remove scope or CIDR configuration from a program
+        Args:
+            program_name (str): Name of the program
+            config_type (str): Type of config ('scope' or 'cidr')
+            items (list): List of items to remove
+        """
+        program_id = await self.db.get_program_id(program_name)
+        if not program_id:
+            print(f"Error: Program '{program_name}' not found")
+            return
+
+        table_name = f"program_{config_type}"
+        column_name = "pattern" if config_type == "scope" else "cidr"
+        
+        for item in items:
+            query = f"""
+            DELETE FROM {table_name}
+            WHERE program_id = $1 AND {column_name} = $2
+            """
+            await self.db.execute_query(query, program_id, item)
     
     async def send_job(self, function_name: str, program_name: str, target: str, force: bool):
         """Send a job to the worker using QueueManager"""
@@ -296,8 +332,13 @@ class H3XReconClient:
         #pp.pprint(self.arguments)
         # Execute based on parsed arguments
         if self.arguments.get('program'):
-            if self.arguments.get('add'):
-                await self.db.add_program(self.arguments['<program>'])
+            if self.arguments.get('list'):
+                [print(r.get("name")) for r in await self.db.get_programs()]
+            elif self.arguments.get('add'):
+                if await self.db.add_program(self.arguments['<program>']):
+                    print(f"Program '{self.arguments['<program>']}' added successfully")
+                else:
+                    print(f"Failed to add program '{self.arguments['<program>']}'")
             elif self.arguments.get('del'):
                 if await self.db.remove_program(self.arguments['<program>']):
                     print(f"Program '{self.arguments['<program>']}' removed successfully")
@@ -305,7 +346,13 @@ class H3XReconClient:
                     print(f"Failed to remove program '{self.arguments['<program>']}'")
 
         elif self.arguments.get('config'):
-            if self.arguments.get('list'):
+            if self.arguments.get('add') or self.arguments.get('del'):
+                if self.arguments.get('scope'): 
+                    await self.add_program_config(self.arguments['<program>'], "scope", self.arguments['<item>'])
+                elif self.arguments.get('cidr'):
+                    await self.add_program_config(self.arguments['<program>'], "cidr", self.arguments['<item>'])
+                
+            elif self.arguments.get('list'):
                 if self.arguments.get('scope'):
                     [print(r) for r in await self.db.get_program_scope(self.arguments['<program>'])]
                 elif self.arguments.get('cidr'):

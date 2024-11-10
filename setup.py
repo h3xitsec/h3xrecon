@@ -4,11 +4,15 @@ import os
 # Get the absolute path to the README.md file
 readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
 
+# Read the README.md content
+with open(readme_path, 'r', encoding='utf-8') as f:
+    long_description = f.read()
+
 setup(
     name="h3xrecon",
     version="0.0.3",
-    packages=find_packages(where='src'),  # Specify the source directory
-    package_dir={'': 'src'},  # Indicate that packages are in the 'src' directory
+    packages=find_packages(where='src'),  # Corrected package discovery
+    package_dir={'': 'src'},  # Corrected package directory
     install_requires=[
         "docopt",
         "loguru",
@@ -26,15 +30,15 @@ setup(
     },
     author="h3xit",
     description="h3xrecon bug bounty reconnaissance automation",
-    long_description="h3xrecon bug bounty reconnaissance automation",
+    long_description=long_description,  # Use the actual README content
     long_description_content_type="text/markdown",
-    url="https://github.com/h3xitsec/h3xrecon",  # Your repository URL
+    url="https://github.com/h3xitsec/h3xrecon",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",  # Adjust license as needed
+        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.9",  # Adjust minimum Python version as needed
+    python_requires=">=3.9",
 
     extras_require={
         'test': [

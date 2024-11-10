@@ -55,6 +55,7 @@ class FunctionExecutor:
             except Exception as e:
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
         logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
+    
     async def execute_function(self, func_name: str, target: str, program_id: int, execution_id: str, timestamp: str, force_execution: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
         if func_name not in self.function_map:
             logger.error(f"Function '{func_name}' not found in function_map.")

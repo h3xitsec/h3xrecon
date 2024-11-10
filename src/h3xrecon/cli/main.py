@@ -3,7 +3,8 @@
 """H3XRecon Client
 
 Usage:
-    client.py ( program ) ( add | del ) ( <program> )
+    client.py ( program ) ( list )
+    client.py ( program ) ( add | del) ( <program> )
     client.py [ -p <program> ] ( config ) ( add | del ) ( cidr | scope ) ( - | <item> )
     client.py [ -p <program> ] ( config ) ( list ) ( cidr | scope )
     client.py ( system ) ( queue ) ( show | messages | flush ) ( worker | job | data )
@@ -21,7 +22,7 @@ Options:
 """
 
 import asyncio
-import sys
+import sys, os
 from docopt import docopt
 from h3xrecon.cli.client import H3XReconClient
 

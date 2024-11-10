@@ -12,6 +12,7 @@
     - "{{ h3xrecon_dockercompose_pkg }}"
     - python3-venv
     - python3-jsondiff
+    - fail2ban
   tasks:
   - ansible.builtin.include_tasks: tasks/test_all_nodes.yaml
 
@@ -79,4 +80,4 @@
       append: yes
 
 - ansible.builtin.import_playbook: "setup_docker_swarm.yaml"
-#- ansible.builtin.import_playbook: "validate_docker_swarm.yaml"
+- ansible.builtin.import_playbook: "validate_docker_swarm.yaml"
