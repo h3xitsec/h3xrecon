@@ -1,0 +1,13 @@
+export H3XRECON_DB_USER=h3xrecon
+export H3XRECON_DB_NAME=h3xrecon
+export H3XRECON_DB_HOST=localhost
+export H3XRECON_DB_PORT=5432
+export H3XRECON_DB_PASS=h3xrecon
+export H3XRECON_REDIS_HOST=localhost
+export H3XRECON_REDIS_PORT=6379
+export H3XRECON_NATS_HOST=localhost
+export H3XRECON_NATS_PORT=4222
+export PGPASSWORD=$H3XRECON_DB_PASS
+export H3XRECON_LOG_LEVEL=DEBUG
+export H3XRECON_LOG_FILE_PATH=h3xrecon.log
+export PYTHONPATH="$PWD/src"
