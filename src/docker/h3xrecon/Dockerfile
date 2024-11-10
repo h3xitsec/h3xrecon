@@ -34,7 +34,6 @@ RUN go install github.com/Josue87/gotator@latest
 
 # Copy the entire source directory structure
 COPY h3xrecon /app/src/h3xrecon
-COPY README.md /app/README.md
 COPY setup.py /app/setup.py
 
 # Create and activate venv, then install the package with -e flag for development mode
