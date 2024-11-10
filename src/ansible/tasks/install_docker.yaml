@@ -24,6 +24,9 @@
     state: present
     update_cache: yes
 
+- name: Install Loki plugin for Docker
+  ansible.builtin.shell: docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions || true
+
 - name: Set Docker logging driver
   ansible.builtin.copy:
     content: |
@@ -44,6 +47,3 @@
     name: docker
     state: started
     enabled: yes
-
-- name: Install Loki plugin for Docker
-  ansible.builtin.shell: docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions

@@ -1,0 +1,23 @@
+- name: Setup Nodes for h3xrecon
+  hosts: all
+  gather_facts: false
+  max_fail_percentage: 0
+  
+  vars_files:
+  - vaults/vault.yaml
+
+  tasks:
+  - ansible.builtin.include_tasks: tasks/test_all_nodes.yaml
+  - name: Set Docker logging driver
+    become: true
+    ansible.builtin.file:
+      path: /etc/docker/daemon.json
+      state: absent
+      
+
+  - name: Ensure Docker service is running
+    become: true
+    ansible.builtin.systemd:
+      name: docker
+      state: started
+      enabled: yes

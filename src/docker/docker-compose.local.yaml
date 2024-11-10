@@ -65,7 +65,10 @@ services:
       - "6379:6379"
 
   database:
-    image: h3xrecontest/h3xrecon_pgsql:latest
+    image: postgres
+    configs:
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/psql_dump.sql
     environment:
       - H3XRECON_DB_PASS=h3xrecon
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
@@ -83,7 +86,7 @@ services:
       start_period: 30s
 
   msgbroker:
-    image: h3xrecontest/h3xrecon_msgbroker:latest
+    image: ghcr.io/h3x/h3xrecon_msgbroker:latest
     volumes:
       - nats_data:/data
     ports:
@@ -96,7 +99,7 @@ services:
       start_period: 5s
 
   jobprocessor:
-    image: h3xrecontest/h3xrecon:latest
+    image: ghcr.io/h3x/h3xrecon:latest
     environment:
       - H3XRECON_DB_USER=h3xrecon
       - H3XRECON_DB_NAME=h3xrecon
@@ -116,7 +119,7 @@ services:
         condition: service_healthy
 
   dataprocessor:
-    image: h3xrecontest/h3xrecon:latest
+    image: ghcr.io/h3x/h3xrecon:latest
     environment:
       - H3XRECON_DB_USER=h3xrecon
       - H3XRECON_DB_NAME=h3xrecon
@@ -136,7 +139,7 @@ services:
         condition: service_healthy
 
   worker:
-    image: h3xrecontest/h3xrecon:latest
+    image: ghcr.io/h3x/h3xrecon:latest
     environment:
       - H3XRECON_DB_USER=h3xrecon
       - H3XRECON_DB_NAME=h3xrecon
