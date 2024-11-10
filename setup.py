@@ -5,9 +5,9 @@ import os
 readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
 
 # Read the README.md content
-with open(readme_path, 'r', encoding='utf-8') as f:
-    long_description = f.read()
-
+#with open(readme_path, 'r', encoding='utf-8') as f:
+#    long_description = f.read()
+long_description = "reconh3x is a bug bounty reconnaissance automation tool"
 setup(
     name="h3xrecon",
     version="0.0.3",
