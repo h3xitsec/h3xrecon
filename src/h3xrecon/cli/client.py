@@ -331,28 +331,30 @@ class H3XReconClient:
         #pp = pprint.PrettyPrinter(indent=4)
         #pp.pprint(self.arguments)
         # Execute based on parsed arguments
+
+        ## Program Management
         if self.arguments.get('program'):
-            if self.arguments.get('list'):
+            if self.arguments.get('l') or self.arguments.get('list'):
                 [print(r.get("name")) for r in await self.db.get_programs()]
-            elif self.arguments.get('add'):
+            elif self.arguments.get('a') or self.arguments.get('add'):
                 if await self.db.add_program(self.arguments['<program>']):
                     print(f"Program '{self.arguments['<program>']}' added successfully")
                 else:
                     print(f"Failed to add program '{self.arguments['<program>']}'")
-            elif self.arguments.get('del'):
+            elif self.arguments.get('d') or self.arguments.get('del'):
                 if await self.db.remove_program(self.arguments['<program>']):
                     print(f"Program '{self.arguments['<program>']}' removed successfully")
                 else:
                     print(f"Failed to remove program '{self.arguments['<program>']}'")
 
         elif self.arguments.get('config'):
-            if self.arguments.get('add') or self.arguments.get('del'):
+            if self.arguments.get('a') or self.arguments.get('add') or self.arguments.get('d') or self.arguments.get('del'):
                 if self.arguments.get('scope'): 
                     await self.add_program_config(self.arguments['<program>'], "scope", self.arguments['<item>'])
                 elif self.arguments.get('cidr'):
                     await self.add_program_config(self.arguments['<program>'], "cidr", self.arguments['<item>'])
                 
-            elif self.arguments.get('list'):
+            elif self.arguments.get('l') or self.arguments.get('list'):
                 if self.arguments.get('scope'):
                     [print(r) for r in await self.db.get_program_scope(self.arguments['<program>'])]
                 elif self.arguments.get('cidr'):
@@ -387,9 +389,38 @@ class H3XReconClient:
                     result = await self.flush_stream(self.arguments['<queue_name>'])
                     print(result)
 
-        elif self.arguments.get('add'):
-            if any(self.arguments.get(t) for t in ['domain', 'ip', 'url']):
-                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t))
+        elif self.arguments.get('l') or self.arguments.get('list'):                
+            if self.arguments.get('d') or self.arguments.get('domains') or self.arguments.get('domain'):
+                if self.arguments.get('--resolved'):
+                    [print(f"{r['domain']} -> {r['resolved_ips']}") for r in await self.db.get_resolved_domains(self.arguments['<program>'])]
+                elif self.arguments.get('--unresolved'):
+                    [print(r['domain']) for r in await self.db.get_unresolved_domains(self.arguments['<program>'])]
+                else:
+                    [print(r['domain']) for r in await self.db.get_domains(self.arguments['<program>'])]
+
+            elif self.arguments.get('i') or self.arguments.get('ips') or self.arguments.get('ip'):
+                if self.arguments.get('--resolved'):
+                    [print(f"{r['ip']} -> {r['ptr']}") for r in await self.db.get_reverse_resolved_ips(self.arguments['<program>'])]
+                elif self.arguments.get('--unresolved'):
+                    [print(r['ip']) for r in await self.db.get_not_reverse_resolved_ips(self.arguments['<program>'])]
+                else:
+                    [print(r['ip']) for r in await self.db.get_ips(self.arguments['<program>'])]
+
+            elif self.arguments.get('u') or self.arguments.get('urls') or self.arguments.get('url'):
+                if self.arguments.get('--details'):
+                    result = await self.get_urls_details(self.arguments['<program>'])
+                    headers = result[0].keys()
+                    rows = [x.values() for x in result]
+                    print(tabulate(rows, headers=headers, tablefmt='grid'))
+                else:
+                    [print(r['url']) for r in await self.db.get_urls(self.arguments['<program>'])]
+                
+            elif self.arguments.get('s') or self.arguments.get('services') or self.arguments.get('service'):
+                [print(f"{r.get('protocol')}:{r.get('ip')}:{r.get('port')}") for r in await self.db.get_services(self.arguments['<program>'])]
+
+        elif self.arguments.get('a') or self.arguments.get('add'):
+            if any(self.arguments.get(t) for t in ['d', 'domain', 'i', 'ip', 'u', 'url']):
+                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t) or self.arguments.get(t[0]))
                 items = []
                 if isinstance(self.arguments['<item>'], str):
                     items = [self.arguments['<item>']]
@@ -397,9 +428,9 @@ class H3XReconClient:
                     items.extend([u.rstrip() for u in process_stdin()])
                 await self.add_item(item_type, self.arguments['<program>'], items)
 
-        elif self.arguments.get('del'):
-            if any(self.arguments.get(t) for t in ['domain', 'ip', 'url']):
-                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t))
+        elif self.arguments.get('d') or self.arguments.get('del'):
+            if any(self.arguments.get(t) for t in ['d', 'domain', 'i', 'ip', 'u', 'url']):
+                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t) or self.arguments.get(t[0]))
                 if isinstance(self.arguments['<item>'], str):
                     if await self.remove_item(item_type, self.arguments['<program>'], self.arguments['<item>']):
                         print(f"{item_type.capitalize()} '{self.arguments['<item>']}' removed from program '{self.arguments['<program>']}'")
@@ -409,38 +440,7 @@ class H3XReconClient:
                     for i in [u.rstrip() for u in process_stdin()]:
                         await self.remove_item(item_type, self.arguments['<program>'], i)
 
-        elif self.arguments.get('list'):                
-            if self.arguments.get('domains'):
-                if self.arguments.get('--resolved'):
-                    [print(f"{r['domain']} -> {r['resolved_ips']}") for r in await self.db.get_resolved_domains(self.arguments['<program>'])]
-                elif self.arguments.get('--unresolved'):
-                    [print(r['domain']) for r in await self.db.get_unresolved_domains(self.arguments['<program>'])]
-                else:
-                    [print(r['domain']) for r in await self.db.get_domains(self.arguments['<program>'])]
-
-            elif self.arguments.get('ips'):
-                if self.arguments.get('--resolved'):
-                    [print(f"{r['ip']} -> {r['ptr']}") for r in await self.db.get_reverse_resolved_ips(self.arguments['<program>'])]
-                elif self.arguments.get('--unresolved'):
-                    [print(r['ip']) for r in await self.db.get_not_reverse_resolved_ips(self.arguments['<program>'])]
-                else:
-                    [print(r['ip']) for r in await self.db.get_ips(self.arguments['<program>'])]
-
-            elif self.arguments.get('urls'):
-                if self.arguments.get('--details'):
-                    result = await self.get_urls_details(self.arguments['<program>'])
-                    headers = result[0].keys()
-                    rows = [x.values() for x in result]
-                    print(tabulate(rows, headers=headers, tablefmt='grid'))
-
-                else:
-                    result = await self.db.get_urls(self.arguments['<program>'])
-                    [print(r['url']) for r in await self.db.get_urls(self.arguments['<program>'])]
-                
-            elif self.arguments.get('services'):
-                [print(f"{r.get('protocol')}:{r.get('ip')}:{r.get('port')}") for r in await self.db.get_services(self.arguments['<program>'])]
-
-        elif self.arguments.get('sendjob'):
+        elif self.arguments.get('s') or self.arguments.get('sendjob'):
             await self.send_job(
                 function_name=self.arguments['<function>'],
                 program_name=self.arguments['<program>'],
