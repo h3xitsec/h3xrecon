@@ -7,8 +7,6 @@ configs:
     file: ./grafana/provisioning/datasources/datasource.yml
   promtail-config:
     file: ./grafana/provisioning/promtail/config.yml
-  postgres-init:
-    file: ../h3xrecon/psql_dump.sql
 
 services:
   loki:
@@ -84,9 +82,6 @@ services:
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
     image: postgres
-    configs:
-      - source: postgres-init
-        target: /docker-entrypoint-initdb.d/psql_dump.sql
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:

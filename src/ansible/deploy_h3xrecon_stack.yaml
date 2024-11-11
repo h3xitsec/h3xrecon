@@ -3,7 +3,7 @@
   vars_files:
     - vaults/vault.yaml
   tasks:
-    - {"name": "Sync Project's files", "ansible.builtin.include_tasks": "tasks/sync_project.yaml"}
+    #- {"name": "Sync Project's files", "ansible.builtin.include_tasks": "tasks/sync_project.yaml"}
     - name: Deploy Docker stack
       delegate_to: localhost
       community.docker.docker_stack:
