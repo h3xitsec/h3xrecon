@@ -15,8 +15,10 @@ class Worker:
     def __init__(self, config: Config):
         self.qm = QueueManager(config.nats)
         self.db = DatabaseManager(config.database.to_dict() )
+        self.config = config
+        self.config.setup_logging()
         self.worker_id = f"worker-{os.getenv('HOSTNAME')}"
-        self.function_executor = FunctionExecutor(qm=self.qm, db=self.db)
+        self.function_executor = FunctionExecutor(qm=self.qm, db=self.db, config=self.config)
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
         redis_config = config.redis
@@ -26,6 +28,7 @@ class Worker:
             db=redis_config.db,
             password=redis_config.password
         )
+
 
     async def start(self):
         logger.info(f"Starting worker (Worker ID: {self.worker_id})...")

@@ -2,6 +2,7 @@ from typing import Dict, Any, AsyncGenerator, List, Callable
 from h3xrecon.workers.plugins.base import ReconPlugin
 from h3xrecon.core import QueueManager
 from h3xrecon.core import DatabaseManager
+from h3xrecon.core import Config
 from loguru import logger
 import importlib
 import pkgutil
@@ -10,10 +11,12 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-class FunctionExecutor:
-    def __init__(self, qm: QueueManager, db: DatabaseManager):
+class FunctionExecutor():
+    def __init__(self, qm: QueueManager, db: DatabaseManager, config: Config):
         self.qm = qm
-        self.db = db
+        self.db = db    
+        self.config = config
+        self.config.setup_logging()
         self.function_map: Dict[str, Callable] = {}
         self.load_plugins()
 

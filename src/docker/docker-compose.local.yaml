@@ -64,8 +64,9 @@ services:
 
   database:
     image: h3xrecontest/h3xrecon_pgsql:latest
+    env_file:
+      - .env.compose
     environment:
-      - H3XRECON_DB_PASS=h3xrecon
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=${H3XRECON_DB_USER}
       - POSTGRES_DB=${H3XRECON_DB_NAME}
@@ -89,6 +90,8 @@ services:
 
   msgbroker:
     image: h3xrecontest/h3xrecon_msgbroker:latest
+    env_file:
+      - .env.compose
     volumes:
       - nats_data:/data
     ports:
@@ -102,17 +105,9 @@ services:
 
   jobprocessor:
     image: h3xrecontest/h3xrecon:latest
+    env_file:
+      - .env.compose
     environment:
-      - H3XRECON_DB_USER=h3xrecon
-      - H3XRECON_DB_NAME=h3xrecon
-      - H3XRECON_DB_HOST=database
-      - H3XRECON_DB_PASS=h3xrecon
-      - H3XRECON_REDIS_HOST=cache
-      - H3XRECON_REDIS_PORT=6379
-      - H3XRECON_NATS_HOST=msgbroker
-      - H3XRECON_NATS_PORT=4222
-      - H3XRECON_LOG_LEVEL=DEBUG
-      - H3XRECON_LOG_FILE_PATH=/app/logs/h3xrecon.log
       - H3XRECON_ROLE=jobprocessor
     depends_on:
       msgbroker:
@@ -122,17 +117,9 @@ services:
 
   dataprocessor:
     image: h3xrecontest/h3xrecon:latest
+    env_file:
+      - .env.compose
     environment:
-      - H3XRECON_DB_USER=h3xrecon
-      - H3XRECON_DB_NAME=h3xrecon
-      - H3XRECON_DB_HOST=database
-      - H3XRECON_DB_PASS=h3xrecon
-      - H3XRECON_REDIS_HOST=cache
-      - H3XRECON_REDIS_PORT=6379
-      - H3XRECON_NATS_HOST=msgbroker
-      - H3XRECON_NATS_PORT=4222
-      - H3XRECON_LOG_LEVEL=DEBUG
-      - H3XRECON_LOG_FILE_PATH=/app/logs/h3xrecon.log
       - H3XRECON_ROLE=dataprocessor
     depends_on:
       msgbroker:
@@ -142,17 +129,9 @@ services:
 
   worker:
     image: h3xrecontest/h3xrecon:latest
+    env_file:
+      - .env.compose
     environment:
-      - H3XRECON_DB_USER=h3xrecon
-      - H3XRECON_DB_NAME=h3xrecon
-      - H3XRECON_DB_HOST=database
-      - H3XRECON_DB_PASS=h3xrecon
-      - H3XRECON_REDIS_HOST=cache
-      - H3XRECON_REDIS_PORT=6379
-      - H3XRECON_NATS_HOST=msgbroker
-      - H3XRECON_NATS_PORT=4222
-      - H3XRECON_LOG_LEVEL=DEBUG
-      - H3XRECON_LOG_FILE_PATH=/app/logs/h3xrecon.log
       - H3XRECON_ROLE=worker
     depends_on:
       msgbroker:
