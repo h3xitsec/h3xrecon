@@ -19,6 +19,7 @@ cp -r src/h3xrecon/dataprocessor ./src/docker/h3xrecon/h3xrecon/
 cp -r src/h3xrecon/jobprocessor ./src/docker/h3xrecon/h3xrecon/
 cp -r src/h3xrecon/logging ./src/docker/h3xrecon/h3xrecon/
 cp -r src/h3xrecon/workers ./src/docker/h3xrecon/h3xrecon/
+cp -r src/migrations ./src/docker/pgsql/
 cp src/h3xrecon/psql_dump.sql ./src/docker/pgsql/
 
 #ls -l ./src/docker
@@ -56,6 +57,6 @@ echo "------------------------------------"
     echo "===================================="
 
     rm -rf ./src/docker/h3xrecon/h3xrecon
-    rm ./src/docker/h3xrecon/setup.py
-    rm ./src/docker/pgsql/psql_dump.sql
+    rm -f ./src/docker/h3xrecon/setup.py
+    rm -rf ./src/docker/pgsql/migrations
 fi

@@ -7,8 +7,6 @@ configs:
     file: ./grafana/provisioning/datasources/datasource.yml
   promtail-config:
     file: ./grafana/provisioning/promtail/config.yml
-  postgres-init:
-    file: ../h3xrecon/psql_dump.sql
 
 name: h3xrecon
 
@@ -65,10 +63,7 @@ services:
       - "6379:6379"
 
   database:
-    image: postgres
-    configs:
-      - source: postgres-init
-        target: /docker-entrypoint-initdb.d/psql_dump.sql
+    image: h3xrecontest/h3xrecon_pgsql:latest
     environment:
       - H3XRECON_DB_PASS=h3xrecon
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
@@ -84,6 +79,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    command: >
+      bash -c "
+        docker-entrypoint.sh postgres &
+        until pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}; do sleep 1; done;
+        /migrate.sh &&
+        wait
+      "
 
   msgbroker:
     image: h3xrecontest/h3xrecon_msgbroker:latest
