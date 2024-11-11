@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 import re
+import subprocess
 from urllib.parse import urlparse
 from h3xrecon.core.database import DatabaseManager
 from loguru import logger
@@ -326,41 +328,134 @@ class H3XReconClient:
             except:
                 pass
 
-    async def run(self):
-        #import pprint
-        #pp = pprint.PrettyPrinter(indent=4)
-        #pp.pprint(self.arguments)
-        # Execute based on parsed arguments
+    async def system_compose_status(self):
+        """Check the status of Docker Compose services"""
+        try:
+            project_directory = os.path.join(os.path.dirname(__file__), '..', '..', 'docker')
+            compose_file = os.path.join(project_directory, 'docker-compose.local.yaml')
+            
+            # Run docker-compose ps command
+            result = subprocess.run(
+                ['docker-compose', '-f', compose_file, '--project-directory', project_directory, 'ps'], 
+                capture_output=True, 
+                text=True, 
+                check=True
+            )
+            
+            # Print the output directly
+            print(result.stdout)
+            return result.stdout
+        except subprocess.CalledProcessError as e:
+            print(f"Error checking compose status: {e}")
+            print(e.stderr)
+            return None
+        except FileNotFoundError:
+            print("Docker Compose not found. Ensure docker-compose is installed.")
+            return None
 
-        ## Program Management
+    async def system_compose_start(self):
+        """Start Docker Compose services"""
+        try:
+            # Assume docker-compose.yml is in the project root
+            project_directory = os.path.join(os.path.dirname(__file__), '..', '..', 'docker')
+            compose_file = os.path.join(project_directory, 'docker-compose.local.yaml')
+            
+            # Run docker-compose up -d command
+            result = subprocess.run(
+                ['docker-compose', '-f', compose_file, '--project-directory', project_directory, 'up', '-d'], 
+                capture_output=True, 
+                text=True, 
+                check=True
+            )
+            
+            print("Services started successfully:")
+            print(result.stdout)
+            return result.stdout
+        except subprocess.CalledProcessError as e:
+            print(f"Error starting compose services: {e}")
+            print(e.stderr)
+            return None
+        except FileNotFoundError:
+            print("Docker Compose not found. Ensure docker-compose is installed.")
+            return None
+
+    async def system_compose_stop(self):
+        """Stop Docker Compose services"""
+        try:
+            # Assume docker-compose.yml is in the project root
+            project_directory = os.path.join(os.path.dirname(__file__), '..', '..', 'docker')
+            compose_file = os.path.join(project_directory, 'docker-compose.local.yaml')
+            
+            # Run docker-compose up -d command
+            result = subprocess.run(
+                ['docker-compose', '-f', compose_file, '--project-directory', project_directory, 'down'], 
+                capture_output=True, 
+                text=True, 
+                check=True
+            )
+            
+            print("Services stopped successfully:")
+            print(result.stdout)
+            return result.stdout
+        except subprocess.CalledProcessError as e:
+            print(f"Error stopping compose services: {e}")
+            print(e.stderr)
+            return None
+        except FileNotFoundError:
+            print("Docker Compose not found. Ensure docker-compose is installed.")
+            return None
+
+    async def run(self):
+        # h3xrecon program
         if self.arguments.get('program'):
-            if self.arguments.get('l') or self.arguments.get('list'):
+            
+            # h3xrecon program list
+            if self.arguments.get('list'):
                 [print(r.get("name")) for r in await self.db.get_programs()]
-            elif self.arguments.get('a') or self.arguments.get('add'):
+            
+            # h3xrecon program add
+            elif self.arguments.get('add'):
                 if await self.db.add_program(self.arguments['<program>']):
                     print(f"Program '{self.arguments['<program>']}' added successfully")
                 else:
                     print(f"Failed to add program '{self.arguments['<program>']}'")
-            elif self.arguments.get('d') or self.arguments.get('del'):
+            
+            # h3xrecon program del
+            elif self.arguments.get('del'):
                 if await self.db.remove_program(self.arguments['<program>']):
                     print(f"Program '{self.arguments['<program>']}' removed successfully")
                 else:
                     print(f"Failed to remove program '{self.arguments['<program>']}'")
 
+        # h3xrecon -p program config
         elif self.arguments.get('config'):
-            if self.arguments.get('a') or self.arguments.get('add') or self.arguments.get('d') or self.arguments.get('del'):
+        
+            # h3xrecon -p program config add/del
+            if self.arguments.get('add') or self.arguments.get('del'):
                 if self.arguments.get('scope'): 
                     await self.add_program_config(self.arguments['<program>'], "scope", self.arguments['<item>'])
                 elif self.arguments.get('cidr'):
                     await self.add_program_config(self.arguments['<program>'], "cidr", self.arguments['<item>'])
-                
-            elif self.arguments.get('l') or self.arguments.get('list'):
+            
+            # h3xrecon -p program config list scope/cidr
+            elif self.arguments.get('list'):
                 if self.arguments.get('scope'):
                     [print(r) for r in await self.db.get_program_scope(self.arguments['<program>'])]
                 elif self.arguments.get('cidr'):
                     [print(r) for r in await self.db.get_program_cidr(self.arguments['<program>'])]
-
+        
+        # h3xrecon system
         elif self.arguments.get('system'):
+            # h3xrecon system compose
+            if self.arguments.get('compose'):
+                if self.arguments.get('status'):
+                    await self.system_compose_status()
+                if self.arguments.get('start'):
+                    await self.system_compose_start()
+                if self.arguments.get('stop'):
+                    await self.system_compose_stop()
+
+            # h3xrecon system queue
             if self.arguments.get('queue'):
                 if self.arguments.get('show'):
                     if self.arguments['worker']:
@@ -388,39 +483,11 @@ class H3XReconClient:
                 elif self.arguments.get('flush'):
                     result = await self.flush_stream(self.arguments['<queue_name>'])
                     print(result)
-
-        elif self.arguments.get('l') or self.arguments.get('list'):                
-            if self.arguments.get('d') or self.arguments.get('domains') or self.arguments.get('domain'):
-                if self.arguments.get('--resolved'):
-                    [print(f"{r['domain']} -> {r['resolved_ips']}") for r in await self.db.get_resolved_domains(self.arguments['<program>'])]
-                elif self.arguments.get('--unresolved'):
-                    [print(r['domain']) for r in await self.db.get_unresolved_domains(self.arguments['<program>'])]
-                else:
-                    [print(r['domain']) for r in await self.db.get_domains(self.arguments['<program>'])]
-
-            elif self.arguments.get('i') or self.arguments.get('ips') or self.arguments.get('ip'):
-                if self.arguments.get('--resolved'):
-                    [print(f"{r['ip']} -> {r['ptr']}") for r in await self.db.get_reverse_resolved_ips(self.arguments['<program>'])]
-                elif self.arguments.get('--unresolved'):
-                    [print(r['ip']) for r in await self.db.get_not_reverse_resolved_ips(self.arguments['<program>'])]
-                else:
-                    [print(r['ip']) for r in await self.db.get_ips(self.arguments['<program>'])]
-
-            elif self.arguments.get('u') or self.arguments.get('urls') or self.arguments.get('url'):
-                if self.arguments.get('--details'):
-                    result = await self.get_urls_details(self.arguments['<program>'])
-                    headers = result[0].keys()
-                    rows = [x.values() for x in result]
-                    print(tabulate(rows, headers=headers, tablefmt='grid'))
-                else:
-                    [print(r['url']) for r in await self.db.get_urls(self.arguments['<program>'])]
-                
-            elif self.arguments.get('s') or self.arguments.get('services') or self.arguments.get('service'):
-                [print(f"{r.get('protocol')}:{r.get('ip')}:{r.get('port')}") for r in await self.db.get_services(self.arguments['<program>'])]
-
-        elif self.arguments.get('a') or self.arguments.get('add'):
-            if any(self.arguments.get(t) for t in ['d', 'domain', 'i', 'ip', 'u', 'url']):
-                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t) or self.arguments.get(t[0]))
+        
+        # h3xrecon -p program add domain/ip/url
+        elif self.arguments.get('add'):
+            if any(self.arguments.get(t) for t in ['domain', 'ip', 'url']):
+                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t))
                 items = []
                 if isinstance(self.arguments['<item>'], str):
                     items = [self.arguments['<item>']]
@@ -428,9 +495,10 @@ class H3XReconClient:
                     items.extend([u.rstrip() for u in process_stdin()])
                 await self.add_item(item_type, self.arguments['<program>'], items)
 
-        elif self.arguments.get('d') or self.arguments.get('del'):
-            if any(self.arguments.get(t) for t in ['d', 'domain', 'i', 'ip', 'u', 'url']):
-                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t) or self.arguments.get(t[0]))
+        # h3xrecon -p program del domain/ip/url
+        elif self.arguments.get('del'):
+            if any(self.arguments.get(t) for t in ['domain', 'ip', 'url']):
+                item_type = next(t for t in ['domain', 'ip', 'url'] if self.arguments.get(t))
                 if isinstance(self.arguments['<item>'], str):
                     if await self.remove_item(item_type, self.arguments['<program>'], self.arguments['<item>']):
                         print(f"{item_type.capitalize()} '{self.arguments['<item>']}' removed from program '{self.arguments['<program>']}'")
@@ -440,7 +508,44 @@ class H3XReconClient:
                     for i in [u.rstrip() for u in process_stdin()]:
                         await self.remove_item(item_type, self.arguments['<program>'], i)
 
-        elif self.arguments.get('s') or self.arguments.get('sendjob'):
+        # h3xrecon -p program list domains/ips/urls
+        elif self.arguments.get('list'):          
+            # h3xrecon -p program list domains
+            if self.arguments.get('domains'):
+                if self.arguments.get('--resolved'):
+                    [print(f"{r['domain']} -> {r['resolved_ips']}") for r in await self.db.get_resolved_domains(self.arguments['<program>'])]
+                elif self.arguments.get('--unresolved'):
+                    [print(r['domain']) for r in await self.db.get_unresolved_domains(self.arguments['<program>'])]
+                else:
+                    [print(r['domain']) for r in await self.db.get_domains(self.arguments['<program>'])]
+
+            # h3xrecon -p program list ips
+            elif self.arguments.get('ips'):
+                if self.arguments.get('--resolved'):
+                    [print(f"{r['ip']} -> {r['ptr']}") for r in await self.db.get_reverse_resolved_ips(self.arguments['<program>'])]
+                elif self.arguments.get('--unresolved'):
+                    [print(r['ip']) for r in await self.db.get_not_reverse_resolved_ips(self.arguments['<program>'])]
+                else:
+                    [print(r['ip']) for r in await self.db.get_ips(self.arguments['<program>'])]
+
+            # h3xrecon -p program list urls
+            elif self.arguments.get('urls'):
+                if self.arguments.get('--details'):
+                    result = await self.get_urls_details(self.arguments['<program>'])
+                    headers = result[0].keys()
+                    rows = [x.values() for x in result]
+                    print(tabulate(rows, headers=headers, tablefmt='grid'))
+
+                else:
+                    result = await self.db.get_urls(self.arguments['<program>'])
+                    [print(r['url']) for r in await self.db.get_urls(self.arguments['<program>'])]
+                
+            # h3xrecon -p program list services
+            elif self.arguments.get('services'):
+                [print(f"{r.get('protocol')}:{r.get('ip')}:{r.get('port')}") for r in await self.db.get_services(self.arguments['<program>'])]
+
+        # h3xrecon -p program sendjob
+        elif self.arguments.get('sendjob'):
             await self.send_job(
                 function_name=self.arguments['<function>'],
                 program_name=self.arguments['<program>'],
