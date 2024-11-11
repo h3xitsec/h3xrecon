@@ -12,7 +12,7 @@ class FindSubdomainsSubfinder(ReconPlugin):
 
     async def execute(self, target: str) -> AsyncGenerator[Dict[str, Any], None]:
         logger.info(f"Running {self.name} on {target}")
-        command = f"/home/h3x/.local/share/go/bin/subfinder -d {target}"
+        command = f"subfinder -d {target}"
         logger.debug(f"Running command: {command}")
 
         process = await asyncio.create_subprocess_shell(
