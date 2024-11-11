@@ -92,7 +92,7 @@ ansible-playbook -i src/ansible/hosts.yaml src/ansible/deploy_h3xrecon_stack.yam
 ## Recon Workflow
 
 <p align="center">
-  <img src="docs/assets/h3xrecon_workflow.png" alt="H3XRecon Workflow" width="200"/>
+  <img src="docs/assets/h3xrecon_workflow.png" alt="H3XRecon Workflow"/>
 </p>
 
 
