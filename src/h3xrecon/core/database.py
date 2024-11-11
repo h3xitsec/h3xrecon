@@ -37,6 +37,29 @@ class DatabaseManager:
         if self.pool:
             await self.pool.close()
     
+    async def drop_program_data(self, program_name: str):
+        queries = []
+        program_id = await self.get_program_id(program_name)
+        query = """
+        DELETE FROM domains WHERE program_id = $1
+        """
+        queries.append(query)
+        query = """
+        DELETE FROM urls WHERE program_id = $1
+        """
+        queries.append(query)
+        query = """
+        DELETE FROM services WHERE program_id = $1
+        """
+        queries.append(query)
+        query = """
+        DELETE FROM ips WHERE program_id = $1
+        """
+        queries.append(query)
+
+        for q in queries:
+            await self.execute_query(q, program_id)
+
 
     async def format_records(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -668,6 +691,7 @@ class DatabaseManager:
     
     async def execute_query(self, query: str, *args) -> List[Dict[str, Any]]:
         logger.debug(f"Executing query: {query} with args: {args}")
+
         await self.ensure_connected()
         try:
             async with self.pool.acquire() as conn:

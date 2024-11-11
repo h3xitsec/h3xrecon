@@ -327,101 +327,11 @@ class H3XReconClient:
                 await self.nc.close()
             except:
                 pass
-
-    async def system_compose_status(self):
-        """Check the status of Docker Compose services"""
-        try:
-            project_directory = os.path.join(os.path.dirname(__file__), '..', '..', 'docker')
-            compose_file = os.path.join(project_directory, 'docker-compose.local.yaml')
-            
-            # Run docker-compose ps command
-            result = subprocess.run(
-                ['docker-compose', '-f', compose_file, '--project-directory', project_directory, 'ps'], 
-                capture_output=True, 
-                text=True, 
-                check=True
-            )
-            
-            # Print the output directly
-            print(result.stdout)
-            return result.stdout
-        except subprocess.CalledProcessError as e:
-            print(f"Error checking compose status: {e}")
-            print(e.stderr)
-            return None
-        except FileNotFoundError:
-            print("Docker Compose not found. Ensure docker-compose is installed.")
-            return None
     
-    async def system_compose_logs(self, service: str):
-        """Check the logs of a Docker Compose service"""
-        try:
-            project_directory = os.path.join(os.path.dirname(__file__), '..', '..', 'docker')
-            compose_file = os.path.join(project_directory, 'docker-compose.local.yaml')
-            
-            # Run docker-compose logs command in follow mode
-            subprocess.run(
-                ['docker-compose', '-f', compose_file, '--project-directory', project_directory, 'logs', '-f', service], 
-                check=True
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Error checking compose logs: {e}")
-            print(e.stderr)
-        except FileNotFoundError:
-            print("Docker Compose not found. Ensure docker-compose is installed.")
-
-    async def system_compose_start(self):
-        """Start Docker Compose services"""
-        try:
-            # Assume docker-compose.yml is in the project root
-            project_directory = os.path.join(os.path.dirname(__file__), '..', '..', 'docker')
-            compose_file = os.path.join(project_directory, 'docker-compose.local.yaml')
-            
-            # Run docker-compose up -d command
-            result = subprocess.run(
-                ['docker-compose', '-f', compose_file, '--project-directory', project_directory, 'up', '-d'], 
-                capture_output=True, 
-                text=True, 
-                check=True
-            )
-            
-            print("Services started successfully:")
-            print(result.stdout)
-            return result.stdout
-        except subprocess.CalledProcessError as e:
-            print(f"Error starting compose services: {e}")
-            print(e.stderr)
-            return None
-        except FileNotFoundError:
-            print("Docker Compose not found. Ensure docker-compose is installed.")
-            return None
-
-    async def system_compose_stop(self):
-        """Stop Docker Compose services"""
-        try:
-            # Assume docker-compose.yml is in the project root
-            project_directory = os.path.join(os.path.dirname(__file__), '..', '..', 'docker')
-            compose_file = os.path.join(project_directory, 'docker-compose.local.yaml')
-            
-            # Run docker-compose up -d command
-            result = subprocess.run(
-                ['docker-compose', '-f', compose_file, '--project-directory', project_directory, 'down'], 
-                capture_output=True, 
-                text=True, 
-                check=True
-            )
-            
-            print("Services stopped successfully:")
-            print(result.stdout)
-            return result.stdout
-        except subprocess.CalledProcessError as e:
-            print(f"Error stopping compose services: {e}")
-            print(e.stderr)
-            return None
-        except FileNotFoundError:
-            print("Docker Compose not found. Ensure docker-compose is installed.")
-            return None
-
+    async def drop_program_data(self, program_name: str):
+        """Drop all data for a program"""
+        await self.db.drop_program_data(program_name)
+        
     async def run(self):
         # h3xrecon program
         if self.arguments.get('program'):
@@ -460,47 +370,38 @@ class H3XReconClient:
                     [print(r) for r in await self.db.get_program_scope(self.arguments['<program>'])]
                 elif self.arguments.get('cidr'):
                     [print(r) for r in await self.db.get_program_cidr(self.arguments['<program>'])]
+            
+            # h3xrecon -p program config database drop
+            elif self.arguments.get('database'):
+                if self.arguments.get('drop'):
+                    await self.db.drop_program_data(self.arguments['<program>'])
         
         # h3xrecon system
         elif self.arguments.get('system'):
-            # h3xrecon system compose
-            if self.arguments.get('compose'):
-                if self.arguments.get('status'):
-                    await self.system_compose_status()
-                elif self.arguments.get('start'):
-                    await self.system_compose_start()
-                elif self.arguments.get('stop'):
-                    await self.system_compose_stop()
-                elif self.arguments.get('logs'):
-                    await self.system_compose_logs(self.arguments['<service>'])
 
             # h3xrecon system queue
             if self.arguments.get('queue'):
+                if self.arguments['worker']:
+                    stream = 'FUNCTION_EXECUTE'
+                elif self.arguments['job']:
+                    stream = 'FUNCTION_OUTPUT'
+                elif self.arguments['data']:
+                    stream = 'RECON_DATA'
+
                 if self.arguments.get('show'):
-                    if self.arguments['worker']:
-                        result = await self.get_stream_info('FUNCTION_EXECUTE')
-                    elif self.arguments['job']:
-                        result = await self.get_stream_info('FUNCTION_OUTPUT')
-                    elif self.arguments['data']:
-                        result = await self.get_stream_info('RECON_DATA')
+                    result = await self.get_stream_info(stream)
                     headers = result[0].keys()
                     rows = [x.values() for x in result]
                     print(tabulate(rows, headers=headers, tablefmt='grid'))
 
                 elif self.arguments.get('messages'):
-                    if self.arguments['worker']:
-                        stream = 'FUNCTION_EXECUTE'
-                    elif self.arguments['job']:
-                        stream = 'FUNCTION_OUTPUT'
-                    elif self.arguments['data']:
-                        stream = 'RECON_DATA'
                     result = await self.get_stream_messages(stream)
                     headers = result[0].keys()
                     rows = [x.values() for x in result]
                     print(tabulate(rows, headers=headers, tablefmt='grid'))
 
                 elif self.arguments.get('flush'):
-                    result = await self.flush_stream(self.arguments['<queue_name>'])
+                    result = await self.flush_stream(stream)
                     print(result)
         
         # h3xrecon -p program add domain/ip/url
