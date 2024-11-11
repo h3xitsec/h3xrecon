@@ -352,6 +352,23 @@ class H3XReconClient:
         except FileNotFoundError:
             print("Docker Compose not found. Ensure docker-compose is installed.")
             return None
+    
+    async def system_compose_logs(self, service: str):
+        """Check the logs of a Docker Compose service"""
+        try:
+            project_directory = os.path.join(os.path.dirname(__file__), '..', '..', 'docker')
+            compose_file = os.path.join(project_directory, 'docker-compose.local.yaml')
+            
+            # Run docker-compose logs command in follow mode
+            subprocess.run(
+                ['docker-compose', '-f', compose_file, '--project-directory', project_directory, 'logs', '-f', service], 
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error checking compose logs: {e}")
+            print(e.stderr)
+        except FileNotFoundError:
+            print("Docker Compose not found. Ensure docker-compose is installed.")
 
     async def system_compose_start(self):
         """Start Docker Compose services"""
@@ -450,10 +467,12 @@ class H3XReconClient:
             if self.arguments.get('compose'):
                 if self.arguments.get('status'):
                     await self.system_compose_status()
-                if self.arguments.get('start'):
+                elif self.arguments.get('start'):
                     await self.system_compose_start()
-                if self.arguments.get('stop'):
+                elif self.arguments.get('stop'):
                     await self.system_compose_stop()
+                elif self.arguments.get('logs'):
+                    await self.system_compose_logs(self.arguments['<service>'])
 
             # h3xrecon system queue
             if self.arguments.get('queue'):

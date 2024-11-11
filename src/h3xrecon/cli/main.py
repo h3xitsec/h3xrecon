@@ -9,6 +9,7 @@ Usage:
     h3xrecon [ -p <program> ] ( config ) ( list ) ( cidr | scope )
     h3xrecon ( system ) ( queue ) ( show | messages | flush ) ( worker | job | data )
     h3xrecon ( system ) ( compose ) ( status | start | stop )
+    h3xrecon ( system ) ( compose ) ( logs ) ( <service> )
     h3xrecon [ -p <program> ] ( list ) ( domains | ips ) [--resolved] [--unresolved]
     h3xrecon [ -p <program> ] ( list ) ( urls | services ) [--details]
     h3xrecon [ -p <program> ] ( add | del ) ( domain | ip | url ) ( - | <item> )
