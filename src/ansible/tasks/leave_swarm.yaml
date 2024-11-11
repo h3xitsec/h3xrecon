@@ -5,6 +5,7 @@
         state: absent
         force: yes
       when: inventory_hostname not in groups['processor']
+      ignore_errors: true
     
     - name: Force leave "orphaned" Docker Swarm
       ansible.builtin.command: docker swarm leave --force
@@ -27,10 +28,14 @@
       loop:
         - /etc/docker/swarm
         - /var/lib/docker/swarm
+        - /etc/docker/daemon.json
         - /var/run/docker/swarm
       ignore_errors: true
 
-- name: Reset Docker to non-Swarm state
-  ansible.builtin.systemd:
-    name: docker
-    state: restarted
+    - name: Restart Docker service
+      ansible.builtin.shell: systemctl restart docker
+
+    # - name: Reset Docker to non-Swarm state
+  #   ansible.builtin.systemd:
+#     name: docker
+#     state: restarted
