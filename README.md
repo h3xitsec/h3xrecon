@@ -21,7 +21,7 @@ H3XRecon is a powerful bug bounty reconnaissance automation tool designed to str
 - Python 3.11+
 - Ansible 2.9+ (for remote deployment)
 
-## 💻 Local Development Setup
+## 💻 Local Development
 
 1. Clone the repository:
 ```bash
@@ -61,6 +61,19 @@ docker compose logs -f [service_name]
 # Stop all services
 docker compose down
 ```
+
+### Update local stack
+
+When you edit code, you can update the local compose stack by running:
+```bash
+# Build the local images
+./build.sh
+
+# Update the stack
+docker compose up -d
+```
+
+It will restart with the updated code.
 
 ## 🌐 Remote Deployment
 
