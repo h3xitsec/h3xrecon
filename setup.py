@@ -22,7 +22,8 @@ setup(
         "python-dotenv",
         "redis",
         "jsondiff",
-        "python-dateutil"
+        "python-dateutil",
+        "dnspython"
     ],
     entry_points={
         'console_scripts': [
