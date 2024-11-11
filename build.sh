@@ -20,7 +20,6 @@ cp -r src/h3xrecon/jobprocessor ./src/docker/h3xrecon/h3xrecon/
 cp -r src/h3xrecon/logging ./src/docker/h3xrecon/h3xrecon/
 cp -r src/h3xrecon/workers ./src/docker/h3xrecon/h3xrecon/
 cp -r src/migrations ./src/docker/pgsql/
-cp src/h3xrecon/psql_dump.sql ./src/docker/pgsql/
 
 #ls -l ./src/docker
 #ls -l ./src/docker/pgsql

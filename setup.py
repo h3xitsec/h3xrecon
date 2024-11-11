@@ -21,7 +21,8 @@ setup(
         "asyncpg",
         "python-dotenv",
         "redis",
-        "jsondiff"
+        "jsondiff",
+        "python-dateutil"
     ],
     entry_points={
         'console_scripts': [

@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Union
 from loguru import logger
 from datetime import datetime
 from .config import Config
+import dateutil.parser
 
 class DatabaseManager:
     def __init__(self, config: Config = None):
@@ -471,17 +472,78 @@ class DatabaseManager:
             if self.pool is None:
                 raise Exception("Database connection pool is not initialized")
             
+            # Convert types before insertion
+            port = int(httpx_data.get('port')) if httpx_data.get('port') else None
+            status_code = int(httpx_data.get('status_code')) if httpx_data.get('status_code') else None
+            content_length = int(httpx_data.get('content_length')) if httpx_data.get('content_length') else None
+            words = int(httpx_data.get('words')) if httpx_data.get('words') else None
+            lines = int(httpx_data.get('lines')) if httpx_data.get('lines') else None
+            timestamp = dateutil.parser.parse(httpx_data.get('timestamp')) if httpx_data.get('timestamp') else None
+            
             async with self.pool.acquire() as conn:
                 await conn.execute(
                     '''
-                    INSERT INTO urls (url, httpx_data, program_id)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (url) DO UPDATE
-                    SET httpx_data = COALESCE(NULLIF(EXCLUDED.httpx_data, '{}'), urls.httpx_data)
+                    INSERT INTO urls (
+                        url, program_id, a, host, path, port, tech, response_time,
+                        input, lines, title, words, failed, method, scheme,
+                        cdn_name, cdn_type, final_url, resolvers, timestamp,
+                        webserver, status_code, content_type, content_length,
+                        chain_status_codes
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
+                    )
+                    ON CONFLICT (url) DO UPDATE SET
+                        a = EXCLUDED.a,
+                        host = EXCLUDED.host,
+                        path = EXCLUDED.path,
+                        port = EXCLUDED.port,
+                        tech = EXCLUDED.tech,
+                        response_time = EXCLUDED.response_time,
+                        input = EXCLUDED.input,
+                        lines = EXCLUDED.lines,
+                        title = EXCLUDED.title,
+                        words = EXCLUDED.words,
+                        failed = EXCLUDED.failed,
+                        method = EXCLUDED.method,
+                        scheme = EXCLUDED.scheme,
+                        cdn_name = EXCLUDED.cdn_name,
+                        cdn_type = EXCLUDED.cdn_type,
+                        final_url = EXCLUDED.final_url,
+                        resolvers = EXCLUDED.resolvers,
+                        timestamp = EXCLUDED.timestamp,
+                        webserver = EXCLUDED.webserver,
+                        status_code = EXCLUDED.status_code,
+                        content_type = EXCLUDED.content_type,
+                        content_length = EXCLUDED.content_length,
+                        chain_status_codes = EXCLUDED.chain_status_codes
                     ''',
                     url.lower(),
-                    json.dumps(httpx_data),
-                    program_id
+                    program_id,
+                    httpx_data.get('a'),
+                    httpx_data.get('host'),
+                    httpx_data.get('path'),
+                    port,  # converted to int
+                    httpx_data.get('tech'),
+                    httpx_data.get('time'),  # response_time
+                    httpx_data.get('input'),
+                    lines,  # converted to int
+                    httpx_data.get('title'),
+                    words,  # converted to int
+                    httpx_data.get('failed', False),
+                    httpx_data.get('method'),
+                    httpx_data.get('scheme'),
+                    httpx_data.get('cdn_name'),
+                    httpx_data.get('cdn_type'),
+                    httpx_data.get('final_url'),
+                    httpx_data.get('resolvers'),
+                    timestamp,  # converted to datetime
+                    httpx_data.get('webserver'),
+                    status_code,  # converted to int
+                    httpx_data.get('content_type'),
+                    content_length,  # converted to int
+                    httpx_data.get('chain_status_codes')
                 )
                 logger.info(f"URL inserted or updated: {url}")
         except Exception as e:
