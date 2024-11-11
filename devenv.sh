@@ -29,6 +29,13 @@ export ANSIBLE_HOME=./src/ansible
 export ANSIBLE_INVENTORY=./src/ansible/hosts.yaml
 export ANSIBLE_LOCAL_TEMP=./.ansible_tmp
 
+
+# Activate Python virtual environment
+source ./venv/bin/activate
+
+# Source h3xrecon completion
+. ./src/h3xrecon/cli/h3xrecon-complete.sh
+
 # Ansible Playbook wrapper
 apb() {
     alias ls=ls
