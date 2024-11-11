@@ -1,99 +1,113 @@
-# h3xrecon
+# H3XRecon
 
-h3xrecon is a bug bounty reconnaissance automation tool.
+<p align="center">
+  <img src="docs/assets/logo.png" alt="H3XRecon Logo" width="200"/>
+</p>
 
-## Installation for local development
+H3XRecon is a powerful bug bounty reconnaissance automation tool designed to streamline and automate the reconnaissance phase of security assessments. It provides a distributed architecture for efficient scanning and data processing.
 
-### Prerequisites
+## 🚀 Features
 
-- Docker
-- Docker Compose v2 (docker compose, not docker-compose)
-- Python 3.11+ with venv and pip
+- Distributed reconnaissance architecture using Docker Swarm
+- Real-time log aggregation and visualization with Grafana
+- Modular plugin system for custom reconnaissance tools
+- Centralized data processing and storage
+- Built-in scope management and filtering
 
-### Setup
+## 📋 Prerequisites
 
+- Docker Engine 20.10+
+- Docker Compose v2 (`docker compose`, not `docker-compose`)
+- Python 3.11+
+- Ansible 2.9+ (for remote deployment)
+
+## 💻 Local Development Setup
+
+1. Clone the repository:
 ```bash
 git clone https://github.com/h3xitsec/h3xrecon.git
 cd h3xrecon
+```
+
+2. Create and activate Python virtual environment:
+```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install .
 ```
 
-### Start Docker Compose services
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
+
+4. Configure development environment:
+```bash
+source devenv.sh
+```
+
+### Managing Docker Services
 
 ```bash
-docker compose -f src/docker/docker-compose.local.yaml up -d
+# Start services and view logs
+docker compose up
+
+# Run in detached mode
+docker compose up -d
+
+# View logs
+docker compose logs -f [service_name]
+
+# Stop all services
+docker compose down
 ```
 
-## Deploying to remote servers
+## 🌐 Remote Deployment
 
-### Set Ansible inventory
+### 1. Configure Ansible Inventory
 
-Set the inventory file in src/ansible/hosts.yaml to point to your servers.
+Create your inventory file at `src/ansible/hosts.yaml`. Example configuration:
 
-```yaml
-all:
-  vars:
-    h3xrecon_base_directory: /home/h3x/data/projects/h3xrecon # Where is the project cloned on the server
-    h3xrecon_target_directory: /home/{{ ansible_user }}/h3xrecon # Where the project will be deployed on the server
-    h3xrecon_timezone: America/Montreal
-
-  ## Hosts Definitions
-  hosts: {}
-    
-
-## Processor Host Group
-## Those hosts will run the database, msgbroker and cache components
-## Those hosts will also be the Docker Swarm managers
-processor:
-  vars:
-    h3xrecon_role: processor
-  hosts:
-    recon:
-      ansible_host: x.x.x.x
-      ansible_user: username
-      ansible_ssh_private_key: "{{ PROCESSOR_PRIVATE_KEY }}"
-      h3xrecon_dockercompose_pkg: docker-compose-plugin
-
-## Workers Hosts Group
-workers:
-  vars:
-    h3xrecon_role: worker
-    h3xrecon_dockercompose_pkg: docker-compose-v2
-  hosts:
-    vps2:
-      ansible_host: y.y.y.y
-      ansible_user: username
-      ansible_ssh_private_key_file: /path/to/ansible.key
-      ansible_ssh_extra_args: '-o StrictHostKeyChecking=no'
+```yaml:src/ansible/hosts.yaml
+startLine: 1
+endLine: 85
 ```
 
-### Configure the nodes
+### 2. Configure Nodes
 
-This playbook will install prerequisites and docker on the nodes as well as configure the Docker Swarm cluster.
+Install prerequisites and set up Docker Swarm cluster:
 
 ```bash
 ansible-playbook -i src/ansible/hosts.yaml src/ansible/setup_nodes.yaml
 ```
 
-### Deploy the project
+### 3. Deploy Stack
 
-This playbook will deploy the docker stack on the cluster
+Deploy the H3XRecon stack to the cluster:
 
 ```bash
 ansible-playbook -i src/ansible/hosts.yaml src/ansible/deploy_h3xrecon_stack.yaml
 ```
-## Dashboards
+
+## 📊 Monitoring Dashboards
 
 ### Grafana
-
-The Grafana dashboard is available at http://<grafana-host>:3000.
-
-Use the following credentials to login:
-- Username: admin
-- Password: admin
+- **URL**: `http://<grafana-host>:3000`
+- **Default Credentials**: 
+  - Username: `admin`
+  - Password: `admin`
+- **Features**:
+  - Real-time log aggregation
+  - Service performance metrics
+  - Custom reconnaissance dashboards
 
 ### Docker Swarm Dashboard
+- **URL**: `http://<swarm-manager-host>:8080`
+- **Features**:
+  - Service health monitoring
+  - Container management
+  - Resource utilization metrics
 
-The Docker Swarm dashboard is available at http://<swarm-manager-host>:8080.
+## 📖 Documentation
+
+For detailed usage instructions and configuration options, please refer to the [CLI Documentation](src/h3xrecon/cli/README.md).
