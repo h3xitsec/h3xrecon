@@ -7,9 +7,8 @@ Usage:
     h3xrecon ( program ) ( add | del) ( <program> )
     h3xrecon [ -p <program> ] ( config ) ( add | del ) ( cidr | scope ) ( - | <item> )
     h3xrecon [ -p <program> ] ( config ) ( list ) ( cidr | scope )
+    h3xrecon [ -p <program> ] ( config ) ( database ) ( drop)
     h3xrecon ( system ) ( queue ) ( show | messages | flush ) ( worker | job | data )
-    h3xrecon ( system ) ( compose ) ( status | start | stop )
-    h3xrecon ( system ) ( compose ) ( logs ) ( <service> )
     h3xrecon [ -p <program> ] ( list ) ( domains | ips ) [--resolved] [--unresolved]
     h3xrecon [ -p <program> ] ( list ) ( urls | services ) [--details]
     h3xrecon [ -p <program> ] ( add | del ) ( domain | ip | url ) ( - | <item> )
@@ -29,8 +28,6 @@ from docopt import docopt
 from h3xrecon.cli.client import H3XReconClient
 
 VERSION = "0.0.1"
-
-
 
 def main():
     try:
