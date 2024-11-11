@@ -3,15 +3,17 @@
 """H3XRecon Client
 
 Usage:
-    client.py ( program ) ( list )
-    client.py ( program ) ( add | del) ( <program> )
-    client.py [ -p <program> ] ( config ) ( add | del ) ( cidr | scope ) ( - | <item> )
-    client.py [ -p <program> ] ( config ) ( list ) ( cidr | scope )
-    client.py ( system ) ( queue ) ( show | messages | flush ) ( worker | job | data )
-    client.py [ -p <program> ] ( list ) ( domains | ips ) [--resolved] [--unresolved]
-    client.py [ -p <program> ] ( list ) ( urls | services ) [--details]
-    client.py [ -p <program> ] ( add | del ) ( domain | ip | url ) ( - | <item> )
-    client.py [ -p <program> ] ( sendjob ) ( <function> ) ( <target> ) [--force]
+    h3xrecon ( program ) ( list )
+    h3xrecon ( program ) ( add | del) ( <program> )
+    h3xrecon [ -p <program> ] ( config ) ( add | del ) ( cidr | scope ) ( - | <item> )
+    h3xrecon [ -p <program> ] ( config ) ( list ) ( cidr | scope )
+    h3xrecon ( system ) ( queue ) ( show | messages | flush ) ( worker | job | data )
+    h3xrecon ( system ) ( compose ) ( status | start | stop )
+    h3xrecon ( system ) ( compose ) ( logs ) ( <service> )
+    h3xrecon [ -p <program> ] ( list ) ( domains | ips ) [--resolved] [--unresolved]
+    h3xrecon [ -p <program> ] ( list ) ( urls | services ) [--details]
+    h3xrecon [ -p <program> ] ( add | del ) ( domain | ip | url ) ( - | <item> )
+    h3xrecon [ -p <program> ] ( sendjob ) ( <function> ) ( <target> ) [--force]
 
 Options:
     -p --program     Program to work on.
@@ -28,6 +30,8 @@ from h3xrecon.cli.client import H3XReconClient
 
 VERSION = "0.0.1"
 
+
+
 def main():
     try:
         # Parse arguments
@@ -37,6 +41,6 @@ def main():
         asyncio.run(client.run())
     except Exception as e:
         print('[ERROR] ' + str(e))
-            
+
 if __name__ == '__main__':
     main()

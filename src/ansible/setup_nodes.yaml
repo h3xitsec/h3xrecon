@@ -43,6 +43,13 @@
     loop: '{{ linux_apt_packages }}'
     loop_control:
       loop_var: pkg
+  
+  - name: Enable fail2ban
+    become: true
+    ansible.builtin.systemd:
+      name: fail2ban
+      state: started
+      enabled: yes
 
   - name: Empty target directory
     become: true

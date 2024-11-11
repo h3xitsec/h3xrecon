@@ -1,3 +1,4 @@
+export H3XRECON_PROCESSOR_HOST=192.168.0.91
 export H3XRECON_DB_USER=h3xrecon
 export H3XRECON_DB_NAME=h3xrecon
 export H3XRECON_DB_HOST=localhost
