@@ -2,7 +2,11 @@
 
 # Environment variables
 ## reconh3x specific variables
-set -a && . ./.env.local && set +a 
+set -a && . ./.env.local && set +a
+
+# Add bin directory to PATH for local wrapper scripts
+export PATH="$PWD/bin:$PATH"
+
 # Set PYTHONPATH to src directory
 export PYTHONPATH="$PWD/src"
 # Set PostgreSQL environment for easy use of psql
