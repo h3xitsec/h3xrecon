@@ -60,9 +60,58 @@ TLDR:
 
 Create your inventory file at `src/ansible/hosts.yaml`. Example configuration:
 
-```yaml:src/ansible/hosts.yaml
-startLine: 1
-endLine: 85
+```yaml:/ansible/hosts.yaml
+all:
+  vars:
+    h3xrecon_base_directory: ./
+    h3xrecon_target_directory: /home/{{ ansible_user }}/h3xrecon/
+    h3xrecon_timezone: America/Montreal
+
+  # No hosts defined by default
+  hosts: {}
+    
+
+## Processor Host Group
+## Those will be used to run the message broker, database, caching and processor services
+processor:
+  vars:
+    H3XRECON_SWARM_ROLE: processor # This is used to set the node label in docker swarm
+  hosts:
+    processor1:
+      ansible_host: 1.1.1.1
+      ansible_user: username
+      ansible_ssh_private_key_file: /path/to/private/key
+      h3xrecon_dockercompose_pkg: docker-compose-plugin # Not all distros have the same package name so we set it here
+
+## Workers Hosts Group
+## Those will be used to run the worker services
+workers:
+  vars:
+    H3XRECON_SWARM_ROLE: worker # This is used to set the node label in docker swarm
+  hosts:
+    worker1:
+      ansible_host: 2.2.2.1
+      ansible_user: username
+      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
+
+    worker2:
+      ansible_host: 2.2.2.2
+      ansible_user: username
+      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
+
+    worker3:
+      ansible_host: 2.2.2.3
+      ansible_user: username
+      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
+
+    worker4:
+      ansible_host: 2.2.2.4
+      ansible_user: username
+      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 ```
 
 #### 2. Configure Nodes
