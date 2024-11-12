@@ -15,8 +15,6 @@ export H3XRECON_LOG_LEVEL=DEBUG
 export H3XRECON_LOG_FILE_PATH=h3xrecon.log
 # Set PYTHONPATH to src directory
 export PYTHONPATH="$PWD/src"
-# Set Docker Compose environment
-export COMPOSE_FILE=./docker-compose.yaml
 # Set PostgreSQL environment for easy use of psql
 export PGHOST=$H3XRECON_DB_HOST
 export PGPORT=$H3XRECON_DB_PORT

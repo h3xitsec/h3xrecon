@@ -63,7 +63,7 @@ services:
       - "6379:6379"
 
   database:
-    image: h3xrecontest/h3xrecon_pgsql:latest
+    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_pgsql:latest
     env_file:
       - .env.compose
     environment:
@@ -89,13 +89,13 @@ services:
       "
 
   msgbroker:
-    image: h3xrecontest/h3xrecon_msgbroker:latest
+    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_msgbroker:latest
     env_file:
       - .env.compose
     volumes:
       - nats_data:/data
     ports:
-      - "4222:4222"  # Updated for local mode
+      - "4222:4222"
     healthcheck:
       test: ["CMD-SHELL", "nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_EXECUTE' && nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_OUTPUT' && nats stream ls --server=nats://localhost:4222 | grep -q 'RECON_DATA'"]
       interval: 2s
@@ -104,7 +104,7 @@ services:
       start_period: 5s
 
   jobprocessor:
-    image: h3xrecontest/h3xrecon_server:latest
+    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_server:latest
     env_file:
       - .env.compose
     environment:
@@ -116,7 +116,7 @@ services:
         condition: service_healthy
 
   dataprocessor:
-    image: h3xrecontest/h3xrecon_server:latest
+    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_server:latest
     env_file:
       - .env.compose
     environment:
@@ -128,7 +128,7 @@ services:
         condition: service_healthy
 
   worker:
-    image: h3xrecontest/h3xrecon_worker:latest
+    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_worker:latest
     env_file:
       - .env.compose
     depends_on:
