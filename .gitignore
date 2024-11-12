@@ -1,5 +1,6 @@
 venv/
 testenv/
+.current_registry
 TODO.md
 .ansible_tmp/
 src/docker/h3xrecon/h3xrecon/
