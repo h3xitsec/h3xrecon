@@ -45,18 +45,13 @@ source localenv.sh
 
 4. Start (and manage) the services:
 
+The `compose.sh` script is a wrapper around `docker compose` that simplifies the usage of the local stack.
+
+See the [compose wrapper documentation](docs/compose_wrapper.md) for more information.
+
+TLDR:
 ```bash
-# Start services and view logs
-docker compose up
-
-# Run in detached mode
-docker compose up -d
-
-# View logs
-docker compose logs -f [service_name]
-
-# Stop all services
-docker compose down
+./compose.sh [local|public] [docker compose options]
 ```
 
 ### 🌐 Remote Deployment
