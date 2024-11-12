@@ -16,8 +16,7 @@ export H3XRECON_LOG_FILE_PATH=h3xrecon.log
 # Set PYTHONPATH to src directory
 export PYTHONPATH="$PWD/src"
 # Set Docker Compose environment
-export COMPOSE_FILE=./src/docker/docker-compose.local.yaml
-export COMPOSE_ENV_FILES=./src/docker/.env.compose
+export COMPOSE_FILE=./docker-compose.yaml
 # Set PostgreSQL environment for easy use of psql
 export PGHOST=$H3XRECON_DB_HOST
 export PGPORT=$H3XRECON_DB_PORT
@@ -34,7 +33,7 @@ export ANSIBLE_LOCAL_TEMP=./.ansible_tmp
 source ./venv/bin/activate
 
 # Source h3xrecon completion
-. ./src/h3xrecon/cli/h3xrecon-complete.sh
+#. ./src/h3xrecon/cli/h3xrecon-complete.sh
 
 # Ansible Playbook wrapper
 apb() {

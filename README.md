@@ -13,6 +13,7 @@ H3XRecon is a powerful bug bounty reconnaissance automation tool designed to str
 - Modular plugin system for custom reconnaissance tools
 - Centralized data processing and storage
 - Built-in scope management and filtering
+- Bug Bounty program management with scope management
 
 ## 📋 Prerequisites
 
@@ -21,7 +22,9 @@ H3XRecon is a powerful bug bounty reconnaissance automation tool designed to str
 - Python 3.11+
 - Ansible 2.9+ (for remote deployment)
 
-## 💻 Local Development
+## 💻 Getting Started
+
+### Local Docker Compose Option
 
 1. Clone the repository:
 ```bash
@@ -29,24 +32,18 @@ git clone https://github.com/h3xitsec/h3xrecon.git
 cd h3xrecon
 ```
 
-2. Create and activate Python virtual environment:
+2. Build the local images:
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+./build.sh
 ```
 
-3. Install dependencies:
+3. Configure the environment:
 ```bash
-pip install -r requirements.txt
-pip install -e .
+# This will set all the requirement environment variables for the local stack
+source localenv.sh
 ```
 
-4. Configure development environment:
-```bash
-source devenv.sh
-```
-
-### Managing Docker Services
+4. Start (and manage) the services:
 
 ```bash
 # Start services and view logs
@@ -62,22 +59,9 @@ docker compose logs -f [service_name]
 docker compose down
 ```
 
-### Update local stack
+### 🌐 Remote Deployment
 
-When you edit code, you can update the local compose stack by running:
-```bash
-# Build the local images
-./build.sh
-
-# Update the stack
-docker compose up -d
-```
-
-It will restart with the updated code.
-
-## 🌐 Remote Deployment
-
-### 1. Configure Ansible Inventory
+#### 1. Configure Ansible Inventory
 
 Create your inventory file at `src/ansible/hosts.yaml`. Example configuration:
 
@@ -86,7 +70,7 @@ startLine: 1
 endLine: 85
 ```
 
-### 2. Configure Nodes
+#### 2. Configure Nodes
 
 Install prerequisites and set up Docker Swarm cluster:
 
@@ -94,7 +78,7 @@ Install prerequisites and set up Docker Swarm cluster:
 ansible-playbook -i src/ansible/hosts.yaml src/ansible/setup_nodes.yaml
 ```
 
-### 3. Deploy Stack
+#### 3. Deploy Stack
 
 Deploy the H3XRecon stack to the cluster:
 
