@@ -2,16 +2,23 @@
   block:
     - name: Get Tailscale IP
       ansible.builtin.command: tailscale ip -4
-      register: tailscale_ip
+      register: node_ip
       changed_when: false
+      when: lookup('ansible.builtin.env', 'H3XRECON_SWARM_MODE', default='lan') == 'tailscale'
+
+    - name: Get Local IP
+      ansible.builtin.command: ip -4 addr show scope global | grep inet | awk '{print $2}' | cut -d/ -f1
+      register: local_ip
+      changed_when: false
+      when: lookup('ansible.builtin.env', 'H3XRECON_SWARM_MODE', default='lan') == 'lan'
 
     - ansible.builtin.debug:
-        var: tailscale_ip
+        var: node_ip
 
     - name: Initialize Swarm on first host
       community.docker.docker_swarm:
         state: present
-        advertise_addr: "{{ tailscale_ip.stdout }}"
+        advertise_addr: "{{ node_ip.stdout }}"
       when: inventory_hostname == groups['processor'][0]
       register: swarm_init
 
@@ -25,9 +32,9 @@
     - name: Join Swarm as worker
       community.docker.docker_swarm:
         state: join
-        advertise_addr: "{{ tailscale_ip.stdout }}"
+        advertise_addr: "{{ node_ip.stdout }}"
         join_token: "{{ swarm_info.swarm_facts.JoinTokens.Worker }}"
-        remote_addrs: [ "{{ hostvars[groups['processor'][0]]['tailscale_ip']['stdout'] }}" ]
+        remote_addrs: [ "{{ hostvars[groups['processor'][0]]['node_ip']['stdout'] }}" ]
       when: inventory_hostname != groups['processor'][0]
   
 - name: Tag Swarm Nodes
