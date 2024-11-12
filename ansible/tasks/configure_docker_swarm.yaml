@@ -7,7 +7,7 @@
       when: lookup('ansible.builtin.env', 'H3XRECON_SWARM_MODE', default='lan') == 'tailscale'
 
     - name: Get Local IP
-      ansible.builtin.command: ip -4 addr show scope global | grep inet | awk '{print $2}' | cut -d/ -f1
+      ansible.builtin.command: ip -4 addr show scope global | grep inet | awk '{print $2}' | cut -d/ -f1 | head -1
       register: local_ip
       changed_when: false
       when: lookup('ansible.builtin.env', 'H3XRECON_SWARM_MODE', default='lan') == 'lan'
