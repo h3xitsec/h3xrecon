@@ -2,6 +2,7 @@ venv/
 testenv/
 .current_registry
 TODO.md
+src/ansible/hosts.yaml
 .ansible_tmp/
 src/docker/h3xrecon/h3xrecon/
 src/docker/h3xrecon/setup.py
