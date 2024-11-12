@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -a && . ./.env.compose && set +a
+
 show_menu() {
     echo "Please select a registry option:"
     echo "1) local  - Use local Docker registry (for development)"
