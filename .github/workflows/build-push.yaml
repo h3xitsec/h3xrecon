@@ -65,8 +65,8 @@ jobs:
       - name: Build and push database image
         uses: docker/build-push-action@v4
         with:
-          context: ./src/docker/pgsql
-          file: ./src/docker/pgsql/Dockerfile
+          context: ./docker/pgsql
+          file: ./docker/pgsql/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:latest
           cache-from: type=gha
@@ -76,8 +76,8 @@ jobs:
       - name: Build and push msgbroker image
         uses: docker/build-push-action@v4
         with:
-          context: ./src/docker/msgbroker
-          file: ./src/docker/msgbroker/Dockerfile
+          context: ./docker/msgbroker
+          file: ./docker/msgbroker/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_msgbroker:latest
           cache-from: type=gha
