@@ -213,7 +213,7 @@ services:
       - H3XRECON_ROLE=worker
     deploy:
       mode: replicated
-      replicas: 1
+      replicas: ${H3XRECON_WORKERS_COUNT}
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == worker

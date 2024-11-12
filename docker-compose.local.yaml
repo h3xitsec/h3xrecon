@@ -134,6 +134,10 @@ services:
     depends_on:
       msgbroker:
         condition: service_healthy
+      cache:
+        condition: service_healthy
+    deploy:
+      replicas: ${H3XRECON_WORKERS_COUNT}
 
 volumes:
   pgsql_data:

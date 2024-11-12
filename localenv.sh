@@ -23,41 +23,41 @@ export ANSIBLE_LOCAL_TEMP=./.ansible_tmp
 alias h3xrecon='docker run --rm -it --network host --env-file ./.env.local ghcr.io/h3xitsec/h3xrecon_client'
 
 # Ansible Playbook wrapper
-apb() {
-    alias ls=ls
-    local playbook="$1"
-    if [[ -z "$playbook" ]]; then
-        # If no argument, list available playbooks
-        echo "Available Ansible playbooks:"
-        find ./src/ansible/ -maxdepth 1 -type f ! -name 'hosts.yaml' -name *.yaml  | xargs -n1 basename | cut -d. -f1
-        return 1
-    fi
+# apb() {
+#     alias ls=ls
+#     local playbook="$1"
+#     if [[ -z "$playbook" ]]; then
+#         # If no argument, list available playbooks
+#         echo "Available Ansible playbooks:"
+#         find ./src/ansible/ -maxdepth 1 -type f ! -name 'hosts.yaml' -name *.yaml  | xargs -n1 basename | cut -d. -f1
+#         return 1
+#     fi
 
-    # Auto-complete .yaml extension if not provided
-    if [[ ! "$playbook" == *.yaml ]]; then
-        playbook="${playbook}.yaml"
-    fi
+#     # Auto-complete .yaml extension if not provided
+#     if [[ ! "$playbook" == *.yaml ]]; then
+#         playbook="${playbook}.yaml"
+#     fi
 
-    # Check if playbook exists
-    if [[ ! -f "./src/ansible/$playbook" ]]; then
-        echo "Playbook not found: $playbook"
-        echo "Available Ansible playbooks:"
-        ls ./src/ansible/*.yaml | xargs -n1 basename
-        return 1
-    fi
+#     # Check if playbook exists
+#     if [[ ! -f "./src/ansible/$playbook" ]]; then
+#         echo "Playbook not found: $playbook"
+#         echo "Available Ansible playbooks:"
+#         ls ./src/ansible/*.yaml | xargs -n1 basename
+#         return 1
+#     fi
 
-    ansible-playbook "./src/ansible/$playbook"
-}
+#     ansible-playbook "./src/ansible/$playbook"
+# }
 
-# Enable tab completion for Ansible playbooks
-_apb_completion() {
-    local cur playbooks
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    playbooks=$(ls ./src/ansible/*.yaml | xargs -n1 basename | sed 's/\.yaml$//')
+# # Enable tab completion for Ansible playbooks
+# _apb_completion() {
+#     local cur playbooks
+#     COMPREPLY=()
+#     cur="${COMP_WORDS[COMP_CWORD]}"
+#     playbooks=$(ls ./src/ansible/*.yaml | xargs -n1 basename | sed 's/\.yaml$//')
 
-    COMPREPLY=( $(compgen -W "${playbooks}" -- "${cur}") )
-    return 0
-}
+#     COMPREPLY=( $(compgen -W "${playbooks}" -- "${cur}") )
+#     return 0
+# }
 
-complete -F _apb_completion apb
+# complete -F _apb_completion apb

@@ -39,19 +39,19 @@ cd h3xrecon
 
 3. Configure the environment:
 ```bash
-# This will set all the requirement environment variables for the local stack
+# This will set all the requirement environment variables for the local stack and add the bin directory to the PATH
 source localenv.sh
 ```
 
 4. Start (and manage) the services:
 
-The `compose.sh` script is a wrapper around `docker compose` that simplifies the usage of the local stack.
+The `compose` script is a wrapper around `docker compose` that simplifies the usage of the local stack.
 
 See the [compose wrapper documentation](docs/compose_wrapper.md) for more information.
 
 TLDR:
 ```bash
-./compose.sh [local|public] [docker compose options]
+compose [local|public] [docker compose options]
 ```
 
 5. Start using it
@@ -88,6 +88,20 @@ pip install .
 
 For more information on the commands, please refer to the [CLI Documentation](docs/cli.md).
 
+6. Scaling the workers
+
+Hot scaling the workers is as simple as running the following command:
+
+```bash
+compose scale worker=<number_of_workers>
+```
+
+Alternatively, you can set the number of workers in the .env.local file and restart the compose stack.
+
+```bash
+# Edit the .env.compose file to set the number of workers
+H3XRECON_WORKERS_COUNT=<number_of_workers>
+```
 
 ### 🌐 Remote Deployment
 
