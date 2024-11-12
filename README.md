@@ -54,6 +54,41 @@ TLDR:
 ./compose.sh [local|public] [docker compose options]
 ```
 
+5. Start using it
+
+Source the localenv.sh script to set the environment variables and alias for h3xrecon client's docker image
+
+```bash
+. ./localenv.sh
+```
+
+Setup your first program
+
+```bash
+# Create a new program
+h3xrecon program add program_name
+# Add a scope to the program
+h3xrecon -p program_name config add scope ".*example.com"
+# Add a cidr to the program
+h3xrecon -p program_name config add cidr "1.2.3.4/24"
+# Send a job to the program
+h3xrecon -p program_name sendjob resolve_domain example.com
+# View data
+h3xrecon -p program_name list domains/urls/ips/services
+```
+
+Alternatively, you can install the h3xrecon client as a python module and use it directly:
+
+```bash
+python -m venv venv
+git clone https://github.com/h3xitsec/h3xrecon-cli.git
+cd h3xrecon-cli
+pip install .
+```
+
+For more information on the commands, please refer to the [CLI Documentation](docs/cli.md).
+
+
 ### 🌐 Remote Deployment
 
 Ansible is used to deploy the H3XRecon stack to a remote Docker Swarm cluster.
