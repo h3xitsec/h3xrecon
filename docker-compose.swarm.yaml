@@ -133,7 +133,7 @@ services:
         tag: "{{.Name}}"
   
   jobprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon:latest
+    image: ghcr.io/h3xitsec/h3xrecon_server:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -164,7 +164,7 @@ services:
         tag: "{{.Name}}"
   
   dataprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon:latest
+    image: ghcr.io/h3xitsec/h3xrecon_server:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -195,7 +195,7 @@ services:
         tag: "{{.Name}}"
   
   worker:
-    image: ghcr.io/h3xitsec/h3xrecon:latest
+    image: ghcr.io/h3xitsec/h3xrecon_worker:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy

@@ -14,7 +14,7 @@
         dest: "{{ file['dest'] }}"
       loop:
         - src: ../docker/grafana
-          dest: "{{ h3xrecon_target_directory }}/"
+          dest: "{{ h3xrecon_target_directory }}"
         - src: ../docker-compose.swarm.yaml
           dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
       loop_control:
