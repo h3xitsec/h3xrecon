@@ -14,9 +14,11 @@
         dest: "{{ file['dest'] }}"
       loop:
         - src: ../docker/grafana
-          dest: "{{ h3xrecon_target_directory }}/"
+          dest: "{{ h3xrecon_target_directory }}"
         - src: ../docker-compose.swarm.yaml
           dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
+        - src: ../.env.compose
+          dest: "{{ h3xrecon_target_directory }}.env"
       loop_control:
         loop_var: file
     - name: Install jsondiff python library
@@ -26,19 +28,9 @@
     - name: Deploy Docker stack
       ansible.builtin.shell:
         chdir: "{{ h3xrecon_target_directory }}"
-        cmd: docker stack deploy -c docker-compose.yaml h3xrecon
+        cmd: |
+          export $(cat .env) > /dev/null 2>&1; docker stack deploy -c docker-compose.yaml h3xrecon
       register: docker_stack_deploy
-      environment:
-        H3XRECON_DB_USER: h3xrecon
-        H3XRECON_DB_NAME: h3xrecon
-        H3XRECON_DB_HOST: database
-        H3XRECON_DB_PASS: h3xrecon
-        H3XRECON_REDIS_HOST: cache
-        H3XRECON_REDIS_PORT: 6379
-        H3XRECON_NATS_HOST: msgbroker
-        H3XRECON_NATS_PORT: 4222
-        H3XRECON_LOG_LEVEL: DEBUG
-        H3XRECON_LOG_FILE_PATH: /app/logs/h3xrecon.log
     - name: Display Docker stack deploy result
       ansible.builtin.debug:
         var: docker_stack_deploy

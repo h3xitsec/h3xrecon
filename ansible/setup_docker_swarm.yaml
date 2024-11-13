@@ -11,10 +11,12 @@
 
   tasks:
     - {"name": "Test communication with all nodes", "ansible.builtin.include_tasks": "tasks/test_all_nodes.yaml"}
-    - {"name": "Install Tailscale", "when": lookup('ansible.builtin.env', 'H3XRECON_SWARM_MODE', default=Undefined) == 'tailscale',"ansible.builtin.include_tasks": "tasks/install_tailscale.yaml"}
+    - name: Install Tailscale
+      ansible.builtin.include_tasks: tasks/install_tailscale.yaml
+      when: lookup('ansible.builtin.env', 'H3XRECON_SWARM_MODE', default='lan') == 'tailscale'
     - {"name": "Install Docker", "ansible.builtin.include_tasks": "tasks/install_docker.yaml"}
     - {"name": "Configure Docker Swarm", "ansible.builtin.include_tasks": "tasks/configure_docker_swarm.yaml"}
-    - {"name": "Setup Dashboard", "ansible.builtin.include_tasks": "tasks/setup_dashboard.yaml"}
+    #- {"name": "Setup Dashboard", "ansible.builtin.include_tasks": "tasks/setup_dashboard.yaml"}
   
   handlers:
     - name: Restart Docker

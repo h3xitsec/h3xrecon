@@ -21,8 +21,9 @@
     state: present
     name: h3xrecon_db
     compose:
-    - services:
-        swarm-dashboard:
+      - version: '3.8'
+        services:
+          swarm-dashboard:
           image: mohsenasm/swarm-dashboard:latest
           volumes:
             - /var/run/docker.sock:/var/run/docker.sock
