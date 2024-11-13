@@ -109,7 +109,18 @@ Ansible is used to deploy the H3XRecon stack to a remote Docker Swarm cluster.
 
 It setup the whole docker swarm cluster using Tailscale as a communication layer between the nodes.
 
-#### 1. Configure Ansible Inventory
+#### 1. Install Ansible requirements
+
+```bash
+# Install python-venv from your package manager
+apt update && apt install python3-venv # Debian/Ubuntu
+
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### 2. Configure Ansible Inventory
 
 Create your inventory file at `src/ansible/hosts.yaml`. Example configuration:
 
@@ -167,22 +178,21 @@ workers:
       ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 ```
 
-#### 2. Configure Nodes
+#### 3. Configure Nodes
 
 Install prerequisites and set up Docker Swarm cluster:
 
-`apb` is a wrapper around `ansible-playbook` that simplifies the usage of the ansible playbooks.
-
 ```bash
-apb setup_nodes
+# Will do the basic setup of the nodes and install docker and setup a docker swarm cluster
+ansible-playbook ansible/setup_nodes.yaml
 ```
 
-#### 3. Deploy Stack
+#### 4. Deploy Stack
 
 Deploy the H3XRecon stack to the cluster:
 
 ```bash
-apb deploy_h3xrecon_stack
+ansible-playbook ansible/deploy_h3xrecon_stack.yaml
 ```
 
 ## Recon Workflow
