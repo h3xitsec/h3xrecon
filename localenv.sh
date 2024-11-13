@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export H3XRECON_BASE_DIRECTORY=$(pwd)
+
 # Environment variables
 ## reconh3x specific variables
 set -a && . ./.env.local && set +a

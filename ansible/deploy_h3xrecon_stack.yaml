@@ -4,14 +4,35 @@
     - vaults/vault.yaml
   tasks:
     #- {"name": "Sync Project's files", "ansible.builtin.include_tasks": "tasks/sync_project.yaml"}
+    # - name: Create target directory
+    #   ansible.builtin.file:
+    #     path: "{{ h3xrecon_target_directory }}"
+    #     state: directory
+
+    # - name: Copy compose files
+    #   ansible.builtin.copy:
+    #     src: "{{ file['src'] }}"
+    #     dest: "{{ file['dest'] }}"
+    #   loop:
+    #     - src: ../docker/grafana
+    #       dest: "{{ h3xrecon_target_directory }}/"
+    #     - src: ../docker-compose.swarm.yaml
+    #       dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
+    #   loop_control:
+    #     loop_var: file
+
+    # - name: Deploy Docker stack
+    #   ansible.builtin.shell:
+    #     chdir: "{{ h3xrecon_target_directory }}"
+    #     cmd: docker stack deploy -c docker-compose.yaml h3xrecon
     - name: Deploy Docker stack
+      delegate_to: localhost
       community.docker.docker_stack:
         state: present
         name: h3xrecon
         compose:
           - ../docker-compose.yaml
       environment:
-        DOCKER_HOST: ssh://{{ ansible_host }}
         H3XRECON_DB_USER: h3xrecon
         H3XRECON_DB_NAME: h3xrecon
         H3XRECON_DB_HOST: database

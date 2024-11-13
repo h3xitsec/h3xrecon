@@ -1,3 +1,4 @@
+version: '3.8'
 configs:
   grafana-dashboards:
     file: ./grafana/provisioning/dashboards/logs-dashboard.json
@@ -81,7 +82,7 @@ services:
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
-    image: postgres
+    image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:
@@ -213,7 +214,7 @@ services:
       - H3XRECON_ROLE=worker
     deploy:
       mode: replicated
-      replicas: ${H3XRECON_WORKERS_COUNT}
+      replicas: 5
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == worker
