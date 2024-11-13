@@ -18,8 +18,8 @@ export PGUSER=$H3XRECON_DB_USER
 export PGPASSWORD=$H3XRECON_DB_PASS
 export PGDATABASE=$H3XRECON_DB_NAME
 # Set Ansible environment
-export ANSIBLE_HOME=./src/ansible
-export ANSIBLE_INVENTORY=./src/ansible/hosts.yaml
+export ANSIBLE_HOME=./ansible
+export ANSIBLE_INVENTORY=./ansible/hosts.yaml
 export ANSIBLE_LOCAL_TEMP=./.ansible_tmp
 
 alias h3xrecon='docker run --rm -it --network host --env-file ./.env.local ghcr.io/h3xitsec/h3xrecon_client'
