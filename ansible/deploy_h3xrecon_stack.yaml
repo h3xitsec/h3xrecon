@@ -27,6 +27,7 @@
       ansible.builtin.shell:
         chdir: "{{ h3xrecon_target_directory }}"
         cmd: docker stack deploy -c docker-compose.yaml h3xrecon
+      register: docker_stack_deploy
       environment:
         H3XRECON_DB_USER: h3xrecon
         H3XRECON_DB_NAME: h3xrecon
@@ -38,3 +39,6 @@
         H3XRECON_NATS_PORT: 4222
         H3XRECON_LOG_LEVEL: DEBUG
         H3XRECON_LOG_FILE_PATH: /app/logs/h3xrecon.log
+    - name: Display Docker stack deploy result
+      ansible.builtin.debug:
+        var: docker_stack_deploy
