@@ -5,12 +5,11 @@
   tasks:
     #- {"name": "Sync Project's files", "ansible.builtin.include_tasks": "tasks/sync_project.yaml"}
     - name: Deploy Docker stack
-      delegate_to: localhost
       community.docker.docker_stack:
         state: present
         name: h3xrecon
         compose:
-          - ../docker/docker-compose.yaml
+          - ../docker-compose.yaml
       environment:
         DOCKER_HOST: ssh://{{ ansible_host }}
         H3XRECON_DB_USER: h3xrecon

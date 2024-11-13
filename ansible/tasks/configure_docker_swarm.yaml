@@ -7,8 +7,9 @@
       when: lookup('ansible.builtin.env', 'H3XRECON_SWARM_MODE', default='lan') == 'tailscale'
 
     - name: Get Local IP
-      ansible.builtin.command: ip -4 addr show scope global | grep inet | awk '{print $2}' | cut -d/ -f1 | head -1
-      register: local_ip
+      ansible.builtin.shell: |
+        ip -4 addr show scope global | grep inet | awk '{print $2}' | cut -d/ -f1 | head -1
+      register: node_ip
       changed_when: false
       when: lookup('ansible.builtin.env', 'H3XRECON_SWARM_MODE', default='lan') == 'lan'
 
@@ -52,3 +53,4 @@
       when: 
         - inventory_hostname == groups['processor'][0]
       delegate_to: "{{ groups['processor'][0] }}"
+    
