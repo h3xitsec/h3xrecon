@@ -1,36 +1,37 @@
-venv/
-testenv/
-.current_registry
-TODO.md
-.ansible_tmp/
-src/docker/h3xrecon/h3xrecon/
-src/docker/h3xrecon/setup.py
-src/docker/pgsql/psql_dump.sql
-notes.md
-.pythoncache/
-.pytest_cache/
-.env
-.psqlpass
-*.log
-env.sh
-.env
-.coverage
-.cursorignore
-*.log
-secrets/
-build/
-shell.nix
-vault.yaml
-h3xrecon.egg-info/
-tailscale_vault.yaml
-old_keep/
-dev_tools/
-*.key
-*.pub
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-
-# C extensions
 *.so
+*.egg-info/
+.installed.cfg
+*.egg
+.coverage
+.pytest_cache/
+.pythoncache/
+
+# Environment
+venv/
+
+# Project specific
+.current_registry
+.ansible_tmp/
+.psqlpass
+secrets/
+vault.yaml
+tailscale_vault.yaml
 ansible/hosts.yaml
+
+# Keys and certificates
+*.key
+*.pub
+
+# Logs and temporary files
+*.log
+notes.md
+TODO.md
+
+# Development tools
+.cursorignore
+shell.nix
+dev_tools/
+old_keep/
