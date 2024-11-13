@@ -34,7 +34,7 @@
         state: present
         name: h3xrecon
         compose:
-          - ../docker-compose.swarm.yaml
+          - "{{ lookup('file', '../docker-compose.swarm.yaml') }}"
       environment:
         H3XRECON_DB_USER: h3xrecon
         H3XRECON_DB_NAME: h3xrecon
