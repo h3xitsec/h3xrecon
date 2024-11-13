@@ -41,6 +41,9 @@
     group: root
     mode: '0644'
     
+- name: Ensure user has permissions to use Docker
+  ansible.builtin.shell: usermod -aG docker $USER
+  become: true
 
 - name: Ensure Docker service is running
   ansible.builtin.systemd:

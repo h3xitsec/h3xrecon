@@ -26,7 +26,6 @@
     #     chdir: "{{ h3xrecon_target_directory }}"
     #     cmd: docker stack deploy -c docker-compose.yaml h3xrecon
     - name: Deploy Docker stack
-      delegate_to: localhost
       community.docker.docker_stack:
         state: present
         name: h3xrecon
