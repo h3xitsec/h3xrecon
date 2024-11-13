@@ -22,6 +22,12 @@ H3XRecon is a powerful bug bounty reconnaissance automation tool designed to str
 - Python 3.11+
 - Ansible 2.9+ (for remote deployment)
 
+## Recon Workflow
+
+<p align="center">
+  <img src="docs/assets/h3xrecon_workflow.png" alt="H3XRecon Workflow"/>
+</p>
+
 ## 💻 Getting Started
 
 ### Local Docker Compose Option
@@ -194,13 +200,6 @@ Deploy the H3XRecon stack to the cluster:
 ```bash
 ansible-playbook ansible/deploy_h3xrecon_stack.yaml
 ```
-
-## Recon Workflow
-
-<p align="center">
-  <img src="docs/assets/h3xrecon_workflow.png" alt="H3XRecon Workflow"/>
-</p>
-
 
 ## 📊 Monitoring Dashboards
 
