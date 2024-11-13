@@ -32,7 +32,7 @@ git clone https://github.com/h3xitsec/h3xrecon.git
 cd h3xrecon
 ```
 
-2. Build the local images:
+2. Build the local images (optional, you can also pull the images from the ghcr.io registry, see section 4):
 ```bash
 ./build.sh
 ```
