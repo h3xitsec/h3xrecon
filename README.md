@@ -28,6 +28,10 @@ H3XRecon is a powerful bug bounty reconnaissance automation tool designed to str
   <img src="docs/assets/h3xrecon_workflow.png" alt="H3XRecon Workflow"/>
 </p>
 
+## Credits
+
+The client part of the project is inspired from the [BBRF client](https://github.com/honoki/bbrf-client) by @honoki. This is what I was using before I started this project, so I made it work in the same way,
+
 ## 💻 Getting Started
 
 ### Local Docker Compose Option
