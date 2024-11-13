@@ -25,6 +25,10 @@
     #   ansible.builtin.shell:
     #     chdir: "{{ h3xrecon_target_directory }}"
     #     cmd: docker stack deploy -c docker-compose.yaml h3xrecon
+    - name: Install jsondiff python library
+      ansible.builtin.pip:
+        name: jsondiff
+        state: present
     - name: Deploy Docker stack
       community.docker.docker_stack:
         state: present
