@@ -3,7 +3,6 @@
   vars_files:
     - vaults/vault.yaml
   tasks:
-    - {"name": "Sync Project's files", "ansible.builtin.include_tasks": "tasks/sync_project.yaml"}
     - name: Create target directory
       ansible.builtin.file:
         path: "{{ h3xrecon_target_directory }}"
