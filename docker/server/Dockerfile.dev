@@ -19,10 +19,13 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/h3xitsec/h3xrecon-server.git /app/h3xrecon-server && \
-    python3 -m venv /app/venv && \
-    cd /app/h3xrecon-server && \
-    /app/venv/bin/pip install .
+COPY h3xrecon-worker /app/h3xrecon-server
+
+COPY h3xrecon-core /app/h3xrecon-core
+
+RUN python3 -m venv /app/venv && \
+    /app/venv/bin/pip install /app/h3xrecon-server && \
+    /app/venv/bin/pip install /app/h3xrecon-core
 
 COPY entrypoint.sh /entrypoint.sh
 
