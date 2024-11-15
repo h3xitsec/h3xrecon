@@ -30,7 +30,7 @@ RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
 
 RUN go install github.com/Josue87/gotator@latest
 
-RUN git clone https://github.com/h3xitsec/h3xrecon-worker.git /app/h3xrecon-worker && \
+RUN git clone -b 5-move-functions-output-processing-function-into-the-plugin-that-the-jobprocessor-will-use https://github.com/h3xitsec/h3xrecon-worker.git /app/h3xrecon-worker && \
     python3 -m venv /app/venv && \
     cd /app/h3xrecon-worker && \
     /app/venv/bin/pip install .

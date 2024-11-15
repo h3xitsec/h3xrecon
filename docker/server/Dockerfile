@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/h3xitsec/h3xrecon-server.git /app/h3xrecon-server && \
+RUN git clone -b 5-move-functions-output-processing-function-into-the-plugin-that-the-jobprocessor-will-use https://github.com/h3xitsec/h3xrecon-server.git /app/h3xrecon-server && \
     python3 -m venv /app/venv && \
     cd /app/h3xrecon-server && \
     /app/venv/bin/pip install .
