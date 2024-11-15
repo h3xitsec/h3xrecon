@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-COPY h3xrecon-worker /app/h3xrecon-server
+COPY h3xrecon-server /app/h3xrecon-server
 
 COPY h3xrecon-core /app/h3xrecon-core
 
