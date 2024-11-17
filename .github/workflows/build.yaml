@@ -3,6 +3,10 @@ name: Release Chain
 on:
   workflow_dispatch:
 
+permissions:
+  packages: write
+  contents: write
+
 jobs:
   build-core:
     uses: h3xitsec/h3xrecon-core/.github/workflows/build_and_release.yaml@develop
