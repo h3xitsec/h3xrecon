@@ -1,13 +1,16 @@
 configs:
   grafana-dashboards:
-    file: ./dockergrafana/provisioning/dashboards/logs-dashboard.json
+    file: ./docker/dockergrafana/provisioning/dashboards/logs-dashboard.json
   grafana-dashboard-config:
-    file: ./dockergrafana/provisioning/dashboards/dashboard.yml
+    file: ./docker/dockergrafana/provisioning/dashboards/dashboard.yml
   grafana-datasources:
-    file: ./dockergrafana/provisioning/datasources/datasource.yml
+    file: ./docker/dockergrafana/provisioning/datasources/datasource.yml
   promtail-config:
-    file: ./dockergrafana/provisioning/promtail/config.yml
-
+    file: ./docker/dockergrafana/provisioning/promtail/config.yml
+  msgbroker-init:
+    file: ./docker/msgbroker/init.sh
+  msgbroker-entrypoint:
+    file: ./docker/msgbroker/entrypoint.sh
 name: h3xrecon
 
 services:
@@ -89,13 +92,21 @@ services:
       "
 
   msgbroker:
-    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_msgbroker:latest
+    image: nats:2.10.21-alpine
     env_file:
       - .env.compose
     volumes:
       - nats_data:/data
     ports:
       - "4222:4222"
+    entrypoint:
+      - /bin/sh
+      - /entrypoint.sh
+    configs:
+      - source: msgbroker-init
+        target: /init.sh
+      - source: msgbroker-entrypoint
+        target: /entrypoint.sh
     healthcheck:
       test: ["CMD-SHELL", "nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_EXECUTE' && nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_OUTPUT' && nats stream ls --server=nats://localhost:4222 | grep -q 'RECON_DATA'"]
       interval: 2s

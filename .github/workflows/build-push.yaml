@@ -5,6 +5,8 @@ on:
   #   branches:
   #     - master
   workflow_dispatch:
+  workflow_call:
+  
 permissions:
   packages: write
   contents: read
@@ -29,39 +31,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Build and push h3xrecon-server image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./docker/server
-          file: ./docker/server/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_server:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-      
-      - name: Build and push h3xrecon-worker image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./docker/worker
-          file: ./docker/worker/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_worker:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-      
-      - name: Build and push h3xrecon-client image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./docker/cli
-          file: ./docker/cli/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_client:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-      
       - name: Build and push database image
         uses: docker/build-push-action@v4
         with:
@@ -69,17 +38,6 @@ jobs:
           file: ./docker/pgsql/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64
-      
-      - name: Build and push msgbroker image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./docker/msgbroker
-          file: ./docker/msgbroker/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_msgbroker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
