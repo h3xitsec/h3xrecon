@@ -18,16 +18,15 @@ jobs:
     secrets: inherit
 
   build-server:
-    needs: build-plugins
+    needs: [build-plugins, build-core]
     uses: h3xitsec/h3xrecon-server/.github/workflows/build_and_release.yaml@develop
     secrets: inherit
 
   build-worker:
-    needs: build-server
+    needs: [build-server, build-core, build-plugins]
     uses: h3xitsec/h3xrecon-worker/.github/workflows/build_and_release.yaml@develop
     secrets: inherit
 
   build-database:
-    needs: [build-core, build-plugins, build-server, build-worker, build-server]
     uses: h3xitsec/h3xrecon/.github/workflows/build-push.yaml@develop
     secrets: inherit
