@@ -28,6 +28,6 @@ jobs:
     secrets: inherit
 
   build-database:
-    needs: build-server
+    needs: [build-core, build-plugins, build-server, build-worker, build-server]
     uses: h3xitsec/h3xrecon/.github/workflows/build-push.yaml@develop
     secrets: inherit
