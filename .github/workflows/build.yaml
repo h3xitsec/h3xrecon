@@ -27,19 +27,7 @@ jobs:
     uses: h3xitsec/h3xrecon-worker/.github/workflows/build_and_release.yaml@develop
     secrets: inherit
 
-  build-main:
-    needs: [build-core, build-plugins, build-server, build-worker]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Build and push database image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./docker/pgsql
-          file: ./docker/pgsql/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:v0.0.1
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64
+  build-database:
+    needs: build-server
+    uses: h3xitsec/h3xrecon/.github/workflows/build.yaml@develop
+    secrets: inherit
