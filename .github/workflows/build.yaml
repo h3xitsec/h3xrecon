@@ -29,5 +29,5 @@ jobs:
 
   build-database:
     needs: build-server
-    uses: h3xitsec/h3xrecon/.github/workflows/build.yaml@develop
+    uses: h3xitsec/h3xrecon/.github/workflows/build-push.yaml@develop
     secrets: inherit
