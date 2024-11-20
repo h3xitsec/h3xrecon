@@ -66,7 +66,7 @@ services:
       - "6379:6379"
 
   database:
-    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_pgsql:latest
+    image: ghcr.io/h3xitsec/h3xrecon_pgsql:dev
     env_file:
       - .env.compose
     environment:
@@ -85,7 +85,7 @@ services:
       start_period: 30s
     command: >
       bash -c "
-        docker-entrypoint.sh postgres &
+        docker-entrypoint.sh postgres -c 'max_connections=200' &
         until pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}; do sleep 1; done;
         /migrate.sh &&
         wait
@@ -115,11 +115,19 @@ services:
       start_period: 5s
 
   jobprocessor:
-    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_server:latest
+    image: ghcr.io/h3xitsec/h3xrecon_server:dev
     env_file:
       - .env.compose
     environment:
       - H3XRECON_ROLE=jobprocessor
+    entrypoint:
+      - /app/venv/bin/python
+      - -m
+      - h3xrecon_server.jobprocessor.main
+    volumes:
+      - ./dist/h3xrecon-server/src/h3xrecon_server:/app/h3xrecon_server
+      - ./dist/h3xrecon-core/src/h3xrecon_core:/app/h3xrecon_core
+      - ./dist/h3xrecon-plugins/src/h3xrecon_plugins:/app/h3xrecon_plugins
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -127,11 +135,19 @@ services:
         condition: service_healthy
 
   dataprocessor:
-    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_server:latest
+    image: ghcr.io/h3xitsec/h3xrecon_server:dev
     env_file:
       - .env.compose
     environment:
       - H3XRECON_ROLE=dataprocessor
+    entrypoint:
+      - /app/venv/bin/python
+      - -m
+      - h3xrecon_server.dataprocessor.main
+    volumes:
+      - ./dist/h3xrecon-server/src/h3xrecon_server:/app/h3xrecon_server
+      - ./dist/h3xrecon-core/src/h3xrecon_core:/app/h3xrecon_core
+      - ./dist/h3xrecon-plugins/src/h3xrecon_plugins:/app/h3xrecon_plugins
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -139,16 +155,20 @@ services:
         condition: service_healthy
 
   worker:
-    image: ${H3XRECON_DOCKER_REGISTRY}/h3xrecon_worker:latest
+    image: ghcr.io/h3xitsec/h3xrecon_worker:dev
     env_file:
       - .env.compose
+    volumes:
+      - ./dist/h3xrecon-worker/src/h3xrecon_worker:/app/h3xrecon_worker
+      - ./dist/h3xrecon-core/src/h3xrecon_core:/app/h3xrecon_core
+      - ./dist/h3xrecon-plugins/src/h3xrecon_plugins:/app/h3xrecon_plugins
     depends_on:
       msgbroker:
         condition: service_healthy
       cache:
         condition: service_healthy
     deploy:
-      replicas: ${H3XRECON_WORKERS_COUNT}
+      replicas: 1
 
 volumes:
   pgsql_data:
