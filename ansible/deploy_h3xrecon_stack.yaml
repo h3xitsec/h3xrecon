@@ -19,6 +19,8 @@
           dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
         - src: ../.env.compose
           dest: "{{ h3xrecon_target_directory }}.env"
+        - src: ../docker/msgbroker
+          dest: "{{ h3xrecon_target_directory }}"
       loop_control:
         loop_var: file
     - name: Install jsondiff python library
