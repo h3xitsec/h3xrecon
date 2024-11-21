@@ -9,24 +9,24 @@ permissions:
 
 jobs:
   build-core:
-    uses: h3xitsec/h3xrecon-core/.github/workflows/build_and_release.yaml@main
+    uses: h3xitsec/h3xrecon-core/.github/workflows/build_and_release.yaml
     secrets: inherit
 
   build-plugins:
     needs: build-core
-    uses: h3xitsec/h3xrecon-plugins/.github/workflows/build_and_release.yaml@main
+    uses: h3xitsec/h3xrecon-plugins/.github/workflows/build_and_release.yaml
     secrets: inherit
 
   build-server:
     needs: [build-plugins, build-core]
-    uses: h3xitsec/h3xrecon-server/.github/workflows/build_and_release.yaml@main
+    uses: h3xitsec/h3xrecon-server/.github/workflows/build_and_release.yaml
     secrets: inherit
 
   build-worker:
     needs: [build-server, build-core, build-plugins]
-    uses: h3xitsec/h3xrecon-worker/.github/workflows/build_and_release.yaml@main
+    uses: h3xitsec/h3xrecon-worker/.github/workflows/build_and_release.yaml
     secrets: inherit
 
   build-database:
-    uses: h3xitsec/h3xrecon/.github/workflows/build-push.yaml@main
+    uses: h3xitsec/h3xrecon/.github/workflows/build-push.yaml
     secrets: inherit
