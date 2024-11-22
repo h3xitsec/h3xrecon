@@ -21,11 +21,9 @@ jobs:
       
       - name: Get versions from version file
         id: get_version
-        #working-directory
+        working-directory: docker-pgsql/
         run: |
-          pwd
-          ls -laR
-          echo 'version=$(cat docker-pgsql/docker/pgsql/.version)´ >> $GITHUB_OUTPUT
+          echo "version=$(cat docker/pgsql/.version)" >> $GITHUB_OUTPUT
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
