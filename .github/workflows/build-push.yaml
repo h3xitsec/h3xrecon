@@ -21,7 +21,7 @@ jobs:
       
       - name: Get versions from __about__.py
         id: get_version
-        working-directory: ./docker/pgsql
+        working-directory: docker/pgsql
         run: |
           pwd
           ls -laR
