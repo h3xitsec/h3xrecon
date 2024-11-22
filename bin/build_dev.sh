@@ -6,7 +6,7 @@ trap 'echo Exited!; exit;' SIGINT SIGTERM
 
 SOURCE_PGSQL_DIR="${H3XRECON_SOURCE_PATH}/h3xrecon/docker/pgsql" # Change this to your local h3xrecon/docker/pgsql directory
 DOCKER_BUILD_DIR="${H3XRECON_DEV_PATH}/build"
-PYTHON_BUILD_DIR="${H3XRECON_DEV_PATH}/dist"
+PYTHON_BUILD_DIR="${H3XRECON_DEV_PATH}/source"
 IMAGE_TAG="ghcr.io/h3xitsec/h3xrecon_"
 TAG="dev"
 
@@ -27,7 +27,7 @@ function prepare_local_environment() {
     python -m venv .venv --prompt h3xrecon_dev
 
     # create source directories
-    cp -r ${H3XRECON_SOURCE_PATH}/h3xrecon-{core,plugins,server,worker,cli} ${PYTHON_BUILD_DIR}/
+    cp -r ${H3XRECON_SOURCE_PATH}/h3xrecon-{core,plugins,server,worker,cli,backend} ${PYTHON_BUILD_DIR}/
 
     # remove requirements.txt and create new one
     rm -f ./.requirements.txt
