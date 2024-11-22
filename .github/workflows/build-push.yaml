@@ -15,15 +15,16 @@ jobs:
       - name: Checkout server repository
         uses: actions/checkout@v3
         with:
-          repository: h3xitsec/h3xrecon
-          path: docker-pgsql
+          repository: h3xitsec/h3xrecon-backend
+          path: h3xrecon-backend
           ref: ${{ github.ref }}
+          token: ${{ secrets.GHA_PAT }}
       
       - name: Get versions from version file
         id: get_version
-        working-directory: docker-pgsql/
+        working-directory: h3xrecon-backend/
         run: |
-          echo "version=$(cat docker/pgsql/.version)" >> $GITHUB_OUTPUT
+          echo "version=$(cat pgsql/.version)" >> $GITHUB_OUTPUT
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -41,10 +42,12 @@ jobs:
       - name: Build and push database image
         uses: docker/build-push-action@v4
         with:
-          context: ./docker-pgsql/docker/pgsql
-          file: ./docker-pgsql/docker/pgsql/Dockerfile
+          context: ./h3xrecon-backend/pgsql
+          file: ./h3xrecon-backend/pgsql/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:v${{ steps.get_version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+
+
