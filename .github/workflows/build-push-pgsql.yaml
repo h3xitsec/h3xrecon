@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout server repository
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
           repository: h3xitsec/h3xrecon-backend
@@ -49,5 +49,3 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
-
-

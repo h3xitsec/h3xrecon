@@ -1,0 +1,61 @@
+name: Build and Push Worker Docker Image
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  packages: write
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout worker repository
+        uses: actions/checkout@v3
+        with:
+          repository: h3xitsec/h3xrecon-worker
+          path: h3xrecon-worker
+          ref: ${{ github.ref }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12.7'
+      
+      - name: Get versions from __about__.py
+        id: get_version
+        working-directory: h3xrecon-worker
+        run: |
+          python -c "
+          with open('src/h3xrecon_worker/__about__.py', 'r') as f: 
+              exec(compile(f.read(), 'src/h3xrecon_worker/__about__.py', 'exec'), globals())
+          print(f'version=v{__version__}')
+          print(f'core_version=v{__core_version__}')
+          print(f'plugin_version=v{__plugin_version__}')
+          " >> $GITHUB_OUTPUT
+          
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and push h3xrecon-worker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./
+          file: ./h3xrecon-worker/Dockerfile
+          push: true
+          tags: ghcr.io/h3xitsec/h3xrecon_worker:${{ steps.get_version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
