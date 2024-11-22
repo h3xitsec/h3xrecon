@@ -18,7 +18,13 @@ jobs:
           repository: h3xitsec/h3xrecon
           path: docker-pgsql
           ref: ${{ github.ref }}
-
+      - name: Get versions from __about__.py
+        id: get_version
+        working-directory: h3xrecon-server
+        run: |
+          print(f'version=$(cat .version)')
+          " >> $GITHUB_OUTPUT
+      
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -38,7 +44,7 @@ jobs:
           context: ./docker-pgsql/docker/pgsql
           file: ./docker-pgsql/docker/pgsql/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:v.0.0.2
+          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:v${{ steps.get_version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
