@@ -19,9 +19,9 @@ jobs:
           path: docker-pgsql
           ref: ${{ github.ref }}
       
-      - name: Get versions from __about__.py
+      - name: Get versions from version file
         id: get_version
-        working-directory: docker/pgsql
+        #working-directory
         run: |
           pwd
           ls -laR
