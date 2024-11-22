@@ -25,7 +25,7 @@ jobs:
         run: |
           pwd
           ls -laR
-          print(f'version=$(cat .version)')
+          print(f'version=$(cat docker-pgsql/docker/pgsql/.version)')
           " >> $GITHUB_OUTPUT
       
       - name: Set up QEMU
