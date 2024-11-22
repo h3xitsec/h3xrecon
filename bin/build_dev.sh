@@ -4,11 +4,9 @@
 
 trap 'echo Exited!; exit;' SIGINT SIGTERM
 
-H3XRECON_BASE_DIRECTORY=$(pwd)
-
 SOURCE_PGSQL_DIR="${H3XRECON_SOURCE_PATH}/h3xrecon/docker/pgsql" # Change this to your local h3xrecon/docker/pgsql directory
-DOCKER_BUILD_DIR="${H3XRECON_BASE_DIRECTORY}/build"
-PYTHON_BUILD_DIR="${H3XRECON_BASE_DIRECTORY}/dist"
+DOCKER_BUILD_DIR="${H3XRECON_DEV_PATH}/build"
+PYTHON_BUILD_DIR="${H3XRECON_DEV_PATH}/dist"
 IMAGE_TAG="ghcr.io/h3xitsec/h3xrecon_"
 TAG="dev"
 
@@ -115,9 +113,13 @@ function main() {
         echo "H3XRECON_SOURCE_PATH is not set. Please set it to the path of the h3xrecon source code."
         exit 1
     fi
-    if ! cmp -s ./build.sh ${H3XRECON_SOURCE_PATH}/h3xrecon/docs/build_dev_model.sh; then
+    if [[ -z "${H3XRECON_DEV_PATH}" ]]; then
+        echo "H3XRECON_DEV_PATH is not set. Please set it to the path of the h3xrecon development directory."
+        exit 1
+    fi
+    if ! cmp -s ./build.sh ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/build_dev.sh; then
         echo "Build script has changed. Updating and restarting..."
-        cp ${H3XRECON_SOURCE_PATH}/h3xrecon/docs/build_dev_model.sh ./build.sh
+        cp ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/build_dev.sh ./build.sh
         ./build.sh
     else
         echo "Build script is up to date."
