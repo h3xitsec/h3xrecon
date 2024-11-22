@@ -18,9 +18,10 @@ jobs:
           repository: h3xitsec/h3xrecon
           path: docker-pgsql
           ref: ${{ github.ref }}
+      
       - name: Get versions from __about__.py
         id: get_version
-        working-directory: h3xrecon-server
+        working-directory: h3xrecon/docker/pgsql
         run: |
           print(f'version=$(cat .version)')
           " >> $GITHUB_OUTPUT
