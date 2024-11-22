@@ -41,14 +41,14 @@ jobs:
         with:
           repository: h3xitsec/h3xrecon-core
           path: h3xrecon-core
-          ref: v${{ steps.get_version.outputs.core_version }}
+          ref: ${{ steps.get_version.outputs.core_version }}
       
       - name: Checkout plugins repository
         uses: actions/checkout@v3
         with:
           repository: h3xitsec/h3xrecon-plugins
           path: h3xrecon-plugins
-          ref: v${{ steps.get_version.outputs.plugin_version }}
+          ref: ${{ steps.get_version.outputs.plugin_version }}
           
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
