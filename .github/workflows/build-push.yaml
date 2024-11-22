@@ -21,7 +21,7 @@ jobs:
       
       - name: Get versions from __about__.py
         id: get_version
-        working-directory: h3xrecon/docker/pgsql
+        working-directory: ./docker/pgsql
         run: |
           print(f'version=$(cat .version)')
           " >> $GITHUB_OUTPUT
