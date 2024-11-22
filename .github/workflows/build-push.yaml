@@ -23,6 +23,8 @@ jobs:
         id: get_version
         working-directory: ./docker/pgsql
         run: |
+          pwd
+          ls -laR
           print(f'version=$(cat .version)')
           " >> $GITHUB_OUTPUT
       
