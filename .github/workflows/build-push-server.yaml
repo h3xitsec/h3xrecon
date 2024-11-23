@@ -30,7 +30,7 @@ jobs:
           python -c "
           import os
           
-          def find_about_file(start_path='src'):
+          def find_about_file(start_path='.'):
               for root, dirs, files in os.walk(start_path):
                   if '__about__.py' in files:
                       return os.path.join(root, '__about__.py')
