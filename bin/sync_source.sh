@@ -11,11 +11,13 @@ function main() {
         echo "H3XRECON_DEV_PATH is not set. Please set it to the path of the h3xrecon development directory."
         exit 1
     fi
-    for c in core server plugins worker cli; do 
-        rsync -rav --delete --progress --no-owner --no-group --exclude='h3xrecon_${c}.egg-info' --exclude='.git' --exclude='__pycache__' --exclude='venv' --exclude='build' "${H3XRECON_SOURCE_PATH}/h3xrecon-${c}" ${H3XRECON_DEV_PATH}/dist | sed '0,/^$/d'
+    for c in core server plugins worker cli backend; do
+        rsync -rav --delete --progress --no-owner --no-group --exclude='h3xrecon_${c}.egg-info' --exclude='.git' --exclude='__pycache__' --exclude='venv' --exclude='build' "${H3XRECON_SOURCE_PATH}/h3xrecon-${c}" ${H3XRECON_DEV_PATH}/source | sed '0,/^$/d'
     done
     cp ${H3XRECON_SOURCE_PATH}/h3xrecon/docker-compose.local.yaml ${H3XRECON_DEV_PATH}/
     cp ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/build_dev.sh ${H3XRECON_DEV_PATH}/build.sh
+    cp ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/compose ${H3XRECON_DEV_PATH}/compose
+    cp ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/sync_source.sh ${H3XRECON_DEV_PATH}/sync_source.sh
 }
 
 main

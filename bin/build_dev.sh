@@ -4,15 +4,15 @@
 
 trap 'echo Exited!; exit;' SIGINT SIGTERM
 
-SOURCE_PGSQL_DIR="${H3XRECON_SOURCE_PATH}/h3xrecon/docker/pgsql" # Change this to your local h3xrecon/docker/pgsql directory
-DOCKER_BUILD_DIR="${H3XRECON_DEV_PATH}/build"
+SOURCE_PGSQL_DIR="${H3XRECON_SOURCE_PATH}/h3xrecon-backend/pgsql" # Change this to your local h3xrecon/docker/pgsql directory
+DOCKER_BUILD_DIR="${H3XRECON_DEV_PATH}/docker-build"
 PYTHON_BUILD_DIR="${H3XRECON_DEV_PATH}/source"
 IMAGE_TAG="ghcr.io/h3xitsec/h3xrecon_"
 TAG="dev"
 
 function build() {
-    rm -rf ${DOCKER_BUILD_DIR}
-    rm -rf ${PYTHON_BUILD_DIR}
+    sudo rm -rf ${DOCKER_BUILD_DIR}
+    sudo rm -rf ${PYTHON_BUILD_DIR}
     prepare_local_environment
     build_docker_images
 }
@@ -77,14 +77,21 @@ function build_docker_images() {
 
     # Copy files for server image
     for c in core plugins server; do
-        rsync -rav --delete --progress --no-owner --no-group --exclude='h3xrecon_${c}.egg-info' --exclude='.git' --exclude='__pycache__' --exclude='venv' --exclude='build' "${H3XRECON_SOURCE_PATH}/h3xrecon-${c}" ${DOCKER_BUILD_DIR}/server/ | sed '0,/^$/d'
+        rsync \
+            -rav --delete --progress --no-owner --no-group \
+            --exclude='h3xrecon_${c}.egg-info' \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='venv' \
+            --exclude='build' \
+            "${H3XRECON_SOURCE_PATH}/h3xrecon-${c}" \
+            ${DOCKER_BUILD_DIR}/server/ | sed '0,/^$/d'
     done
     cp "${H3XRECON_SOURCE_PATH}/h3xrecon-server/requirements.txt" ${DOCKER_BUILD_DIR}/server/
     cp "${H3XRECON_SOURCE_PATH}/h3xrecon-server/Dockerfile" ${DOCKER_BUILD_DIR}/server/
 
     #Copy files for worker image
     for c in core plugins worker; do
-        mkdir -p ${DOCKER_BUILD_DIR}/worker/h3xrecon_${c}
         cp -r "${H3XRECON_SOURCE_PATH}/h3xrecon-${c}" ${DOCKER_BUILD_DIR}/worker/
     done
     cp "${H3XRECON_SOURCE_PATH}/h3xrecon-worker/requirements.txt" ${DOCKER_BUILD_DIR}/worker/
@@ -95,7 +102,10 @@ function build_docker_images() {
 
     for c in pgsql server worker; do
         printf "Building ${IMAGE_TAG}${c}:${TAG}.... "
-        if ! docker buildx build -D --output type=docker --file ${DOCKER_BUILD_DIR}/${c}/Dockerfile --platform linux/amd64 --tag ${IMAGE_TAG}${c}:${TAG} ${DOCKER_BUILD_DIR}/${c}/ ; then #> /dev/null 2>&1; then
+        if ! docker build \
+                --file ${DOCKER_BUILD_DIR}/${c}/Dockerfile \
+                --tag ${IMAGE_TAG}${c}:${TAG} \
+                ${DOCKER_BUILD_DIR}/${c} ; then
             echo "Failed to build ${IMAGE_TAG}${c}:${TAG}"
             exit 1
         fi
@@ -117,10 +127,13 @@ function main() {
         echo "H3XRECON_DEV_PATH is not set. Please set it to the path of the h3xrecon development directory."
         exit 1
     fi
-    if ! cmp -s ./build.sh ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/build_dev.sh; then
+    # Add a flag to prevent recursive execution
+    if [[ "${SCRIPT_UPDATED}" != "true" ]] && ! cmp -s ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/build_dev.sh ${H3XRECON_DEV_PATH}/build.sh; then
         echo "Build script has changed. Updating and restarting..."
-        cp ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/build_dev.sh ./build.sh
-        ./build.sh
+        cp ${H3XRECON_SOURCE_PATH}/h3xrecon/bin/build_dev.sh ${H3XRECON_DEV_PATH}/build.sh
+        export SCRIPT_UPDATED=true
+        exec ${H3XRECON_DEV_PATH}/build.sh
+        exit 0
     else
         echo "Build script is up to date."
     fi
