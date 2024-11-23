@@ -26,29 +26,23 @@ jobs:
       
       - name: Get versions from __about__.py
         id: get_version
-        working-directory: h3xrecon-worker
         run: |
           python -c "
-          with open('src/h3xrecon_worker/__about__.py', 'r') as f: 
-              exec(compile(f.read(), 'src/h3xrecon_worker/__about__.py', 'exec'), globals())
-          print(f'version=v{__version__}')
-          print(f'core_version=v{__core_version__}')
-          print(f'plugin_version=v{__plugin_version__}')
+          import os
+          def find_about_file(start_path='.'):
+              for root, dirs, files in os.walk(start_path):
+                  if '__about__.py' in files:
+                      return os.path.join(root, '__about__.py')
+              return None
+          
+          about_file = find_about_file()
+          if about_file:
+              with open(about_file, 'r') as f: 
+                exec(compile(f.read(), about_file, 'exec'), globals())
+            print(f'version=v{__version__}')
+          else:
+              print('Error: __about__.py not found')
           " >> $GITHUB_OUTPUT
-      
-      - name: Checkout core repository
-        uses: actions/checkout@v3
-        with:
-          repository: h3xitsec/h3xrecon-core
-          path: h3xrecon-core
-          ref: ${{ steps.get_version.outputs.core_version }}
-      
-      - name: Checkout plugins repository
-        uses: actions/checkout@v3
-        with:
-          repository: h3xitsec/h3xrecon-plugins
-          path: h3xrecon-plugins
-          ref: ${{ steps.get_version.outputs.plugin_version }}
           
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
