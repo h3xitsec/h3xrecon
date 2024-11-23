@@ -1,4 +1,4 @@
-name: Build and Push Worker Docker Image
+name: Build and Push worker Docker Image
 
 on:
   workflow_dispatch:
@@ -29,6 +29,7 @@ jobs:
         run: |
           python -c "
           import os
+          
           def find_about_file(start_path='.'):
               for root, dirs, files in os.walk(start_path):
                   if '__about__.py' in files:
@@ -38,12 +39,12 @@ jobs:
           about_file = find_about_file()
           if about_file:
               with open(about_file, 'r') as f: 
-                exec(compile(f.read(), about_file, 'exec'), globals())
-            print(f'version=v{__version__}')
+                  exec(compile(f.read(), about_file, 'exec'), globals())
+              print(f'version=v{__version__}')
           else:
               print('Error: __about__.py not found')
           " >> $GITHUB_OUTPUT
-          
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         
@@ -60,11 +61,10 @@ jobs:
       - name: Build and push h3xrecon-worker image
         uses: docker/build-push-action@v4
         with:
-          context: ./
+          context: ./h3xrecon-worker
           file: ./h3xrecon-worker/Dockerfile
           push: true
           tags: ghcr.io/h3xitsec/h3xrecon_worker:${{ steps.get_version.outputs.version }}
           cache-from: type=gha
-          build-args: SERVER_VERSION=${{ steps.get_version.outputs.version }}
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
