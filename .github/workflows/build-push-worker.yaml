@@ -64,6 +64,8 @@ jobs:
           context: ./h3xrecon-worker
           file: ./h3xrecon-worker/Dockerfile
           push: true
+          build-args: |
+            SERVER_VERSION=${{ steps.get_version.outputs.version }}
           tags: ghcr.io/h3xitsec/h3xrecon_worker:${{ steps.get_version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
