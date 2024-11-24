@@ -141,9 +141,9 @@ pip install -r requirements.txt
 
 #### 2. Configure Ansible Inventory
 
-Create your inventory file at `src/ansible/hosts.yaml`. Example configuration:
+Create your inventory file based on the example at `src/ansible/hosts.yaml.example` or the example below:
 
-```yaml:/ansible/hosts.yaml
+```yaml:hosts.yaml
 all:
   vars:
     h3xrecon_base_directory: ./
@@ -218,20 +218,10 @@ ansible-playbook ansible/deploy_h3xrecon_stack.yaml
 
 ### Grafana
 - **URL**: `http://<grafana-host>:3000`
-- **Default Credentials**: 
-  - Username: `admin`
-  - Password: `admin`
 - **Features**:
   - Real-time log aggregation
   - Service performance metrics
   - Custom reconnaissance dashboards
-
-### Docker Swarm Dashboard
-- **URL**: `http://<swarm-manager-host>:8080`
-- **Features**:
-  - Service health monitoring
-  - Container management
-  - Resource utilization metrics
 
 ## 📖 Documentation
 
