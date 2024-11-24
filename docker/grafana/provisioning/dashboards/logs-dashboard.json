@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -31,7 +31,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
+        "h": 16,
         "w": 23,
         "x": 0,
         "y": 0
@@ -74,10 +74,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 12,
+        "h": 16,
         "w": 11,
         "x": 0,
-        "y": 10
+        "y": 16
       },
       "id": 2,
       "options": {
@@ -117,10 +117,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 12,
+        "h": 16,
         "w": 12,
         "x": 11,
-        "y": 10
+        "y": 16
       },
       "id": 3,
       "options": {
@@ -166,6 +166,6 @@
   "timezone": "browser",
   "title": "h3xrecon_logs",
   "uid": "de4vbhg77g4xsd",
-  "version": 9,
+  "version": 1,
   "weekStart": ""
 }
