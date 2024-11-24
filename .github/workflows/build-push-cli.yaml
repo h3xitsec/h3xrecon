@@ -44,7 +44,23 @@ jobs:
           else:
               print('Error: __about__.py not found')
           " >> $GITHUB_OUTPUT
-
+      
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ghcr.io/h3xitsec/h3xrecon_cli         
+          # generate Docker tags based on the following events/attributes
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         
@@ -66,7 +82,7 @@ jobs:
           push: true
           build-args: |
             SERVER_VERSION=${{ steps.get_version.outputs.version }}
-          tags: ghcr.io/h3xitsec/h3xrecon_cli:${{ steps.get_version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }} #ghcr.io/h3xitsec/h3xrecon_cli:${{ steps.get_version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
