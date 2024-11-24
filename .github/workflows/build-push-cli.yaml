@@ -1,4 +1,4 @@
-name: Build and Push worker Docker Image
+name: Build and Push cli Docker Image
 
 on:
   workflow_dispatch:
@@ -12,11 +12,11 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout worker repository
+      - name: Checkout cli repository
         uses: actions/checkout@v3
         with:
-          repository: h3xitsec/h3xrecon-worker
-          path: h3xrecon-worker
+          repository: h3xitsec/h3xrecon-cli
+          path: h3xrecon-cli
           ref: ${{ github.ref }}
       
       - name: Set up Python
@@ -58,15 +58,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Build and push h3xrecon-worker image
+      - name: Build and push h3xrecon-cli image
         uses: docker/build-push-action@v4
         with:
-          context: ./h3xrecon-worker
-          file: ./h3xrecon-worker/Dockerfile
+          context: ./h3xrecon-cli
+          file: ./h3xrecon-cli/Dockerfile
           push: true
           build-args: |
             SERVER_VERSION=${{ steps.get_version.outputs.version }}
-          tags: ghcr.io/h3xitsec/h3xrecon_worker:${{ steps.get_version.outputs.version }}
+          tags: ghcr.io/h3xitsec/h3xrecon_cli:${{ steps.get_version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
