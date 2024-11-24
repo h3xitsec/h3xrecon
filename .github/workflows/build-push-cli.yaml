@@ -54,13 +54,9 @@ jobs:
             ghcr.io/h3xitsec/h3xrecon_cli         
           # generate Docker tags based on the following events/attributes
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
+            type=raw,value=${{ steps.get_version.outputs.version }}
+            type=raw,value=latest
+      
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         
