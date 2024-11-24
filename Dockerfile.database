@@ -1,0 +1,11 @@
+FROM postgres
+
+# Create migrations directory
+RUN mkdir -p /migrations
+
+# Copy all migration files
+COPY docker/database/migrations/*.sql /migrations/
+
+# Copy the migration script
+COPY docker/database/migrate.sh /migrate.sh
+RUN chmod +x /migrate.sh
