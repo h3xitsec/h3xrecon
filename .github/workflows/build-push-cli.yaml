@@ -78,7 +78,7 @@ jobs:
           push: true
           build-args: |
             SERVER_VERSION=${{ steps.get_version.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }} #ghcr.io/h3xitsec/h3xrecon_cli:${{ steps.get_version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64

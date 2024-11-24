@@ -26,6 +26,18 @@ jobs:
         run: |
           echo "version=$(cat pgsql/.version)" >> $GITHUB_OUTPUT
       
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ghcr.io/h3xitsec/h3xrecon_pgsql
+          # generate Docker tags based on the following events/attributes
+          tags: |
+            type=raw,value=${{ steps.get_version.outputs.version }}
+            type=raw,value=latest
+      
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -45,7 +57,7 @@ jobs:
           context: ./h3xrecon-backend/pgsql
           file: ./h3xrecon-backend/pgsql/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/h3xrecon_pgsql:v${{ steps.get_version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64

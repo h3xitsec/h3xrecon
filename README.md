@@ -76,7 +76,7 @@ cat << EOF > ~/.h3xrecon/config.yaml
 EOF
 
 # Create a shell alias for the h3xrecon command
-alias h3xrecon="docker run --network=host--rm -it -v ~/.h3xrecon:/root/.h3xrecon ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3"
+alias h3xrecon="docker run --network=host --rm -it -v ~/.h3xrecon:/root/.h3xrecon ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3"
 ```
 
 4. Start using it
