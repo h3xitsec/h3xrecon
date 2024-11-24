@@ -1,7 +1,0 @@
----
-- name: Build Project
-  delegate_to: localhost
-  run_once: true
-  ansible.builtin.shell:
-    chdir: "{{ h3xrecon_base_directory }}"
-    cmd: ./build.sh

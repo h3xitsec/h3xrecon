@@ -1,0 +1,65 @@
+name: Build and release h3xrecon module
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  packages: write
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12.7'
+          
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install hatchling
+          pip install -e .
+      
+      - name: Get versions from __about__.py
+        id: get_version
+        run: |
+          python -c "
+          import os
+          
+          def find_about_file(start_path='src'):
+              for root, dirs, files in os.walk(start_path):
+                  if '__about__.py' in files:
+                      return os.path.join(root, '__about__.py')
+              return None
+          
+          about_file = find_about_file()
+          if about_file:
+              with open(about_file, 'r') as f: 
+                  exec(compile(f.read(), about_file, 'exec'), globals())
+              print(f'version=v{__version__}')
+          else:
+              print('Error: __about__.py not found')
+          " >> $GITHUB_OUTPUT
+      
+      - name: Build package
+        run: |
+          python -m hatchling build
+      
+      - uses: jimeh/update-tags-action@v1
+        with:
+          tags: |
+            ${{ steps.get_version.outputs.version }}
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          files: |
+            ./dist/*.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

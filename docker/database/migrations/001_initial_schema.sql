@@ -1,0 +1,112 @@
+DO
+$do$
+BEGIN
+   IF NOT EXISTS (
+      SELECT FROM pg_catalog.pg_roles
+      WHERE  rolname = 'h3xrecon') THEN
+      CREATE ROLE h3xrecon LOGIN PASSWORD 'h3xrecon';
+   END IF;
+END
+$do$;
+
+-- Grant necessary permissions to h3xrecon role
+GRANT ALL PRIVILEGES ON DATABASE h3xrecon TO h3xrecon;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO h3xrecon;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO h3xrecon;
+
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS out_of_scope_domains (
+    id SERIAL PRIMARY KEY,
+    domain VARCHAR(255) NOT NULL UNIQUE,
+    program_ids INTEGER[] NOT NULL,
+    discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS function_logs (
+    id SERIAL PRIMARY KEY,
+    execution_id UUID NOT NULL,
+    timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+    function_name VARCHAR(255) NOT NULL,
+    target VARCHAR(255),
+    program_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS logs (
+    id SERIAL PRIMARY KEY,
+    execution_id UUID,
+    timestamp TIMESTAMP WITH TIME ZONE,
+    level VARCHAR(10),
+    component VARCHAR(50),
+    message TEXT,
+    metadata JSONB
+);
+
+CREATE TABLE IF NOT EXISTS programs (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS program_scopes (
+    id SERIAL PRIMARY KEY,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
+    regex TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS program_cidrs (
+    id SERIAL PRIMARY KEY,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE,
+    cidr VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ips (
+    id SERIAL PRIMARY KEY,
+    ip VARCHAR(255) UNIQUE NOT NULL,
+    ptr VARCHAR(1024) DEFAULT NULL,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL,
+    discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS services (
+    id SERIAL PRIMARY KEY,
+    ip INTEGER DEFAULT NULL REFERENCES ips(id),
+    port INTEGER DEFAULT NULL,
+    protocol VARCHAR(255) DEFAULT NULL,
+    service VARCHAR(255) DEFAULT NULL,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL,
+    discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP 
+);
+
+ALTER TABLE services ADD CONSTRAINT unique_service_ip_port UNIQUE (ip, port);
+
+CREATE TABLE IF NOT EXISTS urls (
+    id SERIAL PRIMARY KEY,
+    url VARCHAR(1024) UNIQUE NOT NULL,
+    httpx_data JSONB,
+    -- title VARCHAR(1024) DEFAULT NULL,
+    -- chain_status_codes INTEGER[] DEFAULT NULL,
+    -- status_code INTEGER DEFAULT NULL,
+    -- final_url VARCHAR(1024) DEFAULT NULL,
+    -- scheme VARCHAR(50) DEFAULT NULL,
+    -- port INTEGER DEFAULT NULL,
+    -- webserver VARCHAR(255) DEFAULT NULL,
+    -- content_type VARCHAR(255) DEFAULT NULL,
+    -- content_length INTEGER DEFAULT NULL,
+    -- tech VARCHAR(1024)[] DEFAULT NULL,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL,
+    discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS domains (
+    id SERIAL PRIMARY KEY,
+    domain VARCHAR(255) UNIQUE NOT NULL,
+    ips INTEGER[] DEFAULT NULL,
+    cnames VARCHAR(1024)[] DEFAULT NULL,
+    is_catchall BOOLEAN DEFAULT FALSE,
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL,
+    discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

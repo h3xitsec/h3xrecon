@@ -1,4 +1,35 @@
 {
+  "__inputs": [
+    {
+      "name": "DS_LOKI",
+      "label": "Loki",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "loki",
+      "pluginName": "Loki"
+    }
+  ],
+  "__elements": {},
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "11.3.0"
+    },
+    {
+      "type": "panel",
+      "id": "logs",
+      "name": "Logs",
+      "version": ""
+    },
+    {
+      "type": "datasource",
+      "id": "loki",
+      "name": "Loki",
+      "version": "1.0.0"
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -18,137 +49,125 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 3,
+  "id": null,
   "links": [],
   "panels": [
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "uid": "${DS_LOKI}"
       },
       "gridPos": {
         "h": 16,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 0
       },
       "id": 1,
       "options": {
         "dedupStrategy": "none",
-        "enableLogDetails": false,
+        "enableLogDetails": true,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
         "showLabels": false,
         "showTime": false,
-        "sortOrder": "Ascending",
-        "wrapLogMessage": true
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "${DS_LOKI}"
           },
-          "editorMode": "code",
-          "expr": "{service_name=~\".*worker.*\"} !~ `^$`",
+          "editorMode": "builder",
+          "expr": "{service_name=\"h3xrecon_worker\"} |= ``",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Worker Logs",
+      "title": "Workers Logs",
+      "transparent": true,
       "type": "logs"
     },
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "uid": "${DS_LOKI}"
       },
       "gridPos": {
-        "h": 17,
+        "h": 16,
         "w": 12,
-        "x": 0,
-        "y": 16
+        "x": 12,
+        "y": 0
       },
       "id": 2,
       "options": {
         "dedupStrategy": "none",
-        "enableLogDetails": false,
+        "enableLogDetails": true,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
         "showLabels": false,
         "showTime": false,
-        "sortOrder": "Ascending",
-        "wrapLogMessage": true
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
+          "editorMode": "builder",
+          "expr": "{service_name=\"h3xrecon_jobprocessor\"} |= ``",
+          "queryType": "range",
+          "refId": "A",
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "code",
-          "expr": "{service_name=~\".*jobprocessor.*\"} !~ `^$`",
-          "queryType": "range",
-          "refId": "A"
+            "uid": "${DS_LOKI}"
+          }
         }
       ],
-      "title": "Job Processor Logs",
+      "title": "JobProcessor Logs",
       "type": "logs"
     },
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "uid": "${DS_LOKI}"
       },
       "gridPos": {
-        "h": 17,
+        "h": 21,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 16
       },
       "id": 3,
       "options": {
         "dedupStrategy": "none",
-        "enableLogDetails": false,
+        "enableLogDetails": true,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
         "showLabels": false,
         "showTime": false,
-        "sortOrder": "Ascending",
-        "wrapLogMessage": true
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
       },
-      "pluginVersion": "11.3.1",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
+          "editorMode": "builder",
+          "expr": "{service_name=\"h3xrecon_dataprocessor\"} |= ``",
+          "queryType": "range",
+          "refId": "A",
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "code",
-          "expr": "{service_name=~\".*dataprocessor.*\"} !~ `^$`",
-          "queryType": "range",
-          "refId": "A"
+            "uid": "${DS_LOKI}"
+          }
         }
       ],
-      "title": "Data Processor Logs",
+      "title": "DataProcessor Logs",
       "type": "logs"
     }
   ],
-  "preload": false,
   "schemaVersion": 40,
   "tags": [],
   "templating": {
@@ -160,8 +179,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "h3xrecon_output",
-  "uid": "de4vkriavjz7kd",
-  "version": 2,
+  "title": "h3xrecon",
+  "uid": "ee3gbsefbsxkwd",
+  "version": 8,
   "weekStart": ""
 }

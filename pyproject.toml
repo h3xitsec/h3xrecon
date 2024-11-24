@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "h3xrecon"
+dynamic = ["version"]
+description = 'All in One Bug Bounty Reconnaissance Automation System'
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "h3xit", email = "h3xit@protonmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+    "asyncio==3.4.3",
+    "loguru==0.7.2",
+    "jsondiff==2.2.1",
+    "dnspython==2.7.0",
+    "asyncpg==0.30.0",
+    "nats-py==2.9.0",
+    "python-dateutil==2.9.0.post0",
+    "python-dotenv==1.0.1",
+    "redis==5.2.0",
+    "six==1.16.0"
+]
+
+[project.urls]
+Documentation = "https://github.com/h3xit/h3xrecon#readme"
+Issues = "https://github.com/h3xit/h3xrecon/issues"
+Source = "https://github.com/h3xit/h3xrecon"
+
+[tool.hatch.version]
+path = "src/h3xrecon/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/h3xrecon tests}"
+
+[tool.coverage.run]
+source_pkgs = ["h3xrecon", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/h3xrecon/__about__.py",
+]
+
+[project.scripts]
+h3xrecon-dataprocessor = "h3xrecon.server.dataprocessor:run"
+h3xrecon-jobprocessor = "h3xrecon.server.jobprocessor:run"
+h3xrecon-worker = "h3xrecon.worker.worker:run"
+
+[tool.coverage.paths]
+h3xrecon = ["src/h3xrecon", "*/h3xrecon/src/h3xrecon"]
+tests = ["tests", "*/h3xrecon/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]

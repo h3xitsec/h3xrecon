@@ -1,3 +1,10 @@
+# h3xrecon
+
+[![PyPI - Version](https://img.shields.io/pypi/v/h3xrecon.svg)](https://pypi.org/project/h3xrecon)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/h3xrecon.svg)](https://pypi.org/project/h3xrecon)
+
+-----
+
 # H3XRecon
 
 <p align="center">
@@ -226,3 +233,7 @@ ansible-playbook ansible/deploy_h3xrecon_stack.yaml
 ## 📖 Documentation
 
 For detailed usage instructions and configuration options, please refer to the [CLI Documentation](src/h3xrecon/cli/README.md).
+
+## License
+
+`h3xrecon` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.

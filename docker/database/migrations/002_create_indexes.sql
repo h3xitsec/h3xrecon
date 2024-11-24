@@ -1,0 +1,12 @@
+CREATE INDEX idx_domains ON domains(domain);
+CREATE INDEX idx_ips ON ips(ip);
+CREATE INDEX idx_urls ON urls(url);
+CREATE INDEX idx_function_logs_execution_id ON function_logs(execution_id);
+CREATE INDEX idx_function_logs_timestamp ON function_logs(timestamp);
+CREATE INDEX idx_function_logs_function_name ON function_logs(function_name);
+CREATE INDEX idx_function_logs_program_id ON function_logs(program_id);
+CREATE INDEX idx_domains_program ON domains(program_id, domain);
+CREATE INDEX idx_ips_program ON ips(program_id, ip);
+CREATE INDEX idx_urls_program ON urls(program_id, url);
+CREATE INDEX idx_out_of_scope_domains ON out_of_scope_domains(domain);
+CREATE INDEX idx_out_of_scope_domains_gin ON out_of_scope_domains USING GIN (program_ids);

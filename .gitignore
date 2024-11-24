@@ -1,38 +1,37 @@
 # Python
 __pycache__/
 *.py[cod]
-*.so
-*.egg-info/
-.installed.cfg
-*.egg
-.coverage
-.pytest_cache/
-.pythoncache/
+*$py.class
 
-# Environment
+# Virtual Environment
 venv/
-.env.local
+env/
+.env/
+.venv/
 
-# Project specific
-.current_registry
-.ansible_tmp/
-.psqlpass
-secrets/
-vault.yaml
-tailscale_vault.yaml
-ansible/hosts.yaml
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Keys and certificates
-*.key
-*.pub
+# Compiled files
+*.pyc
+*.pyo
+*.pyd
 
-# Logs and temporary files
+# Logs and databases
 *.log
-notes.md
-TODO.md
+*.sqlite3
 
-# Development tools
-.cursorignore
-shell.nix
-dev_tools/
-old_keep/
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Project-specific files and directories
+data/
+logs/
+build/
+dist/
+*.egg-info/
