@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
+  "id": 3,
   "links": [],
   "panels": [
     {
@@ -32,7 +32,7 @@
       },
       "gridPos": {
         "h": 16,
-        "w": 23,
+        "w": 24,
         "x": 0,
         "y": 0
       },
@@ -40,23 +40,22 @@
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": false,
-        "prettifyLogMessage": true,
+        "prettifyLogMessage": false,
         "showCommonLabels": false,
         "showLabels": false,
         "showTime": false,
         "sortOrder": "Ascending",
         "wrapLogMessage": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.3.1",
       "targets": [
         {
           "datasource": {
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "direction": "forward",
-          "editorMode": "builder",
-          "expr": "{service_name=~\"h3xrecon-worker.*\"} !~ `^$`",
+          "editorMode": "code",
+          "expr": "{service_name=~\".*worker.*\"} !~ `^$`",
           "queryType": "range",
           "refId": "A"
         }
@@ -74,8 +73,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 16,
-        "w": 11,
+        "h": 17,
+        "w": 12,
         "x": 0,
         "y": 16
       },
@@ -83,23 +82,22 @@
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": false,
-        "prettifyLogMessage": true,
+        "prettifyLogMessage": false,
         "showCommonLabels": false,
         "showLabels": false,
         "showTime": false,
         "sortOrder": "Ascending",
         "wrapLogMessage": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.3.1",
       "targets": [
         {
           "datasource": {
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "direction": "forward",
-          "editorMode": "builder",
-          "expr": "{service_name=~\"h3xrecon-jobprocessor.*\"} !~ `^$`",
+          "editorMode": "code",
+          "expr": "{service_name=~\".*jobprocessor.*\"} !~ `^$`",
           "queryType": "range",
           "refId": "A"
         }
@@ -117,32 +115,31 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 16,
+        "h": 17,
         "w": 12,
-        "x": 11,
+        "x": 12,
         "y": 16
       },
       "id": 3,
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": false,
-        "prettifyLogMessage": true,
+        "prettifyLogMessage": false,
         "showCommonLabels": false,
         "showLabels": false,
         "showTime": false,
         "sortOrder": "Ascending",
         "wrapLogMessage": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.3.1",
       "targets": [
         {
           "datasource": {
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "direction": "forward",
           "editorMode": "code",
-          "expr": "{service_name=~\"h3xrecon-dataprocessor.*\"} !~ `^$`",
+          "expr": "{service_name=~\".*dataprocessor.*\"} !~ `^$`",
           "queryType": "range",
           "refId": "A"
         }
@@ -152,7 +149,6 @@
     }
   ],
   "preload": false,
-  "refresh": "5s",
   "schemaVersion": 40,
   "tags": [],
   "templating": {
@@ -164,8 +160,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "h3xrecon_logs",
-  "uid": "de4vbhg77g4xsd",
-  "version": 1,
+  "title": "h3xrecon_output",
+  "uid": "de4vkriavjz7kd",
+  "version": 2,
   "weekStart": ""
 }
