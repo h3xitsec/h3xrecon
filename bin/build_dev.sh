@@ -14,7 +14,7 @@ function build() {
     sudo rm -rf ${DOCKER_BUILD_DIR}
     sudo rm -rf ${PYTHON_BUILD_DIR}
     prepare_local_environment
-    build_docker_images
+    #build_docker_images
 }
 
 function prepare_local_environment() {

@@ -24,8 +24,8 @@
       loop_control:
         loop_var: file
     - name: Install jsondiff python library
-      ansible.builtin.pip:
-        name: jsondiff
+      ansible.builtin.apt:
+        name: python3-jsondiff
         state: present
     - name: Deploy Docker stack
       ansible.builtin.shell:

@@ -49,10 +49,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/h3xitsec/h3xrecon_cli         
-          # generate Docker tags based on the following events/attributes
+            ghcr.io/h3xitsec/h3xrecon_server
           tags: |
             type=raw,value=${{ steps.get_version.outputs.version }}
             type=raw,value=latest
