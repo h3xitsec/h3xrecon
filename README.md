@@ -42,35 +42,44 @@ git clone https://github.com/h3xitsec/h3xrecon.git
 cd h3xrecon
 ```
 
-2. Build the local images (optional, you can also pull the images from the ghcr.io registry, see section 4):
+2. Start the compose stack
 ```bash
-./build.sh
+docker compose up -d
+docker compose logs -f
 ```
 
-3. Configure the environment:
-```bash
-# This will set all the requirement environment variables for the local stack and add the bin directory to the PATH
-source localenv.sh
-```
-
-4. Start (and manage) the services:
-
-The `compose` script is a wrapper around `docker compose` that simplifies the usage of the local stack.
-
-See the [compose wrapper documentation](docs/compose_wrapper.md) for more information.
-
-TLDR:
-```bash
-compose [local|public] [docker compose options]
-```
-
-5. Start using it
-
-Source the localenv.sh script to set the environment variables and alias for h3xrecon client's docker image
+3. Pull the cli docker image and setup the configuration file
 
 ```bash
-. ./localenv.sh
+# Pull the image
+docker pull ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3
+
+# Create the configuration file
+cat << EOF > ~/.h3xrecon/config.yaml
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "h3xrecon",
+    "user": "h3xrecon",
+    "password": "h3xrecon"
+  },
+  "nats": {
+    "host": "localhost",
+    "port": 4222
+  },
+  "logging": {
+    "level": "DEBUG",
+    "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> - <level>{message}</level>"
+  }
+}
+EOF
+
+# Create a shell alias for the h3xrecon command
+alias h3xrecon="docker run --rm -it -v ~/.h3xrecon:/root/.h3xrecon ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3"
 ```
+
+4. Start using it
 
 Setup your first program
 
@@ -91,14 +100,12 @@ Alternatively, you can install the h3xrecon client as a python module and use it
 
 ```bash
 python -m venv venv
-git clone https://github.com/h3xitsec/h3xrecon-cli.git
-cd h3xrecon-cli
-pip install .
+pip install git+https://github.com/h3xitsec/h3xrecon-cli.git
 ```
 
 For more information on the commands, please refer to the [CLI Documentation](docs/cli.md).
 
-6. Scaling the workers
+5. Scaling the workers
 
 Hot scaling the workers is as simple as running the following command:
 
