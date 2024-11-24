@@ -14,43 +14,43 @@ configs:
 name: h3xrecon
 
 services:
-  # loki:
-  #   image: grafana/loki:latest
-  #   ports:
-  #     - target: 3100
-  #       published: 3100
-  #   command: -config.file=/etc/loki/local-config.yaml
-  #   deploy:
-  #     placement:
-  #       constraints:
-  #         - node.labels.H3XRECON_SWARM_ROLE == processor
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - target: 3100
+        published: 3100
+    command: -config.file=/etc/loki/local-config.yaml
+    deploy:
+      placement:
+        constraints:
+          - node.labels.H3XRECON_SWARM_ROLE == processor
 
-  # promtail:
-  #   image: grafana/promtail:latest
-  #   volumes:
-  #     - /var/lib/docker/containers:/var/lib/docker/containers:ro
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #   configs:
-  #     - source: promtail-config
-  #       target: /etc/promtail/config.yml
-  #   command: -config.file=/etc/promtail/config.yml
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    configs:
+      - source: promtail-config
+        target: /etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
   
-  # grafana:
-  #   image: grafana/grafana:latest
-  #   ports:
-  #     - target: 3000
-  #       published: 3000
-  #   environment:
-  #     - GF_AUTH_ANONYMOUS_ENABLED=true
-  #     - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-  #     - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
-  #   configs:
-  #     - source: grafana-dashboards
-  #       target: /etc/grafana/provisioning/dashboards/logs-dashboard.json
-  #     - source: grafana-dashboard-config
-  #       target: /etc/grafana/provisioning/dashboards/dashboard.yml
-  #     - source: grafana-datasources
-  #       target: /etc/grafana/provisioning/datasources/datasource.yml
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - target: 3000
+        published: 3000
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    configs:
+      - source: grafana-dashboards
+        target: /etc/grafana/provisioning/dashboards/logs-dashboard.json
+      - source: grafana-dashboard-config
+        target: /etc/grafana/provisioning/dashboards/dashboard.yml
+      - source: grafana-datasources
+        target: /etc/grafana/provisioning/datasources/datasource.yml
 
   cache:
     image: redis:6.2-alpine
