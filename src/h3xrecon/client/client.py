@@ -31,10 +31,6 @@ Options:
     --unresolved    Show only unresolved items.
     --force         Force execution of job.
     --details       Show details about URLs.
-
-Configuration:
-  NATS: {Config().client.get('nats').host}
-  Database: {Config().client.get('database').host}
 """
 
 class Client:
