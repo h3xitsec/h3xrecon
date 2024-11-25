@@ -1,0 +1,6 @@
+- name: Deploy Docker stack
+  community.docker.docker_stack:
+    state: present
+    name: h3xrecon
+    compose:
+      - files/docker-compose.dashboard.yaml

@@ -1,0 +1,90 @@
+- name: Setup Nodes for h3xrecon
+  hosts: all
+  gather_facts: false
+  max_fail_percentage: 0
+  
+  vars_files:
+  - vaults/vault.yaml
+  
+  vars:
+    linux_apt_packages:
+    - docker.io
+    - "{{ h3xrecon_dockercompose_pkg }}"
+    - python3-venv
+    - python3-jsondiff
+    - fail2ban
+  tasks:
+  - ansible.builtin.include_tasks: tasks/test_all_nodes.yaml
+
+  - name: get current timezone
+    ansible.builtin.shell: |
+      timedatectl | grep "Time zone" | awk '{print $3}'
+    register: current_timezone
+
+  - name: Set Timezone
+    when: current_timezone.stdout != h3xrecon_timezone
+    ansible.builtin.shell: |
+      export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
+      timedatectl set-timezone {{ h3xrecon_timezone }}
+      timedatectl set-ntp on
+      echo "{{ h3xrecon_timezone }}" > /etc/timezone
+      debconf-set-selections << EOF
+      tzdata tzdata/Areas select {{ h3xrecon_timezone | split('/')[0] }}
+      tzdata tzdata/Zones/{{ h3xrecon_timezone | split('/')[0] }} select {{ h3xrecon_timezone | split('/')[1] }}
+      EOF
+      dpkg-reconfigure tzdata -f noninteractive
+  
+  - name: Install apt packages
+    become: true
+    ansible.builtin.apt:
+      update_cache: true
+      name: '{{ pkg }}'
+      state: present
+    loop: '{{ linux_apt_packages }}'
+    loop_control:
+      loop_var: pkg
+  
+  - name: Enable fail2ban
+    become: true
+    ansible.builtin.systemd:
+      name: fail2ban
+      state: started
+      enabled: yes
+
+  - name: Empty target directory
+    become: true
+    ansible.builtin.file:
+      path: "{{ h3xrecon_target_directory }}/"
+      state: absent
+
+  - name: Delete target directory
+    become: true
+    ansible.builtin.file:
+      path: "{{ h3xrecon_target_directory }}"
+      state: absent
+
+  - name: Create target directory
+    ansible.builtin.file:
+      path: "{{ h3xrecon_target_directory }}"
+      state: directory
+
+  # - name: Copy requirements.txt
+  #   ansible.builtin.copy:
+  #     src: "../../requirements.txt"
+  #     dest: "{{ h3xrecon_target_directory }}/requirements.txt"
+
+  # - name: Setup Python Virtual Environment
+  #   ansible.builtin.pip:
+  #     virtualenv: "{{ h3xrecon_target_directory }}/venv"
+  #     virtualenv_command: python3 -m venv
+  #     extra_args: --upgrade
+  #     requirements: "{{ h3xrecon_target_directory }}/requirements.txt"
+
+  - name: Add ubuntu user to docker group
+    ansible.builtin.user:
+      name: "{{ ansible_user }}"
+      groups: docker
+      append: yes
+
+- ansible.builtin.import_playbook: "setup_docker_swarm.yaml"
+- ansible.builtin.import_playbook: "validate_docker_swarm.yaml"

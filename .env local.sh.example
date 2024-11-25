@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 export H3XRECON_BASE_PATH=${PWD}
+
 # Database settings
 export H3XRECON_DB_USER=h3xrecon
 export H3XRECON_DB_NAME=h3xrecon
@@ -26,6 +27,7 @@ export PGUSER=$H3XRECON_DB_USER
 export PGPASSWORD=$H3XRECON_DB_PASS
 export PGDATABASE=$H3XRECON_DB_NAME
 
-export ANSIBLE_HOME=${H3XRECON_BASE_PATH}/ansible
-export ANSIBLE_INVENTORY=${ANSIBLE_HOME}/hosts.yaml
-export ANSIBLE_LOCAL_TEMP=${H3XRECON_BASE_PATH}/.ansible_tmp
+export ANSIBLE_HOME=${H3XRECON_BASE_PATH}/docker_swarm/ansible
+export ANSIBLE_INVENTORY=${H3XRECON_BASE_PATH}/docker_swarm/hosts.yaml
+export ANSIBLE_LOCAL_TEMP=${H3XRECON_BASE_PATH}/docker_swarm/.ansible_tmp
+export ANSIBLE_VAULT_PASSWORD=

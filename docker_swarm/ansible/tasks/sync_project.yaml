@@ -1,0 +1,16 @@
+- name: Empty target directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ h3xrecon_target_directory }}/"
+    state: absent
+
+- name: Create target directory
+  ansible.builtin.file:
+    path: "{{ h3xrecon_target_directory }}"
+    state: directory
+
+- name: Sync Project
+  ansible.builtin.synchronize:
+    src: "{{ h3xrecon_source_directory }}"
+    dest: "{{ h3xrecon_target_directory }}"
+    rsync_opts: '--exclude=.git --exclude="**/__pycache__/*" --exclude=venv'

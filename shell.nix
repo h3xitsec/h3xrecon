@@ -3,6 +3,8 @@
 pkgs.mkShellNoCC {
   packages = with pkgs; [
     (python3.withPackages (ps: [ 
+      ps.ansible
+      ps.ansible-core
       ps.asyncpg 
       ps.certifi
       ps.charset-normalizer

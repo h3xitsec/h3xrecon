@@ -1,0 +1,3 @@
+---
+# Tailscale authentication key
+tailscale_auth_key: tskey-auth-abc1234

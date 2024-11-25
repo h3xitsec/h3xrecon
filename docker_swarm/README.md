@@ -75,6 +75,22 @@ workers:
       ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 ```
 
+#### 3. Configure Tailscale
+
+If you want to use Tailscale as a communication layer between the nodes, you need to set up a Tailscale account and create an Auth Key
+
+First, copy the example vault file from `docker_swarm/ansible/vaults/tailscale_vault.yaml.example` to `docker_swarm/ansible/vaults/tailscale_vault.yaml`
+
+Then you need to paste the Auth Key in the `docker_swarm/ansible/vaults/tailscale_vault.yaml` file.
+
+Lastly, you need to encrypt the vault using the following command:
+
+```bash
+ansible-vault encrypt docker_swarm/ansible/vaults/tailscale_vault.yaml
+```
+
+Then paste the vault password in the .env.local.sh file on the ANSIBLE_VAULT_PASSWORD variable.
+
 #### 3. Configure Nodes
 
 Install prerequisites and set up Docker Swarm cluster:
