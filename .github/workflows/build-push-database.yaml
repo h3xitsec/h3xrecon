@@ -1,4 +1,4 @@
-name: Build and Push PostgreSQL Docker Image
+name: Build and Push Database Docker Image
 
 on:
   workflow_dispatch:
@@ -14,17 +14,27 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          repository: h3xitsec/h3xrecon-backend
-          path: h3xrecon-backend
-          ref: ${{ github.ref }}
-          token: ${{ secrets.GHA_PAT }}
       
-      - name: Get versions from version file
+      - name: Get versions from __about__.py
         id: get_version
-        working-directory: h3xrecon-backend/
         run: |
-          echo "version=$(cat pgsql/.version)" >> $GITHUB_OUTPUT
+          python -c "
+          import os
+          
+          def find_about_file(start_path='src'):
+              for root, dirs, files in os.walk(start_path):
+                  if '__about__.py' in files:
+                      return os.path.join(root, '__about__.py')
+              return None
+          
+          about_file = find_about_file()
+          if about_file:
+              with open(about_file, 'r') as f: 
+                  exec(compile(f.read(), about_file, 'exec'), globals())
+              print(f'version=v{__version__}')
+          else:
+              print('Error: __about__.py not found')
+          " >> $GITHUB_OUTPUT
       
       - name: Docker meta
         id: meta
@@ -32,7 +42,7 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/h3xitsec/h3xrecon_pgsql
+            ghcr.io/h3xitsec/h3xrecon/database
           # generate Docker tags based on the following events/attributes
           tags: |
             type=raw,value=${{ steps.get_version.outputs.version }}
@@ -54,8 +64,8 @@ jobs:
       - name: Build and push database image
         uses: docker/build-push-action@v4
         with:
-          context: ./h3xrecon-backend/pgsql
-          file: ./h3xrecon-backend/pgsql/Dockerfile
+          context: ./
+          file: ./Dockerfile.database
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
