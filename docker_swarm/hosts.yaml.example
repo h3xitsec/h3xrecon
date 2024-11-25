@@ -20,7 +20,7 @@ processor:
     processor1:
       ansible_host: 1.1.1.1
       ansible_user: username
-      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_private_key_file: "{{ lookup('env', 'ANSIBLE_HOME') }}/.keys/private.key"
       h3xrecon_dockercompose_pkg: docker-compose-plugin # Not all distros have the same package name so we set it here
 
 ## Workers Hosts Group
@@ -32,23 +32,23 @@ workers:
     worker1:
       ansible_host: 2.2.2.1
       ansible_user: username
-      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_private_key_file: "{{ lookup('env', 'ANSIBLE_HOME') }}/.keys/private.key"
       ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 
     worker2:
       ansible_host: 2.2.2.2
       ansible_user: username
-      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_private_key_file: "{{ lookup('env', 'ANSIBLE_HOME') }}/.keys/private.key"
       ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 
     worker3:
       ansible_host: 2.2.2.3
       ansible_user: username
-      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_private_key_file: "{{ lookup('env', 'ANSIBLE_HOME') }}/.keys/private.key"
       ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 
     worker4:
       ansible_host: 2.2.2.4
       ansible_user: username
-      ansible_ssh_private_key_file: /path/to/private/key
+      ansible_ssh_private_key_file: "{{ lookup('env', 'ANSIBLE_HOME') }}/.keys/private.key"
       ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
