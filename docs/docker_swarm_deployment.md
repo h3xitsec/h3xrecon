@@ -26,19 +26,27 @@ You can get 4 of those instance, each with a public IP address
 ### 1. Install Ansible requirements
 
 ```bash
+# Source the local environment variables (see .env.local.sh.example)
+source ./.env.local.sh
+
 # Install python-venv from your package manager
 apt update && apt install python3-venv # Debian/Ubuntu
 
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+python -m venv h3xrecon_venv
+source h3xrecon_venv/bin/activate
+pip install --upgrade pip
+pip install ansible
 ```
 
 ### 2. Configure Ansible Inventory
 
-Create your inventory file based on the example at `src/ansible/hosts.yaml.example` or the example below:
+Create your inventory file based on the example at `docker_swarm/ansible/hosts.yaml.example` or the example below:
 
-```yaml:hosts.yaml
+The environment variables sourced at previous step set Ansible's default inventory file to `docker_swarm/ansible/hosts.yaml`.
+
+If you want to use a different inventory file, you can set the `ANSIBLE_INVENTORY` environment variable to the path of your inventory file or use the `-i` flag when running the ansible commands.
+
+```yaml:docker_swarm/ansible/hosts.yaml
 all:
   vars:
     h3xrecon_base_directory: ./
