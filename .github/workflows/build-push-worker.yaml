@@ -1,28 +1,19 @@
-name: Build and Push worker Docker Image
+name: Build and Push Worker Docker Image
 
 on:
   workflow_dispatch:
   workflow_call:
-
+  
 permissions:
   packages: write
-  contents: write
-
+  contents: read
 jobs:
-  build-and-release:
+  build-and-push:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout worker repository
+      - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          repository: h3xitsec/h3xrecon-worker
-          path: h3xrecon-worker
-          ref: ${{ github.ref }}
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12.7'
       
       - name: Get versions from __about__.py
         id: get_version
@@ -30,7 +21,7 @@ jobs:
           python -c "
           import os
           
-          def find_about_file(start_path='.'):
+          def find_about_file(start_path='src'):
               for root, dirs, files in os.walk(start_path):
                   if '__about__.py' in files:
                       return os.path.join(root, '__about__.py')
@@ -49,15 +40,17 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
+          # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/h3xitsec/h3xrecon_worker
+            ghcr.io/h3xitsec/h3xrecon/worker
+          # generate Docker tags based on the following events/attributes
           tags: |
             type=raw,value=${{ steps.get_version.outputs.version }}
             type=raw,value=latest
-
+      
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
-        
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
@@ -68,15 +61,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Build and push h3xrecon-worker image
+      - name: Build and push worker image
         uses: docker/build-push-action@v4
         with:
-          context: ./h3xrecon-worker
-          file: ./h3xrecon-worker/Dockerfile
+          context: ./
+          file: ./Dockerfile.worker
           push: true
-          build-args: |
-            SERVER_VERSION=${{ steps.get_version.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
