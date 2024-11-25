@@ -30,4 +30,4 @@ export PGDATABASE=$H3XRECON_DB_NAME
 export ANSIBLE_HOME=${H3XRECON_BASE_PATH}/docker_swarm/ansible
 export ANSIBLE_INVENTORY=${H3XRECON_BASE_PATH}/docker_swarm/hosts.yaml
 export ANSIBLE_LOCAL_TEMP=${H3XRECON_BASE_PATH}/docker_swarm/.ansible_tmp
-export ANSIBLE_VAULT_PASSWORD=
+export ANSIBLE_VAULT_PASSWORD_FILE=${ANSIBLE_HOME}/.vaultpass
