@@ -148,7 +148,7 @@ services:
       cache:
         condition: service_healthy
     deploy:
-      replicas: 1
+      replicas: ${H3XRECON_WORKERS_COUNT}
 
 volumes:
   pgsql_data:

@@ -21,6 +21,7 @@ env/
 !.envrc
 !.env*.example
 !.env.compose
+!.env.swarm
 .direnv/
 
 # Ansible files

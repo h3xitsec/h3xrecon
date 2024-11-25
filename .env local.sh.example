@@ -20,6 +20,10 @@ export H3XRECON_NATS_PORT=4222
 export H3XRECON_LOG_LEVEL=INFO
 H3XRECON_LOG_FILE_PATH=./h3xrecon.log
 
+# Docker compose settings
+export H3XRECON_IMAGE_VERSION=latest
+export H3XRECON_WORKERS_COUNT=1
+
 # Psql cli settings
 export PGHOST=$H3XRECON_DB_HOST
 export PGPORT=$H3XRECON_DB_PORT
