@@ -20,11 +20,13 @@ env/
 .env*
 !.env*.example
 !.env.compose
+.direnv/
 
 # Ansible files
 hosts*.yaml*
 !hosts*.yaml.example
 .ansible_tmp/
+.vaultpass
 
 # Compiled files
 *.pyc
