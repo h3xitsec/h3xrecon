@@ -1,0 +1,5 @@
+ARG SERVER_VERSION="dev"
+
+FROM ghcr.io/h3xitsec/h3xrecon/server:${SERVER_VERSION}
+
+ENTRYPOINT ["/app/venv/bin/h3xrecon"]
