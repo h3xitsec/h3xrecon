@@ -18,6 +18,7 @@ env/
 
 # Env files
 .env*
+!.envrc
 !.env*.example
 !.env.compose
 .direnv/
