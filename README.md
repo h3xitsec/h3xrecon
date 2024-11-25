@@ -57,36 +57,9 @@ docker compose up -d
 docker compose logs -f
 ```
 
-### 3. Pull the cli docker image and setup the configuration file
+### 3. Install the h3xrecon client
 
-```bash
-# Pull the image
-docker pull ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3
-
-# Create the configuration file
-cat << EOF > ~/.h3xrecon/config.yaml
-{
-  "database": {
-    "host": "localhost",
-    "port": 5432,
-    "database": "h3xrecon",
-    "user": "h3xrecon",
-    "password": "h3xrecon"
-  },
-  "nats": {
-    "host": "localhost",
-    "port": 4222
-  },
-  "logging": {
-    "level": "DEBUG",
-    "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> - <level>{message}</level>"
-  }
-}
-EOF
-
-# Create a shell alias for the h3xrecon command
-alias h3xrecon="docker run --network=host --rm -it -v ~/.h3xrecon:/root/.h3xrecon ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3"
-```
+Refer to the [CLI Documentation](docs/client.md) for more information on how to install the h3xrecon client.
 
 ### 4. Start using it !
 

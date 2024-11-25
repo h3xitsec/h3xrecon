@@ -22,25 +22,35 @@ H3XRecon client is a powerful command-line tool designed for managing and orches
 
 ## 🚀 Installation
 
-### From source
+### With Docker
+
 ```bash
-# Clone the repository
-git clone https://github.com/h3xitsec/h3xrecon-cli.git
+# Pull the image
+docker pull ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3
 
-# Navigate to the project directory
-cd h3xrecon-cli
+# Create the configuration file
+cat << EOF > ~/.h3xrecon/config.yaml
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "h3xrecon",
+    "user": "h3xrecon",
+    "password": "h3xrecon"
+  },
+  "nats": {
+    "host": "localhost",
+    "port": 4222
+  },
+  "logging": {
+    "level": "DEBUG",
+    "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> - <level>{message}</level>"
+  }
+}
+EOF
 
-# Install the module
-pip install .
-```
-
-### From Docker
-```bash
-# Pull the docker image
-docker pull ghcr.io/h3xitsec/h3xrecon_client
-
-# Setup an alias for running the client from docker
-alias h3xrecon='docker run --rm -it --network host --env-file ${PWD}/.env.local ghcr.io/h3xitsec/h3xrecon_client'
+# Create a shell alias for the h3xrecon command
+alias h3xrecon="docker run --network=host --rm -it -v ~/.h3xrecon:/root/.h3xrecon ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3"
 ```
 
 ## 🎯 Quick Start
