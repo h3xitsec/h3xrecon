@@ -37,23 +37,27 @@ H3XRecon is a powerful bug bounty reconnaissance automation tool designed to str
 
 The client part of the project is inspired from the [BBRF client](https://github.com/honoki/bbrf-client) by @honoki. This is what I was using before I started this project, so I made it work in the same way,
 
-## 💻 Getting Started
+## 💻 Getting Started (Docker Swarm)
 
-### Local Docker Compose Option
+Please refer to the [Docker Swarm README](docker_swarm/README.md) for more information on how to setup the project using Docker Swarm.
 
-1. Clone the repository:
+## 💻 Getting Started (Local Docker Compose)
+
+### 1. Clone the repository:
+
 ```bash
 git clone https://github.com/h3xitsec/h3xrecon.git
 cd h3xrecon
 ```
 
-2. Start the compose stack
+### 2. Start the compose stack
+
 ```bash
 docker compose up -d
 docker compose logs -f
 ```
 
-3. Pull the cli docker image and setup the configuration file
+### 3. Pull the cli docker image and setup the configuration file
 
 ```bash
 # Pull the image
@@ -84,7 +88,7 @@ EOF
 alias h3xrecon="docker run --network=host --rm -it -v ~/.h3xrecon:/root/.h3xrecon ghcr.io/h3xitsec/h3xrecon_cli:v0.0.3"
 ```
 
-4. Start using it
+### 4. Start using it !
 
 Setup your first program
 
@@ -110,7 +114,7 @@ pip install git+https://github.com/h3xitsec/h3xrecon-cli.git
 
 For more information on the commands, please refer to the [CLI Documentation](docs/cli.md).
 
-5. Scaling the workers
+### 5. Scaling the workers
 
 Hot scaling the workers is as simple as running the following command:
 
