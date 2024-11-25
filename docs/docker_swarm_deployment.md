@@ -93,9 +93,13 @@ workers:
       ansible_ssh_extra_args: '-o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
 ```
 
-### 3. Configure Tailscale
+### 3. Set the communication layer
 
-If you want to use Tailscale as a communication layer between the nodes, you need to set up a Tailscale account and create an Auth Key
+You can use Tailscale as a communication layer between the nodes so there is no need to setup a VPN or forward ports but this step is optional.
+
+#### Using Tailscale
+
+If you want to use Tailscale, you need to set up a free Tailscale account and create an Auth Key. Refer to the [Tailscale Documentation](https://tailscale.com/kb/1204/auth-keys/) for more information.
 
 First, copy the example vault file from `docker_swarm/ansible/vaults/tailscale_vault.yaml.example` to `docker_swarm/ansible/vaults/tailscale_vault.yaml`
 
@@ -107,9 +111,17 @@ Lastly, you need to encrypt the vault using the following command:
 ansible-vault encrypt docker_swarm/ansible/vaults/tailscale_vault.yaml
 ```
 
-Then paste the vault password in `docker_swarm/ansible/.vaultpass` file.
+and paste the vault password in `docker_swarm/ansible/.vaultpass` file.
 
 You also need to make sure the `h3xrecon_swarm_mode` variable is set to "tailscale" in the `hosts.yaml`'s `all` host group.
+
+Depending on your setup, you might need to install Tailscale on the computer from which you will operate H3xRecon to be able to communicate with the processor node.
+
+#### Using another communication layer
+
+If you prefer to use another communication layer, such as an already existing VPN or simply run the stack on a local network, set the `h3xrecon_swarm_mode` variable to `lan` in your `hosts.yaml` file.
+
+Note that there is no need for the worker nodes to be able to communicate with each other, only the processor node will be in charge of sending the tasks to the workers.
 
 ### 4. Configure Nodes
 
