@@ -1,8 +1,4 @@
-# H3XRecon h3xrecon
-
-<p align="center">
-  <img src="assets/logo.png" alt="H3XRecon Logo" width="200"/>
-</p>
+# H3xRecon Client
 
 H3XRecon client is a powerful command-line tool designed for managing and orchestrating reconnaissance data across multiple security programs. It provides a robust interface for managing programs, domains, IPs, URLs, and services with advanced filtering capabilities.
 

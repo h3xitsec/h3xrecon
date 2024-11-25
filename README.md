@@ -5,10 +5,6 @@
 
 -----
 
-<p align="center">
-  <img src="docs/assets/logo.png" alt="H3XRecon Logo" width="200"/>
-</p>
-
 H3XRecon is a powerful bug bounty reconnaissance automation tool designed to streamline and automate the reconnaissance phase of security assessments. It provides a distributed architecture for efficient scanning and data processing.
 
 ## 🚀 Features
@@ -39,7 +35,7 @@ The client part of the project is inspired from the [BBRF client](https://github
 
 ## 💻 Getting Started (Docker Swarm)
 
-Please refer to the [Docker Swarm README](docker_swarm/README.md) for more information on how to setup the project using Docker Swarm.
+Please refer to the [Docker Swarm Deployment](docs/docker_swarm_deployment.md) for more information on how to setup the project using Docker Swarm.
 
 ## 💻 Getting Started (Local Docker Compose)
 
@@ -59,7 +55,7 @@ docker compose logs -f
 
 ### 3. Install the h3xrecon client
 
-Refer to the [CLI Documentation](docs/client.md) for more information on how to install the h3xrecon client.
+Refer to the [Client Documentation](docs/client.md) for more information on how to install the h3xrecon client.
 
 ### 4. Start using it !
 
@@ -85,7 +81,7 @@ python -m venv venv
 pip install git+https://github.com/h3xitsec/h3xrecon-cli.git
 ```
 
-For more information on the commands, please refer to the [CLI Documentation](docs/cli.md).
+For more information on the commands, please refer to the [Client Documentation](docs/client.md).
 
 ### 5. Scaling the workers
 
@@ -110,10 +106,6 @@ H3XRECON_WORKERS_COUNT=<number_of_workers>
   - Real-time log aggregation
   - Service performance metrics
   - Custom reconnaissance dashboards
-
-## 📖 Documentation
-
-For detailed usage instructions and configuration options, please refer to the [CLI Documentation](docs/client.md).
 
 ## License
 
