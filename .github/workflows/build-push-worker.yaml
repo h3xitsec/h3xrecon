@@ -73,3 +73,5 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+          build-args:
+            SERVER_VERSION=${{ steps.get_version.outputs.version }}
