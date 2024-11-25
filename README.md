@@ -132,7 +132,7 @@ H3XRECON_WORKERS_COUNT=<number_of_workers>
 ## 📊 Monitoring Dashboards
 
 ### Grafana
-- **URL**: `http://<grafana-host>:3000`
+- **URL**: `http://<processor host>:3000`
 - **Features**:
   - Real-time log aggregation
   - Service performance metrics
@@ -140,7 +140,7 @@ H3XRECON_WORKERS_COUNT=<number_of_workers>
 
 ## 📖 Documentation
 
-For detailed usage instructions and configuration options, please refer to the [CLI Documentation](src/h3xrecon/cli/README.md).
+For detailed usage instructions and configuration options, please refer to the [CLI Documentation](docs/client.md).
 
 ## License
 
