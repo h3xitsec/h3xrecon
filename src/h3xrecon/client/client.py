@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from h3xrecon.__about__ import __version__ as VERSION
 from h3xrecon.core import Config, DatabaseManager, QueueManager
+import asyncio
 import sys
 import re
 import yaml
