@@ -1,4 +1,4 @@
-# 🌐 Remote Deployment to Docker Swarm
+# 🌐 Docker Swarm Deployment
 
 ⚠️ **WARNING**: The documentation for the remote deployment is currently incomplete and under active development. Details may change.
 
@@ -134,7 +134,16 @@ Deploy the H3XRecon stack to the cluster:
 ansible-playbook ansible/deploy_h3xrecon_stack.yaml
 ```
 
-### 6. Adding worker nodes afterwards
+## Maintenance and operations
+
+### Adding worker nodes afterwards
 
 Adding worker nodes to the cluster is as simple as adding them to the `workers` host group in the `hosts.yaml` file and run the playbooks from step 4 again.
 
+### Refresh the stack with lastest images
+
+Simply run the `deploy_h3xrecon_stack.yaml` playbook to force the stack to pull the latest images and redeploy the services.
+
+```bash
+ansible-playbook ansible/deploy_h3xrecon_stack.yaml
+```

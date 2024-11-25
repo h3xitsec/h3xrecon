@@ -33,31 +33,23 @@ H3XRecon is a powerful bug bounty reconnaissance automation tool designed to str
 
 The client part of the project is inspired from the [BBRF client](https://github.com/honoki/bbrf-client) by @honoki. This is what I was using before I started this project, so I made it work in the same way,
 
-## 💻 Getting Started (Docker Swarm)
+## Getting Started
+
+### 💻 Local Docker Compose
+
+Please refer to the [Docker Compose Deployment](docs/docker_compose_deployment.md) for more information on how to setup the project using Docker Compose.
+
+OR
+
+### � Docker Swarm
 
 Please refer to the [Docker Swarm Deployment](docs/docker_swarm_deployment.md) for more information on how to setup the project using Docker Swarm.
 
-## 💻 Getting Started (Local Docker Compose)
-
-### 1. Clone the repository:
-
-```bash
-git clone https://github.com/h3xitsec/h3xrecon.git
-cd h3xrecon
-```
-
-### 2. Start the compose stack
-
-```bash
-docker compose up -d
-docker compose logs -f
-```
-
-### 3. Install the h3xrecon client
+### 📦 Install the h3xrecon client
 
 Refer to the [Client Documentation](docs/client.md) for more information on how to install the h3xrecon client.
 
-### 4. Start using it !
+### 🚀 Start using it !
 
 Setup your first program
 
@@ -74,29 +66,7 @@ h3xrecon -p program_name sendjob resolve_domain example.com
 h3xrecon -p program_name list domains/urls/ips/services
 ```
 
-Alternatively, you can install the h3xrecon client as a python module and use it directly:
-
-```bash
-python -m venv venv
-pip install git+https://github.com/h3xitsec/h3xrecon-cli.git
-```
-
 For more information on the commands, please refer to the [Client Documentation](docs/client.md).
-
-### 5. Scaling the workers
-
-Hot scaling the workers is as simple as running the following command:
-
-```bash
-compose scale worker=<number_of_workers>
-```
-
-Alternatively, you can set the number of workers in the .env.local file and restart the compose stack.
-
-```bash
-# Edit the .env.compose file to set the number of workers
-H3XRECON_WORKERS_COUNT=<number_of_workers>
-```
 
 ## 📊 Monitoring Dashboards
 
