@@ -86,7 +86,7 @@ services:
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=h3xrecon
       - POSTGRES_DB=h3xrecon
-    image: ghcr.io/h3xitsec/h3xrecon_pgsql:latest
+    image: ghcr.io/h3xitsec/h3xrecon/database:latest
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:
@@ -145,7 +145,7 @@ services:
         tag: "{{.Name}}"
   
   jobprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon_server:latest
+    image: ghcr.io/h3xitsec/h3xrecon/server:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -176,7 +176,7 @@ services:
         tag: "{{.Name}}"
   
   dataprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon_server:latest
+    image: ghcr.io/h3xitsec/h3xrecon/server:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy
@@ -207,7 +207,7 @@ services:
         tag: "{{.Name}}"
   
   worker:
-    image: ghcr.io/h3xitsec/h3xrecon_worker:latest
+    image: ghcr.io/h3xitsec/h3xrecon/worker:latest
     depends_on:
       - msgbroker:service_healthy
       - cache:service_healthy

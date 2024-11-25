@@ -13,20 +13,17 @@
         src: "{{ file['src'] }}"
         dest: "{{ file['dest'] }}"
       loop:
-        - src: ../docker/grafana
+        - src: ../../docker/grafana
           dest: "{{ h3xrecon_target_directory }}"
         - src: ../docker-compose.swarm.yaml
           dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
-        - src: ../.env.compose
+        - src: ../../.env.compose
           dest: "{{ h3xrecon_target_directory }}.env"
-        - src: ../docker/msgbroker
+        - src: ../../docker/msgbroker
           dest: "{{ h3xrecon_target_directory }}"
       loop_control:
         loop_var: file
-    - name: Install jsondiff python library
-      ansible.builtin.apt:
-        name: python3-jsondiff
-        state: present
+
     - name: Deploy Docker stack
       ansible.builtin.shell:
         chdir: "{{ h3xrecon_target_directory }}"
