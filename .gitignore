@@ -16,6 +16,12 @@ env/
 *.swo
 *~
 
+# Env files
+.env*
+!.env*.example
+!.env.compose
+
+
 # Compiled files
 *.pyc
 *.pyo

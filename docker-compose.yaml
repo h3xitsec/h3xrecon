@@ -66,7 +66,7 @@ services:
       - "6379:6379"
 
   database:
-    image: ghcr.io/h3xitsec/h3xrecon/database:dev
+    image: ghcr.io/h3xitsec/h3xrecon/database:${H3XRECON_IMAGE_VERSION}
     env_file:
       - .env.compose
     environment:
@@ -115,7 +115,7 @@ services:
       start_period: 5s
 
   jobprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon/server:dev
+    image: ghcr.io/h3xitsec/h3xrecon/server:${H3XRECON_IMAGE_VERSION}
     env_file:
       - .env.compose
     environment:
@@ -127,7 +127,7 @@ services:
         condition: service_healthy
 
   dataprocessor:
-    image: ghcr.io/h3xitsec/h3xrecon/server:dev
+    image: ghcr.io/h3xitsec/h3xrecon/server:${H3XRECON_IMAGE_VERSION}
     env_file:
       - .env.compose
     environment:
@@ -139,7 +139,7 @@ services:
         condition: service_healthy
 
   worker:
-    image: ghcr.io/h3xitsec/h3xrecon/worker:dev
+    image: ghcr.io/h3xitsec/h3xrecon/worker:${H3XRECON_IMAGE_VERSION}
     env_file:
       - .env.compose
     depends_on:

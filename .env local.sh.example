@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+export H3XRECON_BASE_PATH=${PWD}
+# Database settings
+export H3XRECON_DB_USER=h3xrecon
+export H3XRECON_DB_NAME=h3xrecon
+export H3XRECON_DB_HOST=localhost
+export H3XRECON_DB_PASS=h3xrecon
+
+# Redis cache settings
+export H3XRECON_REDIS_HOST=localhost
+export H3XRECON_REDIS_PORT=6379
+
+# NATS msg broker setings
+export H3XRECON_NATS_HOST=localhost
+export H3XRECON_NATS_PORT=4222
+
+# Logs settings
+export H3XRECON_LOG_LEVEL=INFO
+H3XRECON_LOG_FILE_PATH=./h3xrecon.log
+
+# Psql cli settings
+export PGHOST=$H3XRECON_DB_HOST
+export PGPORT=$H3XRECON_DB_PORT
+export PGUSER=$H3XRECON_DB_USER
+export PGPASSWORD=$H3XRECON_DB_PASS
+export PGDATABASE=$H3XRECON_DB_NAME
+
+export ANSIBLE_HOME=${H3XRECON_BASE_PATH}/ansible
+export ANSIBLE_INVENTORY=${ANSIBLE_HOME}/hosts.yaml
+export ANSIBLE_LOCAL_TEMP=${H3XRECON_BASE_PATH}/.ansible_tmp

@@ -66,7 +66,7 @@ omit = [
 h3xrecon-dataprocessor = "h3xrecon.server.dataprocessor:run"
 h3xrecon-jobprocessor = "h3xrecon.server.jobprocessor:run"
 h3xrecon-worker = "h3xrecon.worker.worker:run"
-h3xrecon = "h3xrecon.client.client:main"
+h3xrecon-client = "h3xrecon.client.client:main"
 
 [tool.coverage.paths]
 h3xrecon = ["src/h3xrecon", "*/h3xrecon/src/h3xrecon"]
