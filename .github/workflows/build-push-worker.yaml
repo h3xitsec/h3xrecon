@@ -72,6 +72,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           build-args:
             SERVER_VERSION=${{ steps.get_version.outputs.version }}
