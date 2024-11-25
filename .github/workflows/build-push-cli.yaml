@@ -1,4 +1,4 @@
-name: Build and Push cli Docker Image
+name: Build and Push CLI Docker Image
 
 on:
   workflow_dispatch:
@@ -16,7 +16,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: h3xitsec/h3xrecon-cli
-          path: h3xrecon-cli
           ref: ${{ github.ref }}
       
       - name: Set up Python
@@ -49,10 +48,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/h3xitsec/h3xrecon_cli         
-          # generate Docker tags based on the following events/attributes
+            ghcr.io/h3xitsec/h3xrecon/cli         
           tags: |
             type=raw,value=${{ steps.get_version.outputs.version }}
             type=raw,value=latest
@@ -73,8 +70,8 @@ jobs:
       - name: Build and push h3xrecon-cli image
         uses: docker/build-push-action@v4
         with:
-          context: ./h3xrecon-cli
-          file: ./h3xrecon-cli/Dockerfile
+          context: ./
+          file: ./Dockerfile
           push: true
           build-args: |
             SERVER_VERSION=${{ steps.get_version.outputs.version }}
