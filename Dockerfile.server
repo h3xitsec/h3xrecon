@@ -4,12 +4,6 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     git \
-    unzip \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && apt-get install -y \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ./dist/h3xrecon-0.0.1-py3-none-any.whl /app/h3xrecon-0.0.1-py3-none-any.whl
