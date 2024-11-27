@@ -1,6 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Dict, Any
 import asyncio
+from dataclasses import dataclass, asdict
+
+@dataclass
+class BaseFunctionOutput:
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 class ReconPlugin(ABC):
     @property
