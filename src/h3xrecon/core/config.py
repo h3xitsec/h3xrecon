@@ -65,19 +65,6 @@ class Config:
     def __init__(self):
         """Initialize configuration from file or environment variables."""
         try:
-            # Load client config first
-            try:
-                self.client = self._load_client_config_file()
-            except Exception:
-                #logger.error(f"Error loading client config: {e}")
-                self.client = None
-            # If client configs exists, use it as base and override with env vars
-            #if self.client:
-            #    self.database = self.client['database']
-            #    self.nats = self.client['nats']
-            #    self.logging = self.client['logging']
-            
-            # Load remaining configurations from environment
             self._load_from_env()
         except Exception as e:
             logger.error(f"Error loading configuration: {e}")
@@ -100,27 +87,6 @@ class Config:
         except Exception as e:
             logger.error(f"Error loading configuration from environment: {e}")
             raise
-
-    def _load_client_config_file(self, file: str = None):
-        """Load configuration from a JSON file."""
-        default_path = os.path.expanduser('~/.h3xrecon/config.json')
-        config_path = os.getenv('H3XRECON_CLIENT_CONFIG', default_path)
-        config_path = os.path.expanduser(config_path)
-        file_path = os.path.expanduser(file) if file else config_path
-        
-        try:
-            with open(file_path, 'r') as f:
-                client_config_json = json.load(f)
-            
-            return {
-                "nats": NatsConfig(**client_config_json.get('nats', {})),
-                "database": DatabaseConfig(**client_config_json.get('database', {})),
-                "logging": LogConfig(**client_config_json.get('logging', {}))
-            }
-        except FileNotFoundError:
-            return None
-        except Exception:
-            return None
 
     def _load_database_config_env(self) -> DatabaseConfig:
         """Load database configuration from environment variables."""
@@ -159,11 +125,6 @@ class Config:
             format=os.getenv('H3XRECON_LOG_FORMAT', '<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>'),
             file_path=os.getenv('H3XRECON_LOG_FILE_PATH')
         )
-
-    @classmethod
-    def from_file(cls, config_path: str = 'config.json') -> 'Config':
-        """Load configuration from a JSON file."""
-        return cls(config_path)
 
     def setup_logging(self):
         """Configure logging based on current settings."""

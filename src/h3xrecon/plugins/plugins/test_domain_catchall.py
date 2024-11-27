@@ -51,16 +51,16 @@ class TestDomainCatchall(ReconPlugin):
         self.config = Config()
         self.db = db
         self.qm = QueueManager(self.config.nats)
-        if await self.db.check_domain_regex_match(output_msg.get('source').get('target'), output_msg.get('program_id')):
-            logger.info(f"Domain {output_msg.get('source').get('target')} is part of program {output_msg.get('program_id')}. Sending to data processor.")
-            msg = {
-                "program_id": output_msg.get('program_id'),
-                "data_type": "domain",
-                "data": [output_msg.get('output', {}).get('domain')],
-                "attributes": {
-                    "is_catchall": output_msg.get('output', {}).get('is_catchall')
-                }
+        #if await self.db.check_domain_regex_match(output_msg.get('source').get('target'), output_msg.get('program_id')):
+        logger.info(f"Domain {output_msg.get('source').get('target')} is part of program {output_msg.get('program_id')}. Sending to data processor.")
+        msg = {
+            "program_id": output_msg.get('program_id'),
+            "data_type": "domain",
+            "data": [output_msg.get('output', {}).get('domain')],
+            "attributes": {
+                "is_catchall": output_msg.get('output', {}).get('is_catchall')
             }
-            await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
-        else:
-            logger.info(f"Domain {output_msg.get('source').get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
+        }
+        await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+        # else:
+        #     logger.info(f"Domain {output_msg.get('source').get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")

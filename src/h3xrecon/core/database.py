@@ -319,5 +319,25 @@ class DatabaseManager():
         """
         return await self._fetch_records(query)
 
-    # Remaining methods would follow the same pattern of adding docstrings
-    # I've demonstrated the style for the first set of methods
+    async def check_domain_regex_match(self, domain: str, program_id: int) -> bool:
+        try:
+            if isinstance(domain, dict) and 'subdomain' in domain:
+                domain = domain['subdomain']
+            
+            if not isinstance(domain, str):
+                logger.warning(f"Domain is not a string: {domain}, type: {type(domain)}")
+                return False
+            
+            compiled_regexes = await self.get_compiled_regexes(program_id)
+            for regex in compiled_regexes:
+                if regex.match(domain):
+                    return True
+            await self.insert_out_of_scope_domain(domain, program_id)
+            logger.debug(f"Domain {domain} inserted as out-of-scope for program {program_id}")
+            return False
+        except Exception as e:
+            logger.error(f"Error checking domain regex match: {str(e)}")
+            logger.exception(e)
+            return False
+        finally:
+            logger.debug("Exiting check_domain_regex_match method")
