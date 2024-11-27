@@ -341,3 +341,310 @@ class DatabaseManager():
             return False
         finally:
             logger.debug("Exiting check_domain_regex_match method")
+    
+    async def insert_service(self, ip: str, program_id: int, port: int = None, protocol: str = None, service: str = None) -> bool:
+        try:
+            # First get or create the IP record
+            ip_record = await self._write_records(
+                '''
+                INSERT INTO ips (ip, program_id)
+                VALUES ($1, $2)
+                ON CONFLICT (ip) DO UPDATE 
+                SET program_id = EXCLUDED.program_id
+                RETURNING id
+                ''',
+                ip,
+                program_id
+            )
+            
+            # Handle nested DbResult for IP record
+            if ip_record.success and isinstance(ip_record.data, DbResult):
+                ip_data = ip_record.data.data
+            else:
+                ip_data = ip_record.data
+
+            if not ip_data or not isinstance(ip_data, list) or len(ip_data) == 0:
+                raise Exception(f"Failed to insert or get IP record for {ip}")
+                
+            ip_id = ip_data[0]['id']
+
+            # Use the ON CONFLICT for services with ports
+            result = await self._write_records(
+                '''
+                INSERT INTO services (ip, port, protocol, service, program_id) 
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT ON CONSTRAINT unique_service_ip_port
+                DO UPDATE
+                SET protocol = EXCLUDED.protocol,
+                    service = EXCLUDED.service,
+                    program_id = EXCLUDED.program_id,
+                    discovered_at = CURRENT_TIMESTAMP
+                RETURNING (xmax = 0) AS inserted
+                ''',
+                ip_id,
+                port,
+                protocol,
+                service,
+                program_id
+            )
+            
+            # Handle nested DbResult for service record
+            if result.success and isinstance(result.data, DbResult):
+                data = result.data.data
+            else:
+                data = result.data
+
+            if data and isinstance(data, list) and len(data) > 0:
+                inserted = data[0]['inserted']
+                service_desc = f"{protocol or 'unknown'}:{ip}:{port if port else 'no_port'}"
+                if inserted:
+                    logger.info(f"New service inserted: {service_desc}")
+                else:
+                    logger.info(f"Service updated: {service_desc}")
+                return inserted
+            return False
+                
+        except Exception as e:
+            logger.error(f"Error inserting or updating service in database: {str(e)}")
+            logger.exception(e)
+            return False
+    
+    async def insert_domain(self, domain: str, program_id: int, ips: List[str] = None, cnames: List[str] = None, is_catchall: bool = False):
+        try:
+            logger.debug(f"Checking domain regex match for {domain} in program {program_id}")
+            if await self.check_domain_regex_match(domain, program_id):
+                # Get IP IDs
+                ip_ids = []
+                if ips:
+                    for ip in ips:
+                        ip_id = await self._fetch_value('SELECT id FROM ips WHERE ip = $1', ip)
+                        if ip_id:
+                            ip_ids.append(ip_id.data)
+
+                result = await self._write_records(
+                    '''
+                    INSERT INTO domains (domain, program_id, ips, cnames, is_catchall) 
+                    VALUES ($1, $2, $3, $4, $5) 
+                    ON CONFLICT (domain) DO UPDATE 
+                    SET program_id = EXCLUDED.program_id, ips = EXCLUDED.ips, cnames = EXCLUDED.cnames, is_catchall = EXCLUDED.is_catchall
+                    RETURNING (xmax = 0) AS inserted
+                    ''',
+                    domain.lower(),
+                    program_id,
+                    ip_ids,
+                    [c.lower() for c in cnames] if cnames else None,
+                    is_catchall
+                )
+                
+                if result.success and isinstance(result.data, DbResult):
+                    data = result.data.data
+                else:
+                    data = result.data
+
+                if data and isinstance(data, list) and len(data) > 0:
+                    return data[0]['inserted']
+                return False
+            else:
+                return False
+        except Exception as e:
+            logger.error(f"Error inserting or updating domain in database: {str(e)}")
+            logger.exception(e)
+            return False
+    
+    async def insert_url(self, url: str, httpx_data: Dict[str, Any], program_id: int):
+        logger.debug(f"{url}:{httpx_data}")
+        await self.ensure_connected()
+        try:
+            if self.pool is None:
+                raise Exception("Database connection pool is not initialized")
+            
+            # Convert types before insertion
+            port = int(httpx_data.get('port')) if httpx_data.get('port') else None
+            status_code = int(httpx_data.get('status_code')) if httpx_data.get('status_code') else None
+            content_length = int(httpx_data.get('content_length')) if httpx_data.get('content_length') else None
+            words = int(httpx_data.get('words')) if httpx_data.get('words') else None
+            lines = int(httpx_data.get('lines')) if httpx_data.get('lines') else None
+            timestamp = dateutil.parser.parse(httpx_data.get('timestamp')) if httpx_data.get('timestamp') else None
+            
+            result = await self._write_records(
+                '''
+                INSERT INTO urls (
+                        url, program_id, a, host, path, port, tech, response_time,
+                        input, lines, title, words, failed, method, scheme,
+                        cdn_name, cdn_type, final_url, resolvers, timestamp,
+                        webserver, status_code, content_type, content_length,
+                        chain_status_codes
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
+                    )
+                    ON CONFLICT (url) DO UPDATE SET
+                        a = EXCLUDED.a,
+                        host = EXCLUDED.host,
+                        path = EXCLUDED.path,
+                        port = EXCLUDED.port,
+                        tech = EXCLUDED.tech,
+                        response_time = EXCLUDED.response_time,
+                        input = EXCLUDED.input,
+                        lines = EXCLUDED.lines,
+                        title = EXCLUDED.title,
+                        words = EXCLUDED.words,
+                        failed = EXCLUDED.failed,
+                        method = EXCLUDED.method,
+                        scheme = EXCLUDED.scheme,
+                        cdn_name = EXCLUDED.cdn_name,
+                        cdn_type = EXCLUDED.cdn_type,
+                        final_url = EXCLUDED.final_url,
+                        resolvers = EXCLUDED.resolvers,
+                        timestamp = EXCLUDED.timestamp,
+                        webserver = EXCLUDED.webserver,
+                        status_code = EXCLUDED.status_code,
+                        content_type = EXCLUDED.content_type,
+                        content_length = EXCLUDED.content_length,
+                        chain_status_codes = EXCLUDED.chain_status_codes
+                    RETURNING (xmax = 0) AS inserted
+                ''',
+                url.lower(),
+                program_id,
+                httpx_data.get('a'),
+                httpx_data.get('host'),
+                httpx_data.get('path'),
+                port,
+                httpx_data.get('tech'),
+                httpx_data.get('time'),  # response_time
+                httpx_data.get('input'),
+                lines,
+                httpx_data.get('title'),
+                words,
+                httpx_data.get('failed', False),
+                httpx_data.get('method'),
+                httpx_data.get('scheme'),
+                httpx_data.get('cdn_name'),
+                httpx_data.get('cdn_type'),
+                httpx_data.get('final_url'),
+                httpx_data.get('resolvers'),
+                timestamp,
+                httpx_data.get('webserver'),
+                status_code,
+                httpx_data.get('content_type'),
+                content_length,
+                httpx_data.get('chain_status_codes')
+            )
+            
+            # Handle nested DbResult objects
+            if result.success and isinstance(result.data, DbResult):
+                data = result.data.data
+            else:
+                data = result.data
+
+            if data and isinstance(data, list) and len(data) > 0:
+                inserted = data[0]['inserted']
+                if inserted:
+                    logger.info(f"New URL inserted: {url}")
+                else:
+                    logger.info(f"URL updated: {url}")
+                return inserted
+            return False
+        except Exception as e:
+            logger.error(f"Error inserting or updating URL in database: {e}")
+            logger.exception(e)
+            return False
+
+    async def insert_nuclei(self, program_id: int, data: Dict[str, Any]):
+        await self.ensure_connected()
+        logger.debug(f"Entering insert_nuclei for program {program_id}: {data}")
+        try:
+            if self.pool is None:
+                raise Exception("Database connection pool is not initialized")
+            
+            # Convert types before insertion
+            url = data.get('url')
+            matched_at = data.get('matched_at')
+            template_id = data.get('template_id')
+            template_name = data.get('template_name')
+            template_path = data.get('template_path')
+            severity = data.get('severity')
+            type = data.get('type')
+            port = data.get('port')
+            ip = data.get('ip')
+
+            
+            result = await self._write_records(
+                '''
+                INSERT INTO nuclei (
+                        url, matched_at, type, ip, port, template_path, template_id, template_name, severity, program_id
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                    )
+                    RETURNING (xmax = 0) AS inserted
+                ''',
+                str(url),
+                matched_at,
+                str(type),
+                str(ip),
+                int(port),
+                template_path,
+                template_id,
+                template_name,
+                severity,
+                program_id
+            )
+            
+            # Handle nested DbResult objects
+            if result.success and isinstance(result.data, DbResult):
+                data = result.data.data
+            else:
+                data = result.data
+
+            if data and isinstance(data, list) and len(data) > 0:
+                inserted = data[0]['inserted']
+                if inserted:
+                    logger.info(f"New Nuclei hit inserted: {url}")
+                else:
+                    logger.info(f"Nuclei hit updated: {url}")
+                return inserted
+            return False
+        except Exception as e:
+            logger.error(f"Error inserting or updating Nuclei hit in database: {e}")
+            logger.exception(e)
+            return False
+
+    async def log_or_update_function_execution(self, log_entry: Dict[str, Any]):
+        await self.ensure_connected()
+        try:
+            # Check if the execution already exists
+            existing = await self._fetch_records('''
+                SELECT * FROM function_logs 
+                WHERE execution_id = $1
+            ''', uuid.UUID(log_entry['execution_id']))
+
+            if existing:
+                # Update existing log entry
+                await self._write_records('''
+                    UPDATE function_logs 
+                    SET timestamp = $1
+                    WHERE execution_id = $2
+                ''',
+                    datetime.fromisoformat(log_entry['timestamp']),
+                    uuid.UUID(log_entry['execution_id'])
+                )
+                #logger.debug(f"Updated log entry: {log_entry['execution_id']}")
+            else:
+                # Insert new log entry
+                await self._write_records('''
+                    INSERT INTO function_logs 
+                    (execution_id, timestamp, function_name, target, program_id) 
+                    VALUES ($1, $2, $3, $4, $5)
+                ''',
+                    uuid.UUID(log_entry['execution_id']),
+                    datetime.fromisoformat(log_entry['timestamp']),
+                    log_entry['function_name'],
+                    log_entry['target'],
+                    log_entry['program_id']
+                )
+                #logger.debug(f"Inserted new log entry: {log_entry['execution_id']}")
+        except Exception as e:
+            logger.error(f"Error logging or updating function execution in database: {e}")
+            logger.exception(e)
