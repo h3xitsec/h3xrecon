@@ -4,11 +4,9 @@
 
 from .server import JobProcessor, DataProcessor
 from .worker import Worker
-from .client import Client
 
 __all__ = [
     'JobProcessor',
     'DataProcessor',
     'Worker',
-    'Client',
 ]
