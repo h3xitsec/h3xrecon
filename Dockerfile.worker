@@ -24,4 +24,4 @@ RUN go install github.com/Josue87/gotator@latest
 
 RUN go install -v github.com/owasp-amass/amass/v4/...@master
 
-ENTRYPOINT ["/app/venv/bin/h3xrecon-worker"]
+ENTRYPOINT ["/app/venv/bin/python", "-m", "h3xrecon.worker.worker"]
