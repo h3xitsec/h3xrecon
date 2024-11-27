@@ -1,8 +1,7 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from loguru import logger
-from dataclasses import dataclass
-from h3xrecon.plugins import BaseFunctionOutput
+from dataclasses import dataclass, asdict
 import asyncio
 import json
 import os
@@ -13,7 +12,7 @@ class FunctionParams():
     template_id: str = "insecure-cipher-suite-detect"
 
 @dataclass
-class FunctionOutput(BaseFunctionOutput):
+class FunctionOutput():
     url: str
     matched_at: str
     type: str
@@ -87,7 +86,7 @@ class Nuclei(ReconPlugin):
                     template_name=json_data.get('info', {}).get('name', {}),
                     severity=json_data.get('info', {}).get('severity', {})
                 )
-                yield nuclei_output.to_dict()
+                yield asdict(nuclei_output)
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON output: {e}")
 
@@ -96,6 +95,7 @@ class Nuclei(ReconPlugin):
     async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
         from h3xrecon.core import Config
         from h3xrecon.core import QueueManager
+        
         self.config = Config()
         self.qm = QueueManager(self.config.nats)
         logger.debug(f"Incoming message:\nObject Type: {type(output_msg)}\nObject:\n{json.dumps(output_msg, indent=4)}")

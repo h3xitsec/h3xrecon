@@ -41,7 +41,8 @@ class DataProcessor:
             "ip": self.process_ip,
             "domain": self.process_domain,
             "url": self.process_url,
-            "service": self.process_service
+            "service": self.process_service,
+            "nuclei": self.process_nuclei
         }
 
     async def start(self):
@@ -174,6 +175,7 @@ class DataProcessor:
     
     async def process_nuclei(self, msg: Dict[str, Any]):
         if msg:
+            logger.debug(f"Processing Nuclei result for program {msg.get('program_id')}: {msg}")
             msg_data = msg.get('data', {})
             for d in msg_data:
                 try:
