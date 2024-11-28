@@ -41,7 +41,8 @@ class DataProcessor:
             "ip": self.process_ip,
             "domain": self.process_domain,
             "url": self.process_url,
-            "service": self.process_service
+            "service": self.process_service,
+            "nuclei": self.process_nuclei
         }
 
     async def start(self):
@@ -70,7 +71,6 @@ class DataProcessor:
             if isinstance(data_item, dict) and data_item.get("data_type") == "url":
                 data_item = data_item.get("data").get("url")
             processor = self.data_type_processors.get(msg.get("data_type"))
-            logger.debug(msg)
             if processor:
                 await processor(msg)
 
@@ -109,17 +109,7 @@ class DataProcessor:
     ## Data processing functions ##
     ################################
 
-    # Input format
-    # {
-    #     'program_id': 2,
-    #     'data_type': 'ip',
-    #     'data': ['142.195.133.83'],
-    #     'attributes': {
-    #         'ptr': ['domain.com', 'domain2.com']
-    #     }
-    # }
     async def process_ip(self, msg_data: Dict[str, Any]):
-        #logger.info(msg_data)
         for ip in msg_data.get('data'):
             ptr = msg_data.get('attributes', {}).get('ptr')
             if isinstance(ptr, list):
@@ -130,18 +120,6 @@ class DataProcessor:
             if inserted:
                 await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
     
-
-    # Input format
-    # {
-    #     'program_id': 2,
-    #     'data_type': 'domain',
-    #     'data': ['target.com'],
-    #     'attributes': {
-    #         'ips': ['142.195.133.83'],
-    #         'cnames': []
-    #         'is_catchall': true
-    #     }
-    # }
     async def process_domain(self, msg_data: Dict[str, Any]):
         for domain in msg_data.get('data'):
             logger.info(f"Processing domain: {domain}")
@@ -160,28 +138,6 @@ class DataProcessor:
                 logger.info(f"New domain inserted: {domain}")
                 await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
     
-
-    # Input format
-    # {
-    #     "data": [{
-    #         "attributes": {
-    #             "content_length": 80329,
-    #             "content_type": "text/html",
-    #             "final_url": "http://h3x.it:80",
-    #             "port": "80",
-    #             "scheme": "http",
-    #             "status_code": 200,
-    #             "tech": [
-    #             "GoDaddy Website Builder:8.0.0000"
-    #             ],
-    #             "title": "h3x.it",
-    #             "webserver": "DPS/2.0.0+sha-a9ecb8e"
-    #         },
-    #         "url": "http://h3x.it:80"
-    #     }],
-    #     "data_type": "url",
-    #     "program_id": 1
-    # }
     async def process_url(self, msg: Dict[str, Any]):
         if msg:
             logger.info(msg)
@@ -215,6 +171,33 @@ class DataProcessor:
                 except Exception as e:
                     logger.error(f"Failed to process URL in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
+    
+    async def process_nuclei(self, msg: Dict[str, Any]):
+        if msg:
+            logger.debug(f"Processing Nuclei result for program {msg.get('program_id')}: {msg}")
+            msg_data = msg.get('data', {})
+            for d in msg_data:
+                try:
+                    parsed_url = urlparse(d.get('url'))
+                    hostname = parsed_url.hostname
+                    if not hostname:
+                        logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
+                        return
+                    is_in_scope = await self.db_manager.check_domain_regex_match(hostname, msg.get('program_id'))
+                    if not is_in_scope:
+                        #logger.info(f"Hostname {hostname} is not in scope for program {program_name}. Skipping.")
+                        return
+                    logger.info(f"Processing Nuclei result for program {msg.get('program_id')}: {d.get('matched_at', {})}")
+                    inserted = await self.db_manager.insert_nuclei(
+                        program_id=msg.get('program_id'),
+                        data=d
+                    )
+                    if inserted:
+                        logger.info(f"New Nuclei result inserted: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
+                except Exception as e:
+                    logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
+                    logger.exception(e)
+
     
     # Input format
     # {

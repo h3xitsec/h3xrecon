@@ -58,7 +58,7 @@ class FunctionExecutor():
     
     async def execute_function(self, 
                               func_name: str, 
-                              target: str, 
+                              params: Dict[str, Any], 
                               program_id: int, 
                               execution_id: str, 
                               timestamp: str, 
@@ -68,13 +68,13 @@ class FunctionExecutor():
             return
 
         plugin_execute = self.function_map[func_name]
-        async for result in plugin_execute(target, program_id, execution_id):
+        async for result in plugin_execute(params, program_id, execution_id):
             if isinstance(result, str):
                 result = json.loads(result)
             output_data = {
                 "program_id": program_id,
                 "execution_id": execution_id,
-                "source": {"function": func_name, "target": target, "force": force_execution},
+                "source": {"function": func_name, "target": params.get('target'), "force": force_execution},
                 "output": result,
                 "timestamp": timestamp
             }
@@ -83,6 +83,6 @@ class FunctionExecutor():
 
             
             yield output_data
-        logger.info(f"Finished running {func_name} on {target} ({execution_id})")
+        logger.info(f"Finished running {func_name} on {params.get('target')} ({execution_id})")
 
 

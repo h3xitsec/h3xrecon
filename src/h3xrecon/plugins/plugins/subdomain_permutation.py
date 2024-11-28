@@ -10,12 +10,12 @@ class SubdomainPermutation(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, target: str, program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug("Checking if the target is a dns catchall domain")
         
-        logger.info(f"Running {self.name} on {target}")
+        logger.info(f"Running {self.name} on {params.get("target", {})}")
         command = f"""
-            echo "{target}" > /tmp/gotator_input.txt
+            echo "{params.get("target", {})}" > /tmp/gotator_input.txt
             gotator -sub /tmp/gotator_input.txt -perm /app/Worker/files/permutations.txt -depth 1 -numbers 10 -mindup -adv -md
         """
         process = await asyncio.create_subprocess_shell(
@@ -31,7 +31,7 @@ class SubdomainPermutation(ReconPlugin):
 
         message = {
             "function": "resolve_domain",
-            "target": target,
+            "target": params.get("target", {}),
             "to_test": to_test
         }
         yield message

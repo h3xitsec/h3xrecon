@@ -73,7 +73,7 @@ class Worker:
 
             async for result in self.function_executor.execute_function(
                     func_name=msg["function"],
-                    target=msg["params"]["target"],
+                    params=msg["params"],
                     program_id=msg["program_id"],
                     execution_id=execution_id,
                     timestamp=msg.get("timestamp", datetime.now(timezone.utc).isoformat()),

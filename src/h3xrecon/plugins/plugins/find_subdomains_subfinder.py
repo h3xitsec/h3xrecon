@@ -10,9 +10,9 @@ class FindSubdomainsSubfinder(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, target: str, program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {target}")
-        command = f"subfinder -d {target}"
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+        logger.info(f"Running {self.name} on {params.get("target", {})}")
+        command = f"subfinder -d {params.get("target", {})}"
         logger.debug(f"Running command: {command}")
 
         process = await asyncio.create_subprocess_shell(
@@ -27,7 +27,7 @@ class FindSubdomainsSubfinder(ReconPlugin):
             yield {"subdomain": [output]}
 
         await process.wait()
-        logger.info(f"Finished {self.name} on {target}")
+        logger.info(f"Finished {self.name} on {params.get("target", {})}")
     
     async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
         self.config = Config()

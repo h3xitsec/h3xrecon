@@ -10,15 +10,15 @@ class ExpandCIDR(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, target: str, program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Expands the CIDR to individual IP addresses using prips and dispatches reverse_resolve_ip tasks.
         
         :param target: The CIDR range (e.g., "192.168.1.0/24")
         """
-        logger.info(f"Running {self.name} on CIDR: {target}")
+        logger.info(f"Running {self.name} on CIDR: {params.get("target", {})}")
         command = f"""
-            prips {target}
+            prips {params.get("target", {})}
         """
         process = await asyncio.create_subprocess_shell(
             command,
