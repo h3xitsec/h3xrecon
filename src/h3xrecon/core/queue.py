@@ -123,7 +123,6 @@ class QueueManager:
             max_deliver=1,
             ack_wait=30,
             filter_subject=subject,
-            connect_timeout=1
         )
 
         # Update with custom config if provided
