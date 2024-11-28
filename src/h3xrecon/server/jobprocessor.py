@@ -89,7 +89,7 @@ class JobProcessor:
             
             function_name = msg.get("source", {}).get("function")
             if function_name:
-                target = msg.get('source', {}).get('target')
+                target = msg.get('source', {}).get('params', {}).get('target')
                 program_id = msg.get('program_id')
                 msg['in_scope'] = await self.db.check_domain_regex_match(
                                                domain=target,
@@ -108,8 +108,8 @@ class JobProcessor:
             log_entry = {
                 "execution_id": execution_id,
                 "timestamp": timestamp,
-                "function_name": message_data.get("source", {}).get("function", "unknown"),
-                "target": message_data.get("source", {}).get("target", "unknown"),
+                "function_name": message_data.get("source", {}).get("params", {}).get("function", "unknown"),
+                "target": message_data.get("source", {}).get("params", {}).get("target", "unknown"),
                 "program_id": message_data.get("program_id"),
                 "results": message_data.get("data", [])
             }
@@ -118,7 +118,7 @@ class JobProcessor:
 
             # Update Redis with the last execution timestamp
             function_name = message_data.get("source", {}).get("function", "unknown")
-            target = message_data.get("source", {}).get("target", "unknown")
+            target = message_data.get("source", {}).get("params", {}).get("target", "unknown")
             redis_key = f"{function_name}:{target}"
             self.redis_client.set(redis_key, timestamp)
         except Exception as e:
@@ -127,7 +127,7 @@ class JobProcessor:
     async def process_function_output(self, msg_data: Dict[str, Any]):
         function_name = msg_data.get("source", {}).get("function")
         if function_name in self.processor_map:
-            logger.info(f"Processing output from plugin '{function_name}' on target '{msg_data.get('source', {}).get('target')}'")
+            logger.info(f"Processing output from plugin '{function_name}' on target '{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:
                 await self.processor_map[function_name](msg_data, self.db)
             except Exception as e:
