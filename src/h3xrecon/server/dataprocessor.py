@@ -198,17 +198,6 @@ class DataProcessor:
                     logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
 
-    
-    # Input format
-    # {
-    #     'program_id': 2,
-    #     'data_type': 'service',
-    #     'data': [{
-    #         "ip":"10.0.0.1",
-    #         "port": 443,
-    #         "protocol": "tcp",
-    #     }]
-    # }
     async def process_service(self, msg_data: Dict[str, Any]):
         #logger.info(msg_data)
         for i in msg_data.get('data'):

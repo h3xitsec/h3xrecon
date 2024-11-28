@@ -2,6 +2,8 @@ from h3xrecon.core import DatabaseManager
 from h3xrecon.core import QueueManager
 from h3xrecon.core import Config
 from h3xrecon.plugins import ReconPlugin
+from h3xrecon.__about__ import __version__
+
 from typing import Dict, Any, Callable
 from loguru import logger
 import json
@@ -16,7 +18,7 @@ class JobProcessor:
     def __init__(self, config: Config):
         self.db = DatabaseManager()
         self.qm = QueueManager(config.nats)
-        self.worker_id = f"jobprocessor-{os.getenv('HOSTNAME')}"
+        self.jobprocessor_id = f"jobprocessor-{os.getenv('HOSTNAME')}"
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
         redis_config = config.redis
         self.redis_client = redis.Redis(
@@ -64,10 +66,8 @@ class JobProcessor:
                 logger.warning(f"Error loading plugin '{module_name}': {e}", exc_info=True)
 
     async def start(self):
-        logger.info(f"Starting Job Processor (ID: {self.worker_id})...")
-        
+        logger.info(f"Starting Job Processor (ID: {self.jobprocessor_id}) version {__version__}...")
         await self.qm.connect()
-
         await self.qm.subscribe(
             subject="function.output",
             stream="FUNCTION_OUTPUT",
