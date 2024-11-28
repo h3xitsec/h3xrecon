@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -6,11 +6,13 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./dist/h3xrecon-0.0.1-py3-none-any.whl /app/h3xrecon-0.0.1-py3-none-any.whl
+COPY ./src/h3xrecon/__about__.py /app/
+
+COPY ./dist/h3xrecon-*.whl /app/
 
 RUN python3 -m venv /app/venv && \
     /app/venv/bin/pip install --upgrade pip && \
-    /app/venv/bin/pip install /app/h3xrecon-0.0.1-py3-none-any.whl
+    /app/venv/bin/pip install /app/h3xrecon-*-py3-none-any.whl
 
 COPY docker/server/entrypoint.sh /entrypoint.sh
 

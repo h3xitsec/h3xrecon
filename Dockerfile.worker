@@ -1,6 +1,6 @@
-ARG SERVER_VERSION="dev"
+ARG VERSION="dev"
 
-FROM ghcr.io/h3xitsec/h3xrecon/server:${SERVER_VERSION}
+FROM ghcr.io/h3xitsec/h3xrecon/server:${VERSION}
 
 ENV PATH="$PATH:/root/go/bin:/root/.pdtm/go/bin:/usr/lib/go-1.15/bin"
 
