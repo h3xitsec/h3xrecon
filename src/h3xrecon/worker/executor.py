@@ -74,7 +74,7 @@ class FunctionExecutor():
             output_data = {
                 "program_id": program_id,
                 "execution_id": execution_id,
-                "source": {"function": func_name, "target": params.get('target'), "force": force_execution},
+                "source": {"function": func_name, "params": params, "force": force_execution},
                 "output": result,
                 "timestamp": timestamp
             }

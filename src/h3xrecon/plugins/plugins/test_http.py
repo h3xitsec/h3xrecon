@@ -59,8 +59,8 @@ class TestHTTP(ReconPlugin):
         self.db = db #DatabaseManager(self.config.database.to_dict())
         self.qm = QueueManager(self.config.nats)
         logger.debug(f"Incoming message:\nObject Type: {type(output_msg)}\nObject:\n{json.dumps(output_msg, indent=4)}")
-        #if not await self.db.check_domain_regex_match(output_msg.get('source').get('target'), output_msg.get('program_id')):
-        #    logger.info(f"Domain {output_msg.get('source').get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
+        #if not await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params', {}).get('target'), output_msg.get('program_id')):
+        #    logger.info(f"Domain {output_msg.get('source', {}).get('params', {}).get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
         #else:
         url_msg = {
             "program_id": output_msg.get('program_id'),

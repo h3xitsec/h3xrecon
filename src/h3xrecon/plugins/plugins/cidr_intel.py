@@ -68,7 +68,7 @@ class CIDRIntel(ReconPlugin):
                         "in_scope": output_msg.get('in_scope')
                     }
                     await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=ip_message)
-                    logger.debug(f"Sent IP {ip} to data processor queue for domain {output_msg.get('source').get('target')}")
+                    logger.debug(f"Sent IP {ip} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
                 except Exception as e:
                     logger.error(f"Error processing IP {ip}: {str(e)}")
             else:
@@ -80,7 +80,7 @@ class CIDRIntel(ReconPlugin):
                 "in_scope": output_msg.get('in_scope')
             }
             await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=domain_message)
-            logger.debug(f"Sent domain {domain} to data processor queue for domain {output_msg.get('source').get('target')}")
+            logger.debug(f"Sent domain {domain} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
         except Exception as e:
             logger.error(f"Error in process_resolved_domain: {str(e)}")
             logger.exception(e)
