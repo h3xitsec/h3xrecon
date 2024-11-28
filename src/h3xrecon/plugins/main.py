@@ -10,7 +10,7 @@ class ReconPlugin(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, target: str) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: dict) -> AsyncGenerator[Dict[str, Any], None]:
         """Execute the recon function on the target."""
         pass
 

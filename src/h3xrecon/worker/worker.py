@@ -6,6 +6,7 @@ from h3xrecon.core import QueueManager
 from h3xrecon.core import DatabaseManager
 from h3xrecon.core import Config
 from h3xrecon.__about__ import __version__
+
 import uuid
 import asyncio
 from datetime import datetime, timezone, timedelta
@@ -29,8 +30,7 @@ class Worker:
         )
 
     async def start(self):
-        logger.info(f"Starting worker (Worker ID: {self.worker_id})...")
-        
+        logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
         try:
             await self.qm.connect()
             await self.qm.subscribe(
@@ -40,7 +40,7 @@ class Worker:
                 message_handler=self.message_handler,
                 batch_size=1
             )
-            logger.info(f"Worker {self.worker_id} listening for messages...")
+            logger.info(f"Worker {self.worker_id} started and listening for messages...")
         except ConnectionError as e:
             logger.error(str(e))
             sys.exit(1)
