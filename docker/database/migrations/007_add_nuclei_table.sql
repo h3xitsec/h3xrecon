@@ -12,3 +12,5 @@ CREATE TABLE IF NOT EXISTS nuclei (
     program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL,
     discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE nuclei ADD CONSTRAINT unique_nuclei_url_matched_at UNIQUE (url, template_id);

@@ -5,12 +5,12 @@ from dataclasses import dataclass, asdict
 import asyncio
 import json
 import os
-
+from dataclasses import field
 # TODO: remove the default template_id
 @dataclass
 class FunctionParams():
     target: str
-    template_id: str = "insecure-cipher-suite-detect"
+    extra_params: list = field(default_factory=list)
 
 @dataclass
 class FunctionOutput():
@@ -57,12 +57,12 @@ class Nuclei(ReconPlugin):
         return output_data
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        function_params = FunctionParams(**params)
-        logger.info(f"Running {self.name} on {function_params.target}")
+        function_params = asdict(FunctionParams(**params))
+        logger.info(f"Running {self.name} on {function_params.get("target", {})}")
         # TODO: add more scan options to be sent from the client
         # FIXME: remove the full path to the nuclei binary
         command = f"""
-            /home/h3x/.pdtm/go/bin/nuclei -u {function_params.target} -j -as
+            /home/h3x/.pdtm/go/bin/nuclei -u {function_params.get("target", {})} -j {" ".join(function_params.get("extra_params", []))}
         """
         logger.debug(f"Running command: {command}")
         process = await asyncio.create_subprocess_shell(

@@ -11,11 +11,11 @@ class TestHTTP(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, target: str, program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {target}")
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+        logger.info(f"Running {self.name} on {params.get("target", {})}")
         command = f"""
             #!/bin/bash
-            httpx -u {target} \
+            httpx -u {params.get("target", {})} \
                 -fr \
                 -silent \
                 -status-code \

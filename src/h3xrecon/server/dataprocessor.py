@@ -71,7 +71,6 @@ class DataProcessor:
             if isinstance(data_item, dict) and data_item.get("data_type") == "url":
                 data_item = data_item.get("data").get("url")
             processor = self.data_type_processors.get(msg.get("data_type"))
-            logger.debug(msg)
             if processor:
                 await processor(msg)
 
@@ -189,10 +188,12 @@ class DataProcessor:
                         #logger.info(f"Hostname {hostname} is not in scope for program {program_name}. Skipping.")
                         return
                     logger.info(f"Processing Nuclei result for program {msg.get('program_id')}: {d.get('matched_at', {})}")
-                    await self.db_manager.insert_nuclei(
+                    inserted = await self.db_manager.insert_nuclei(
                         program_id=msg.get('program_id'),
                         data=d
                     )
+                    if inserted:
+                        logger.info(f"New Nuclei result inserted: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
                 except Exception as e:
                     logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
                     logger.exception(e)

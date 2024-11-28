@@ -9,11 +9,11 @@ class ReverseResolveIP(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, target: str, program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {target}")
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+        logger.info(f"Running {self.name} on {params.get("target", {})}")
         command = f"""
             #!/bin/bash
-            echo "{target}" | dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'
+            echo "{params.get("target", {})}" | dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'
         """
         process = await asyncio.create_subprocess_shell(
             command,

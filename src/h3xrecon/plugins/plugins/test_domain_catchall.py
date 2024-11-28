@@ -32,16 +32,16 @@ class TestDomainCatchall(ReconPlugin):
         except Exception:
             return False
 
-    async def execute(self, target: str, program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {target}")
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+        logger.info(f"Running {self.name} on {params.get("target", {})}")
         
         resolver = dns.resolver.Resolver()
         resolver.nameservers = ['8.8.8.8']  # Using Google's DNS server, you can change this if needed
         
-        is_catchall = self.check_catchall(target, resolver)
+        is_catchall = self.check_catchall(params.get("target", {}), resolver)
         
         result = {
-            "domain": target,
+            "domain": params.get("target", {}),
             "is_catchall": is_catchall
         }
         

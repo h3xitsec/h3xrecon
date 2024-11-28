@@ -600,10 +600,10 @@ class DatabaseManager():
 
             if data and isinstance(data, list) and len(data) > 0:
                 inserted = data[0]['inserted']
-                if inserted:
-                    logger.info(f"New Nuclei hit inserted: {url}")
-                else:
-                    logger.info(f"Nuclei hit updated: {url}")
+                #if inserted:
+                #    logger.info(f"New Nuclei hit inserted: {url}")
+                #else:
+                #    logger.info(f"Nuclei hit updated: {url}")
                 return inserted
             return False
         except Exception as e:
