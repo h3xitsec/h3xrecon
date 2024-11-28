@@ -22,13 +22,31 @@ class QueueManager:
             self.config = config
         logger.debug(f"NATS config: {self.config.url}")
         self._subscriptions = {}
-    
+
     async def connect(self) -> None:
         """Connect to NATS server using environment variables for configuration."""
+        async def disconnected_cb():
+            print("Got disconnected...")
+
+        async def reconnected_cb():
+            print("Got reconnected...")
+
+        async def error_cb(e):
+            print(f"Error connecting to NATS server, retrying...")
+
         try:
             self.nc = NATS()
             nats_server = self.config.url
-            await self.nc.connect(servers=[nats_server])
+            connect_options = {
+                "servers": [self.config.url],
+                "error_cb": error_cb,
+                "disconnected_cb": disconnected_cb,
+                "reconnected_cb": reconnected_cb,
+                "connect_timeout": 5,  # 5 seconds timeout
+                "max_reconnect_attempts": 10,
+                "reconnect_time_wait": 1,  # 1 second between reconnect attempts
+            }
+            await self.nc.connect(**connect_options)
             self.js = self.nc.jetstream()
             logger.debug(f"Connected to NATS server at {nats_server}")
         except Exception as e:
@@ -42,7 +60,11 @@ class QueueManager:
         """Ensure NATS connection is established."""
         logger.debug("Ensuring NATS connection is established")
         if self.nc is None or not self.nc.is_connected:
-            await self.connect()
+            try:
+                await self.connect()
+            except Exception as e:
+                logger.error(f"Failed to connect to NATS: {str(e)}")
+                raise
     
     async def ensure_jetstream(self) -> None:
         """Initialize JetStream if not already initialized."""
@@ -100,7 +122,8 @@ class QueueManager:
             replay_policy=ReplayPolicy.INSTANT,
             max_deliver=1,
             ack_wait=30,
-            filter_subject=subject
+            filter_subject=subject,
+            connect_timeout=1
         )
 
         # Update with custom config if provided
