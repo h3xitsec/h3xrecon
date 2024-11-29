@@ -1,0 +1,9 @@
+- name: Setup Nodes for h3xrecon
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    #- {"name": "Prune dangling docker images", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
+    - {"name": "Install Docker", "ansible.builtin.include_tasks": "tasks/install_docker.yaml"}
+    #- {"name": "Fix docker plugins", "ansible.builtin.include_tasks": "tasks/fix_docker_plugins.yaml"}
