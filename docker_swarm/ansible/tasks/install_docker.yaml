@@ -23,23 +23,6 @@
       - docker.io
     state: present
     update_cache: yes
-
-- name: Install Loki plugin for Docker
-  ansible.builtin.shell: docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions || true
-
-- name: Set Docker logging driver
-  ansible.builtin.copy:
-    content: |
-      {
-        "log-driver": "loki",
-        "log-opts": {
-          "loki-url": "http://loki:3100/loki/api/v1/push"
-        }
-      }
-    dest: /etc/docker/daemon.json
-    owner: root
-    group: root
-    mode: '0644'
     
 - name: Ensure user has permissions to use Docker
   ansible.builtin.shell: usermod -aG docker $USER
