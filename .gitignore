@@ -29,6 +29,7 @@ hosts*.yaml*
 !hosts*.yaml.example
 .ansible_tmp/
 .vaultpass
+tailscale_vault.yaml
 */**/.keys/*
 !*/**/.keys/.placeholder
 
