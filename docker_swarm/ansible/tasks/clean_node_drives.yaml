@@ -1,0 +1,21 @@
+- name: Prune dangling docker images
+  shell: docker image prune -f
+  become: true
+- name: Remove temporary files
+  shell: rm -rf /tmp/*
+  become: true
+- name: Remove apt Cache
+  shell: apt clean
+  become: true
+- block:
+    - name: Get free space on root drive
+      shell: df -h /
+      register: root_drive_space
+    - name: Display free space on root drive
+      ansible.builtin.debug:
+        msg: "{{ root_drive_space.stdout_lines[1].split()[2] }} / {{ root_drive_space.stdout_lines[1].split()[1] }} : {{ root_drive_space.stdout_lines[1].split()[3] }} Free ({{ root_drive_space.stdout_lines[1].split()[4] }})"
+    # - name: Check if free space is less than 10%
+    #   ansible.builtin.compare:
+    #     left: "{{ root_drive_space.stdout_lines[1].split()[3] }}"
+    #     right: "10%"
+    #   register: low_space

@@ -24,7 +24,7 @@
 - name: Authenticate and enable Tailscale
   ansible.builtin.command: >
     tailscale up 
-    --authkey="{{ tailscale_auth_key }}"
+    --authkey="{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
     --advertise-routes="{{ tailscale_subnet_routes }}" 
     --accept-routes=true --reset
   no_log: false

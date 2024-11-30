@@ -1,8 +1,0 @@
-- name: Setup Nodes for h3xrecon
-  hosts: all
-  become: true
-  gather_facts: false
-
-
-  tasks:
-    - {"name": "Test communication with all nodes", "ansible.builtin.include_tasks": "tasks/test_all_nodes.yaml"}
