@@ -1,8 +1,12 @@
+- name: Clean up worker drives
+  hosts: workers
+  tasks:
+    - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
+
 - name: Start h3xrecon stack
   hosts: processor
-  vars_files:
-    - vaults/vault.yaml
   tasks:
+    - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
     - name: Create target directory
       ansible.builtin.file:
         path: "{{ h3xrecon_target_directory }}"
