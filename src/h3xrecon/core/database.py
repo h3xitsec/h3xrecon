@@ -318,7 +318,23 @@ class DatabaseManager():
         ORDER BY p.name;
         """
         return await self._fetch_records(query)
-
+    
+    async def insert_out_of_scope_domain(self, domain: str, program_id: int):
+        try:
+            await self._write_records('''
+                INSERT INTO out_of_scope_domains (domain, program_ids)
+                VALUES ($1, ARRAY[$2]::integer[])
+                ON CONFLICT (domain) 
+                DO UPDATE SET program_ids = 
+                    CASE 
+                        WHEN $2 = ANY(out_of_scope_domains.program_ids) THEN out_of_scope_domains.program_ids
+                        ELSE array_append(out_of_scope_domains.program_ids, $2)
+                    END
+            ''', domain.lower(), program_id)
+            logger.info(f"Out-of-scope domain inserted/updated: {domain} for program {program_id}")
+        except Exception as e:
+            logger.error(f"Error inserting/updating out-of-scope domain in database: {str(e)}")
+            logger.exception(e)
     async def check_domain_regex_match(self, domain: str, program_id: int) -> bool:
         try:
             if isinstance(domain, dict) and 'subdomain' in domain:
