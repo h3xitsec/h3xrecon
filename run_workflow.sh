@@ -32,3 +32,7 @@ while true; do
     printf "$run_status\r"
     sleep 1
 done
+
+for w in $(gh workflow list --json name |jq -r '.[].name'); do
+    gh workflow run $w --ref=$(git branch --no-color -q|grep "*"|awk '{print $2}')
+done
