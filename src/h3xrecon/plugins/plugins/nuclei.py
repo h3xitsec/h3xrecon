@@ -18,6 +18,7 @@ class FunctionOutput():
     type: str
     ip: str
     port: int
+    scheme: str
     template_path: str
     template_id: str
     template_name: str
@@ -83,7 +84,7 @@ class Nuclei(ReconPlugin):
                     type=json_data.get('type', {}),
                     ip=json_data.get('ip', {}),
                     port=json_data.get('port', {}),
-                    scheme=json_data.get('scheme', {}),
+                    scheme=json_data.get('scheme', ""),
                     template_path=json_data.get('template', {}),
                     template_id=json_data.get('template-id', {}),
                     template_name=json_data.get('info', {}).get('name', {}),
@@ -99,22 +100,26 @@ class Nuclei(ReconPlugin):
         from h3xrecon.plugins.helper import send_nuclei_data, send_ip_data, send_domain_data, send_service_data
         from urllib.parse import urlparse
         if output_msg.get('in_scope', False):
-            parsed_url = urlparse(output_msg.get('output').get('url'))
-            await send_domain_data(data=parsed_url.netloc, program_id=output_msg.get('program_id'))
-            await send_nuclei_data(data=output_msg.get('output'), program_id=output_msg.get('program_id'))
+            if output_msg.get('output').get('type') == "http":
+                hostname = urlparse(output_msg.get('output').get('url')).hostname            
+            else:
+                hostname = output_msg.get('output').get('url').split(":")[0]
+            await send_domain_data(data=hostname, program_id=output_msg.get('program_id'))
             await send_ip_data(data=output_msg.get('output').get('ip'), program_id=output_msg.get('program_id'))
+            await send_nuclei_data(data=output_msg.get('output'), program_id=output_msg.get('program_id'))
+            # Find scheme and protocol
+
+            if output_msg.get('output').get('type') == "http":
+                protocol = "tcp"
+                scheme = output_msg.get('output').get('scheme', "")
+            else:
+                protocol = output_msg.get('output').get('type', "")
+                scheme = output_msg.get('output').get('scheme', "")
             service = {
                 "ip": output_msg.get('output').get('ip'),
-                "port": output_msg.get('output').get('port'),
-                "protocol": "tcp",
+                "port": int(output_msg.get('output').get('port')),
+                "protocol": protocol,
                 "state": "open",
-                "service": output_msg.get('output').get('scheme'),
+                "service": scheme,
             }
             await send_service_data(data=service, program_id=output_msg.get('program_id'))
-        # nuclei_msg = {
-        #     "program_id": output_msg.get('program_id'),
-        #     "data_type": "nuclei",
-        #     "data": [output_msg.get('output')]
-        # }
-        # TODO: add more data to send to the dataprocessor (url, domain, ip, service, etc.)
-        #await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=nuclei_msg)
