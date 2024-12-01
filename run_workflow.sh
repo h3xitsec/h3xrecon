@@ -33,6 +33,6 @@ while true; do
     sleep 1
 done
 
-for w in $(gh workflow list --json name |jq -r '.[].name'); do
+for w in $(ls -l ./h3xre.github/workflows|awk '{print $7}'); do
     gh workflow run $w --ref=$(git branch --no-color -q|grep "*"|awk '{print $2}')
 done
