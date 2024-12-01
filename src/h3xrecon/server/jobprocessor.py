@@ -81,7 +81,6 @@ class JobProcessor:
 
     async def message_handler(self, msg):
         try:
-            logger.debug(f"Incoming message:\nObject Type: {type(msg)}\nObject:\n{json.dumps(msg, indent=4)}")
             execution_id = msg['execution_id']
             timestamp = msg['timestamp']
             # Log or update function execution in database

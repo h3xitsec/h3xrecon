@@ -178,22 +178,26 @@ class DataProcessor:
             msg_data = msg.get('data', {})
             for d in msg_data:
                 try:
-                    parsed_url = urlparse(d.get('url'))
-                    hostname = parsed_url.hostname
+                    if d.get("type", "") == 'http':
+                        parsed_url = urlparse(d.get('url', ""))
+                        hostname = parsed_url.hostname
+                    else:
+                        hostname = d.get('url', "").split(":")[0]
                     if not hostname:
-                        logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
-                        return
-                    is_in_scope = await self.db_manager.check_domain_regex_match(hostname, msg.get('program_id'))
-                    if not is_in_scope:
-                        #logger.info(f"Hostname {hostname} is not in scope for program {program_name}. Skipping.")
-                        return
-                    logger.info(f"Processing Nuclei result for program {msg.get('program_id')}: {d.get('matched_at', {})}")
-                    inserted = await self.db_manager.insert_nuclei(
-                        program_id=msg.get('program_id'),
-                        data=d
-                    )
-                    if inserted:
-                        logger.info(f"New Nuclei result inserted: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
+                        logger.error(f"Failed to extract hostname from URL: {d.get('output', {}).get('http', {}).get('url', {})}")
+                        continue
+                    else:
+                        is_in_scope = await self.db_manager.check_domain_regex_match(hostname, msg.get('program_id'))
+                        if is_in_scope:
+                            logger.info(f"Processing Nuclei result for program {msg.get('program_id')}: {d.get('matched_at', {})}")
+                            inserted = await self.db_manager.insert_nuclei(
+                                program_id=msg.get('program_id'),
+                                data=d
+                            )
+                            if inserted:
+                                logger.info(f"New Nuclei result inserted: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
+                        else:
+                            logger.info(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
                 except Exception as e:
                     logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
                     logger.exception(e)

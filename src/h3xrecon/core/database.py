@@ -318,7 +318,23 @@ class DatabaseManager():
         ORDER BY p.name;
         """
         return await self._fetch_records(query)
-
+    
+    async def insert_out_of_scope_domain(self, domain: str, program_id: int):
+        try:
+            await self._write_records('''
+                INSERT INTO out_of_scope_domains (domain, program_ids)
+                VALUES ($1, ARRAY[$2]::integer[])
+                ON CONFLICT (domain) 
+                DO UPDATE SET program_ids = 
+                    CASE 
+                        WHEN $2 = ANY(out_of_scope_domains.program_ids) THEN out_of_scope_domains.program_ids
+                        ELSE array_append(out_of_scope_domains.program_ids, $2)
+                    END
+            ''', domain.lower(), program_id)
+            logger.info(f"Out-of-scope domain inserted/updated: {domain} for program {program_id}")
+        except Exception as e:
+            logger.error(f"Error inserting/updating out-of-scope domain in database: {str(e)}")
+            logger.exception(e)
     async def check_domain_regex_match(self, domain: str, program_id: int) -> bool:
         try:
             if isinstance(domain, dict) and 'subdomain' in domain:
@@ -341,6 +357,40 @@ class DatabaseManager():
             return False
         finally:
             logger.debug("Exiting check_domain_regex_match method")
+
+    async def insert_ip(self, ip: str, ptr: str, program_id: int) -> bool:
+        query = """
+        INSERT INTO ips (ip, ptr, program_id)
+        VALUES ($1, LOWER($2), $3)
+        ON CONFLICT (ip) DO UPDATE
+        SET ptr = CASE
+                WHEN EXCLUDED.ptr IS NOT NULL AND EXCLUDED.ptr <> '' THEN EXCLUDED.ptr
+                ELSE ips.ptr
+            END,
+            program_id = EXCLUDED.program_id,
+            discovered_at = CURRENT_TIMESTAMP
+        RETURNING id, (xmax = 0) AS inserted
+        """
+        try:
+            result = await self._write_records(query, ip, ptr, program_id)
+            
+            # Handle nested DbResult objects
+            if result.success and isinstance(result.data, DbResult):
+                data = result.data.data
+            else:
+                data = result.data
+
+            if data and isinstance(data, list) and len(data) > 0:
+                inserted = data[0]['inserted']
+                if inserted:
+                    logger.info(f"New IP inserted: {ip}")
+                else:
+                    logger.info(f"IP updated: {ip}")
+                return inserted
+            return False
+        except Exception as e:
+            logger.error(f"Error inserting IP: {e}")
+            return False
     
     async def insert_service(self, ip: str, program_id: int, port: int = None, protocol: str = None, service: str = None) -> bool:
         try:
