@@ -19,15 +19,13 @@ class ReconPlugin(ABC):
         """Helper method to read and process subprocess output."""
         while True:
             try:
-                # Increase buffer limit to handle larger outputs
-                line = await process.stdout.readuntil(b'\n', limit=1024*1024)  # 1MB buffer
+                line = await process.stdout.readuntil(b'\n')
                 output = line.decode().strip()
                 if output:
                     yield output
             except asyncio.exceptions.IncompleteReadError:
                 break
             except asyncio.exceptions.LimitOverrunError:
-                # If we hit the limit, read the remaining data
                 partial = await process.stdout.read(1024*1024)
                 if partial:
                     output = partial.decode().strip()
