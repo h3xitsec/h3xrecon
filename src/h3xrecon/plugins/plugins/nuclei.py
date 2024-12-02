@@ -64,7 +64,7 @@ class Nuclei(ReconPlugin):
         function_params = asdict(FunctionParams(**params))
         logger.info(f"Running {self.name} on {function_params.get("target", {})}")
         command = f"""
-            nuclei -u {function_params.get("target", {})} -j {" ".join(function_params.get("extra_params", []))}
+            nuclei -or -u {function_params.get("target", {})} -j {" ".join(function_params.get("extra_params", []))}
         """
         logger.debug(f"Running command: {command}")
         process = await asyncio.create_subprocess_shell(
