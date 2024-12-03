@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Dict, Any
+from loguru import logger
 import asyncio
 
 class ReconPlugin(ABC):
