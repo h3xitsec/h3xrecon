@@ -4,7 +4,7 @@ from typing import Dict, Any
 config = Config()
 helper_qm = QueueManager(config.nats)
 
-async def send_nuclei_data(data: str, program_id: int):
+async def send_nuclei_data(data: Dict[str, Any], program_id: int):
     
     msg = {
         "program_id": program_id,
@@ -13,17 +13,16 @@ async def send_nuclei_data(data: str, program_id: int):
     }
     await helper_qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
 
-async def send_domain_data(data: str, program_id: int, attributes: Dict[str, Any] = None):
+async def send_domain_data(data: Dict[str, Any], program_id: int):
     
     msg = {
         "program_id": program_id,
         "data_type": "domain",
-        "data": [data],
-        "attributes": attributes
+        "data": [data]
     }
     await helper_qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
 
-async def send_ip_data(data: str, program_id: int):
+async def send_ip_data(data: Dict[str, Any], program_id: int):
     
     msg = {
         "program_id": program_id,
@@ -32,7 +31,7 @@ async def send_ip_data(data: str, program_id: int):
     }
     await helper_qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
 
-async def send_service_data(data: str, program_id: int):
+async def send_service_data(data: Dict[str, Any], program_id: int):
 
     msg = {
         "program_id": program_id,

@@ -1,10 +1,6 @@
-FROM python:3.12-slim
+ARG VERSION="dev"
 
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+FROM ghcr.io/h3xitsec/h3xrecon/server:${VERSION}
 
 ENV PATH="$PATH:/root/go/bin:/root/.pdtm/go/bin:/usr/lib/go-1.15/bin"
 
@@ -28,17 +24,5 @@ RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
 RUN go install github.com/Josue87/gotator@latest
 
 RUN go install -v github.com/owasp-amass/amass/v4/...@master
-
-COPY ./src/h3xrecon/__about__.py /app/
-
-COPY ./dist/h3xrecon-*.whl /app/
-
-RUN python3 -m venv /app/venv && \
-    /app/venv/bin/pip install --upgrade pip && \
-    /app/venv/bin/pip install /app/h3xrecon-*-py3-none-any.whl
-
-ENV PYTHONUNBUFFERED=1
-
-ENV PYTHONFAULTHANDLER=1
 
 ENTRYPOINT ["/app/venv/bin/python", "-m", "h3xrecon.worker.worker"]
