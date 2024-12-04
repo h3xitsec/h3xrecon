@@ -150,6 +150,35 @@ def sample_resolve_domain_output_with_cnames():
         "timestamp": "2024-12-04T14:40:45.978092+00:00"
     }
 
+@pytest.fixture
+def sample_reverse_resolve_ip_execute_output_with_single_ptr():
+    return "ptr.example.com"
+
+@pytest.fixture
+def sample_reverse_resolve_ip_execute_output_with_multiple_ptrs():
+    return """ptr.example.com
+ptr2.example.com
+"""
+
+@pytest.fixture
+def sample_reverse_resolve_ip_output():
+    return {
+        "program_id": 206,
+        "execution_id": "c38ba702-069f-4f1b-bb7a-519460143952",
+        "source": {
+            "function": "reverse_resolve_ip",
+            "params": {
+                "target": "1.1.1.1",
+                "extra_params": []
+            },
+            "force": False
+        },
+        "output": {
+            "domain": "one.one.one.one"
+        },
+        "timestamp": "2024-12-04T15:15:03.268588+00:00"
+    }
+
 ## Nuclei Fixtures
 @pytest.fixture
 def sample_nuclei_execute_output():
