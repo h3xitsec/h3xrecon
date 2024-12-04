@@ -1,7 +1,7 @@
 import os
 import sys
 from loguru import logger
-from .executor import FunctionExecutor
+from h3xrecon.worker.executor import FunctionExecutor
 from h3xrecon.core import QueueManager
 from h3xrecon.core import DatabaseManager
 from h3xrecon.core import Config
