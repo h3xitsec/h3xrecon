@@ -57,7 +57,38 @@ class TestReverseResolveIPPlugin:
         result = results[0]
         assert result == {"domain": "ptr.example.com"}
 
-
+    # Test that reverse_resolve_ip execute method correctly parses multiple PTRs
+    async def test_reverse_resolve_ip_execute_with_multiple_ptrs(self, reverse_resolve_ip_plugin, mock_process_factory, sample_reverse_resolve_ip_execute_output_with_multiple_ptrs):
+        """
+        Test the execute method with valid JSON output.
+        """
+        # Prepare test data as individual JSON bytes
+        test_data = [
+            (json.dumps(ptr) + '\n').encode() for ptr in sample_reverse_resolve_ip_execute_output_with_multiple_ptrs
+        ]
+        
+        # Create mock process using the factory
+        mock_process = mock_process_factory(test_data)
+        
+        # Patch the _read_subprocess_output method to use our mock process
+        reverse_resolve_ip_plugin._read_subprocess_output = lambda p: self._mock_read_subprocess_output(p, test_data)
+        
+        # Prepare parameters for executionc
+        params = {
+            "target": "1.1.1.1"
+        }
+        
+        # Collect results from execute method
+        results = []
+        async for result in reverse_resolve_ip_plugin.execute(params):
+            results.append(result)
+        
+        # Assert we got the expected number of results
+        assert len(results) == 2
+        
+        # Verify the results match expected output
+        assert results[0] == {"domain": "ptr.example.com"}
+        assert results[1] == {"domain": "ptr2.example.com"}
 
     # Test that process_output correctly calls helper functions with valid output_msg.
     @patch('h3xrecon.plugins.plugins.reverse_resolve_ip.send_domain_data', new_callable=AsyncMock)

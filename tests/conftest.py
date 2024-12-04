@@ -156,9 +156,10 @@ def sample_reverse_resolve_ip_execute_output_with_single_ptr():
 
 @pytest.fixture
 def sample_reverse_resolve_ip_execute_output_with_multiple_ptrs():
-    return """ptr.example.com
-ptr2.example.com
-"""
+    return [
+        "ptr.example.com",
+        "ptr2.example.com"
+    ]
 
 @pytest.fixture
 def sample_reverse_resolve_ip_output():
