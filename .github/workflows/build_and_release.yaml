@@ -28,6 +28,8 @@ jobs:
       - name: Get versions from __about__.py
         id: get_version
         run: |
+          pwd
+          ls -l
           python -c "
           import os
 
