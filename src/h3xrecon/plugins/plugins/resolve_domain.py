@@ -52,7 +52,7 @@ class ResolveDomain(ReconPlugin):
             else:
                 logger.warning(f"Unexpected IP format: {output_msg.get('output').get('a_records')}")
             #if output_msg.get('output', {}).get('cnames'):
-            await send_domain_data(data=[output_msg.get('source', {}).get('params', {}).get('target')], program_id=output_msg.get('program_id'), attributes={"cnames": output_msg.get('output', {}).get('cnames'), "ips": output_msg.get('output', {}).get('a_records')})
+            await send_domain_data(data=output_msg.get('source', {}).get('params', {}).get('target'), program_id=output_msg.get('program_id'), attributes={"cnames": output_msg.get('output', {}).get('cnames'), "ips": output_msg.get('output', {}).get('a_records')})
             logger.debug(f"Sent domain {output_msg.get('output').get('cnames')} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
             #else:
             #    logger.info(f"Domain {output_msg.get('output').get('host')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
