@@ -88,12 +88,12 @@ class JobProcessor:
             
             function_name = msg.get("source", {}).get("function")
             if function_name:
-                target = msg.get('source', {}).get('params', {}).get('target')
-                program_id = msg.get('program_id')
-                msg['in_scope'] = await self.db.check_domain_regex_match(
-                                               domain=target,
-                                               program_id=program_id
-                                           )
+                #target = msg.get('source', {}).get('params', {}).get('target')
+                #program_id = msg.get('program_id')
+                #msg['in_scope'] = await self.db.check_domain_regex_match(
+                #                               domain=target,
+                #                               program_id=program_id
+                #                           )
                 await self.process_function_output(msg)
             
         except Exception as e:
