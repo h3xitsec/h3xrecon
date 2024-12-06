@@ -39,7 +39,11 @@ jobs:
           else:
               print('Error: __about__.py not found')
           " >> $GITHUB_OUTPUT
-
+      
+      - name: Build package
+        run: |
+          python -m hatchling build
+      
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
