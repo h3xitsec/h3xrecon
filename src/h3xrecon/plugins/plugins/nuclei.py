@@ -16,16 +16,21 @@ class FunctionParams():
     extra_params: list = field(default_factory=list)
 
 class FunctionOutput(BaseModel):
-    url: Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')  # Validates HTTP(S) URL or IP:Port
-    matched_at: Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')  # Validates HTTP(S) URL or IP:Port
-    type: str = Field(pattern='^(http|tcp|udp)$')  # Restricts to specific protocols
-    ip: IPvAnyAddress  # Validates IPv4 or IPv6 addresses
-    port: int = Field(ge=1, le=65535)  # Port range validation
-    scheme: Optional[str] = Field(default=None, pattern='^(http|https|ftp|ssh|tcp|udp)?$')  # Common schemes, optional
+    url: Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')
+    matched_at: Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')
+    type: str = Field(pattern='^(http|tcp|udp)$')
+    ip: str = Field(pattern=r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]+$')
+    port: int = Field(ge=1, le=65535)
+    scheme: Optional[str] = Field(default=None, pattern='^(http|https|ftp|ssh|tcp|udp)?$')
     template_path: str
     template_id: str
     template_name: str
-    severity: str = Field(pattern='^(info|low|medium|high|critical)$')  # Standard severity levels
+    severity: str = Field(pattern='^(info|low|medium|high|critical)$')
+
+    class Config:
+        json_encoders = {
+            IPvAnyAddress: str
+        }
 
 class Nuclei(ReconPlugin):
     @property
@@ -34,9 +39,9 @@ class Nuclei(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
         function_params = asdict(FunctionParams(**params))
-        logger.info(f"Running {self.name} on {function_params.get("target", {})}")
+        logger.info(f"Running {self.name} on {function_params.get('target', {})}")
         command = f"""
-            nuclei -or -u {function_params.get("target", {})} -j {" ".join(function_params.get("extra_params", []))}
+            nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}
         """
         logger.debug(f"Running command: {command}")
         process = await asyncio.create_subprocess_shell(
@@ -50,11 +55,12 @@ class Nuclei(ReconPlugin):
             try:
                 json_data = json.loads(output)
                 logger.debug(f"Nuclei output: {json_data}")
+                ip_str = str(json_data.get('ip', ''))
                 nuclei_output = FunctionOutput(
                     url=json_data.get('url', ''),
                     matched_at=json_data.get('matched-at', ''),
                     type=json_data.get('type', ''),
-                    ip=json_data.get('ip', ''),
+                    ip=ip_str,
                     port=json_data.get('port', 0),
                     scheme=json_data.get('scheme', ''),
                     template_path=json_data.get('template', ''),

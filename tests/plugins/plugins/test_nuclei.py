@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from h3xrecon.plugins.plugins.nuclei import Nuclei
+from h3xrecon.plugins.plugins.nuclei import Nuclei, FunctionOutput
 import asyncio
 import json
 @pytest.fixture
@@ -223,3 +223,42 @@ class TestNucleiPlugin:
         mock_send_ip_data.assert_not_awaited()
         mock_send_nuclei_data.assert_not_awaited()
         mock_send_service_data.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_nuclei_output_serialization(self, nuclei_plugin):
+        """Test that the nuclei output can be properly serialized to JSON"""
+        # Create a FunctionOutput object with an IP (this simulates what happens in execute())
+        nuclei_output = FunctionOutput(
+            url="https://example.com",
+            matched_at="https://example.com",
+            type="http",
+            ip="1.2.3.4",  # This gets converted to IPv4Address by Pydantic
+            port=443,
+            scheme="https",
+            template_path="/path/to/template",
+            template_id="template-id",
+            template_name="Template Name",
+            severity="info"
+        )
+        
+        # Simulate the worker's message structure
+        worker_message = {
+            'program_id': 1,
+            'execution_id': 'test-execution',
+            'source': {
+                'function': 'nuclei',
+                'params': {'target': 'example.com'}
+            },
+            'output': nuclei_output.model_dump(),  # This is what actually happens in execute()
+            'in_scope': True
+        }
+        
+        # Try to serialize the entire message
+        try:
+            json_str = json.dumps(worker_message)
+        except TypeError as e:
+            pytest.fail(f"Failed to serialize worker message: {e}")
+        
+        # Verify we can deserialize it back
+        parsed = json.loads(json_str)
+        assert isinstance(parsed['output']['ip'], str)
