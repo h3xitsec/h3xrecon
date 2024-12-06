@@ -88,11 +88,11 @@ class TestHTTP(ReconPlugin):
         service_msg = {
             "program_id": output_msg.get('program_id'),
             "data_type": "service",
-            "data": {
+            "data": [{
                 "ip": output_msg.get('output').get('host'),
                 "port": int(output_msg.get('output').get('port')),
                 "protocol": "tcp",
                 "service": output_msg.get('output').get('scheme')
-            }
+            }]
         }
         await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=service_msg)

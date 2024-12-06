@@ -59,10 +59,10 @@ class PortScan(ReconPlugin):
             service_msg = {
                 "program_id": output_msg.get('program_id'),
                 "data_type": "service",
-                "data": {
+                "data": [{
                     "ip": service.get('ip'),
                     "port": int(service.get('port')),
                     "protocol": service.get('protocol')
-                }
+                }]
             }
             await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=service_msg)
