@@ -107,7 +107,7 @@ class TestReverseResolveIPPlugin:
     
         # Assert helper functions are called once each with correct parameters
         mock_send_domain_data.assert_awaited_once_with(
-            data=[sample_reverse_resolve_ip_output['output']['domain']],
+            data=sample_reverse_resolve_ip_output['output']['domain'],
             program_id=sample_reverse_resolve_ip_output['program_id']
         )
         mock_send_ip_data.assert_awaited_once_with(
