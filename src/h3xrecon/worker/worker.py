@@ -1,16 +1,27 @@
 import os
 import sys
 from loguru import logger
-from .executor import FunctionExecutor
+from h3xrecon.worker.executor import FunctionExecutor
 from h3xrecon.core import QueueManager
 from h3xrecon.core import DatabaseManager
 from h3xrecon.core import Config
 from h3xrecon.__about__ import __version__
 
+from dataclasses import dataclass
+from typing import Dict, Any, List
+import importlib
+import pkgutil
 import uuid
 import asyncio
 from datetime import datetime, timezone, timedelta
 import redis
+
+@dataclass
+class FunctionExecutionRequest:
+    function_name: str
+    program_id: int
+    params: Dict[str, Any]
+    force: bool
 
 class Worker:
     def __init__(self, config: Config):
@@ -28,6 +39,29 @@ class Worker:
             db=config.redis.db,
             password=config.redis.password
         )
+
+    async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
+        # Validate function_name is a valid plugin
+        try:
+            # Dynamically import plugins to check if the function_name is valid
+            plugins_package = 'h3xrecon.plugins.plugins'
+            plugin_found = False
+            
+            plugin_found = function_execution_request.function_name in self.function_executor.function_map
+            if not plugin_found:
+                raise ValueError(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found.")
+        
+        except Exception as e:
+            raise ValueError(f"Error validating function_name: {str(e)}")
+        
+        # Validate program_name exists in the database
+        try:
+            program_name = await self.db.get_program_name(function_execution_request.program_id)
+            if not program_name:
+                raise ValueError(f"Invalid program_id: {function_execution_request.program_id}. Program not found in database.")
+        
+        except Exception as e:
+            raise ValueError(f"Error validating program_name: {str(e)}")
 
     async def start(self):
         logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
@@ -48,39 +82,47 @@ class Worker:
             logger.error(f"Failed to start worker: {str(e)}")
             sys.exit(1)
 
-    async def should_execute(self, msg) -> bool:
-        data = msg
-        redis_key = f"{data.get('function')}:{data.get('params', {}).get('target')}"
+    async def should_execute(self, function_execution_request: FunctionExecutionRequest) -> bool:
+        data = function_execution_request
+        redis_key = f"{data.function_name}:{data.params.get('target')}"
         last_execution = self.redis_client.get(redis_key)
         if last_execution:
             last_execution_time = datetime.fromisoformat(last_execution.decode())
             time_since_last_execution = datetime.now(timezone.utc) - last_execution_time
             skip = not time_since_last_execution > self.execution_threshold
             if skip:
-                logger.info(f"Skipping {data.get('function')} on {data.get('params', {}).get('target')} : executed recently.")
+                logger.info(f"Skipping {data.function_name} on {data.params.get('target')} : executed recently.")
             else:
-                logger.info(f"Running {data.get('function')} on {data.get('params', {}).get('target')} ({data.get('execution_id')})")
+                logger.info(f"Running {data.function_name} on {data.params.get('target')} ({data.execution_id})")
             return not skip
         return True
 
     async def message_handler(self, msg):
         try:
-            if not msg.get("force", False):
-                if not await self.should_execute(msg):
+            logger.debug(msg)
+            function_execution_request = FunctionExecutionRequest(
+                program_id=msg.get('program_id'),
+                function_name=msg.get('function'),
+                params=msg.get('params'),
+                force=msg.get("force", False)
+            )
+            await self.validate_function_execution_request(function_execution_request)
+            if not function_execution_request.force:
+                if not await self.should_execute(function_execution_request):
                     return
             
             execution_id = msg.get("execution_id", str(uuid.uuid4()))
-
             async for result in self.function_executor.execute_function(
-                    func_name=msg["function"],
-                    params=msg["params"],
-                    program_id=msg["program_id"],
+                    func_name=function_execution_request.function_name,
+                    params=function_execution_request.params,
+                    program_id=function_execution_request.program_id,
                     execution_id=execution_id,
                     timestamp=msg.get("timestamp", datetime.now(timezone.utc).isoformat()),
-                    force_execution=msg.get("force_execution", False)
+                    force_execution=function_execution_request.force
                 ):
                 pass
-                    
+        except ValueError as e:
+            logger.error(f"{e}")
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             logger.exception(e)
