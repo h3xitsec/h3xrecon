@@ -76,27 +76,27 @@ class Nuclei(ReconPlugin):
         await process.wait()
     
     async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        if output_msg.get('in_scope', False):
-            if output_msg.get('output', {}).get('type', "") == "http":
-                hostname = urlparse(output_msg.get('output', {}).get('url', "")).hostname            
-            else:
-                hostname = output_msg.get('output', {}).get('url', "").split(":")[0]
-            await send_domain_data(data=hostname, program_id=output_msg.get('program_id'))
-            await send_ip_data(data=output_msg.get('output', {}).get('ip', ""), program_id=output_msg.get('program_id'))
-            await send_nuclei_data(data=output_msg.get('output', {}), program_id=output_msg.get('program_id'))
-            # Find scheme and protocol
+        #if output_msg.get('in_scope', False):
+        if output_msg.get('output', {}).get('type', "") == "http":
+            hostname = urlparse(output_msg.get('output', {}).get('url', "")).hostname            
+        else:
+            hostname = output_msg.get('output', {}).get('url', "").split(":")[0]
+        await send_domain_data(data=hostname, program_id=output_msg.get('program_id'))
+        await send_ip_data(data=output_msg.get('output', {}).get('ip', ""), program_id=output_msg.get('program_id'))
+        await send_nuclei_data(data=output_msg.get('output', {}), program_id=output_msg.get('program_id'))
+        # Find scheme and protocol
 
-            if output_msg.get('output').get('type') == "http":
-                protocol = "tcp"
-                scheme = output_msg.get('output').get('scheme', "")
-            else:
-                protocol = output_msg.get('output').get('type', "")
-                scheme = output_msg.get('output').get('scheme', "")
-            service = {
-                "ip": output_msg.get('output').get('ip'),
-                "port": int(output_msg.get('output').get('port')),
-                "protocol": protocol,
-                "state": "open",
-                "service": scheme,
-            }
-            await send_service_data(data=service, program_id=output_msg.get('program_id'))
+        if output_msg.get('output').get('type') == "http":
+            protocol = "tcp"
+            scheme = output_msg.get('output').get('scheme', "")
+        else:
+            protocol = output_msg.get('output').get('type', "")
+            scheme = output_msg.get('output').get('scheme', "")
+        service = {
+            "ip": output_msg.get('output').get('ip'),
+            "port": int(output_msg.get('output').get('port')),
+            "protocol": protocol,
+            "state": "open",
+            "service": scheme,
+        }
+        await send_service_data(data=service, program_id=output_msg.get('program_id'))

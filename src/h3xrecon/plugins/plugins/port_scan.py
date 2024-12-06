@@ -57,9 +57,9 @@ class PortScan(ReconPlugin):
         self.config = Config()
         self.qm = QueueManager(self.config.nats)
         for service in output_msg.get('output', []):
-            await send_service_data(
-                ip=service.get('ip'),
-                port=int(service.get('port')),
-                protocol=service.get('protocol'),
-                program_id=output_msg.get('program_id')
-            )
+            await send_service_data(data={
+                "ip": service.get('ip'),
+                "port": int(service.get('port')),
+                "protocol": service.get('protocol'),
+                "program_id": output_msg.get('program_id')
+            }, program_id=output_msg.get('program_id'))

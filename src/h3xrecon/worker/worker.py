@@ -44,11 +44,13 @@ class Worker:
         # Validate function_name is a valid plugin
         try:
             # Dynamically import plugins to check if the function_name is valid
-            plugins_package = 'h3xrecon.plugins.plugins'
             plugin_found = False
             
-            plugin_found = function_execution_request.function_name in self.function_executor.function_map
+            # Check if the function name exists in the function map keys
+            plugin_found = any(function_execution_request.function_name in key for key in self.function_executor.function_map.keys())
+            
             if not plugin_found:
+                logger.debug(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found in {list(self.function_executor.function_map.keys())}")
                 raise ValueError(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found.")
         
         except Exception as e:

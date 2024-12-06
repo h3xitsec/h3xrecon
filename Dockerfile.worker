@@ -29,6 +29,8 @@ RUN go install github.com/Josue87/gotator@latest
 
 RUN go install -v github.com/owasp-amass/amass/v4/...@master
 
+COPY ./docker/worker/permutations.txt /app/Worker/files/permutations.txt
+
 COPY ./src/h3xrecon/__about__.py /app/
 
 COPY ./dist/h3xrecon-*.whl /app/

@@ -31,4 +31,5 @@ class FindSubdomainsSubfinder(ReconPlugin):
         logger.info(f"Finished {self.name} on {params.get("target", {})}")
     
     async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        await send_domain_data(data=output_msg.get('output', {}).get('subdomain'), program_id=output_msg.get('program_id'))
+        for subdomain in output_msg.get('output', {}).get('subdomain', []):
+            await send_domain_data(data=subdomain, program_id=output_msg.get('program_id'))

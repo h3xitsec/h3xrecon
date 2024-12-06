@@ -80,9 +80,8 @@ class TestHTTP(ReconPlugin):
         for domain in domains_to_add:
             if domain:
                 await send_domain_data(data=domain, program_id=output_msg.get('program_id'))
-        await send_service_data(
-            ip=output_msg.get('output').get('host'), 
-            port=output_msg.get('output').get('port'), 
-            protocol="tcp", 
-            program_id=output_msg.get('program_id')
-        )
+        await send_service_data(data={
+                "ip": output_msg.get('output').get('host'), 
+                "port": int(output_msg.get('output').get('port')), 
+                "protocol": "tcp"
+        }, program_id=output_msg.get('program_id'))

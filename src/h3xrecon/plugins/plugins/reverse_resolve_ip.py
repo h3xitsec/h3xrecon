@@ -24,6 +24,7 @@ class ReverseResolveIP(ReconPlugin):
         )
         
         async for output in self._read_subprocess_output(process):
+            logger.debug(output)
             yield {"domain": output.strip().strip('"')}
 
         await process.wait()
