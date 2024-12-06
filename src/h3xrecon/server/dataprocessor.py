@@ -127,11 +127,15 @@ class DataProcessor:
                 logger.info(f"Domain {domain} is not part of program {msg_data.get('program_id')}. Skipping processing.")
                 continue
             else:
+                if msg_data.get('attributes') == None:
+                    attributes = {}
+                else:
+                    attributes = msg_data.get('attributes')
                 inserted = await self.db_manager.insert_domain(
                     domain=domain, 
-                    ips=msg_data.get('attributes', {}).get('ips'), 
-                    cnames=msg_data.get('attributes', {}).get('cnames'), 
-                    is_catchall=msg_data.get('attributes', {}).get('is_catchall'), 
+                    ips=attributes.get('ips', []), 
+                    cnames=attributes.get('cnames', []), 
+                    is_catchall=attributes.get('is_catchall', False), 
                     program_id=msg_data.get('program_id')
                 )
             if inserted:
@@ -204,10 +208,9 @@ class DataProcessor:
 
     async def process_service(self, msg_data: Dict[str, Any]):
         #logger.info(msg_data)
+        if not isinstance(msg_data.get('data'), list):
+            msg_data['data'] = [msg_data.get('data')]
         for i in msg_data.get('data'):
-            if isinstance(i, str):
-                i = json.loads(i)
-            logger.debug(i)
             inserted = await self.db_manager.insert_service(ip=i.get("ip"), port=i.get("port"), protocol=i.get("protocol"), program_id=msg_data.get('program_id'), service=i.get("service"))
             #if inserted:
             #    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)

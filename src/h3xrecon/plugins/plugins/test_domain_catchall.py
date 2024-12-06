@@ -1,6 +1,7 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import *
+from h3xrecon.plugins.helper import send_domain_data
 from loguru import logger
 import os
 import dns.resolver
@@ -53,14 +54,16 @@ class TestDomainCatchall(ReconPlugin):
         self.qm = QueueManager(self.config.nats)
         #if await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params',{}).get('target'), output_msg.get('program_id')):
         logger.info(f"Domain {output_msg.get('source', {}).get('params',{}).get('target')} is part of program {output_msg.get('program_id')}. Sending to data processor.")
-        msg = {
-            "program_id": output_msg.get('program_id'),
-            "data_type": "domain",
-            "data": [output_msg.get('output', {}).get('domain')],
-            "attributes": {
-                "is_catchall": output_msg.get('output', {}).get('is_catchall')
-            }
-        }
-        await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+        await send_domain_data(data=output_msg.get('output', {}).get('domain'), program_id=output_msg.get('program_id'), attributes={"is_catchall": output_msg.get('output', {}).get('is_catchall')})
+        # msg = {
+        #     "program_id": output_msg.get('program_id'),
+        #     "data_type": "domain",
+        #     "data": output_msg.get('output', {}).get('domain'),
+        #     "attributes": {
+        #         "is_catchall": output_msg.get('output', {}).get('is_catchall')
+        #     }
+        # }
+        # await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+
         # else:
         #     logger.info(f"Domain {output_msg.get('source', {}).get('params',{}).get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")

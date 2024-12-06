@@ -1,6 +1,7 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import *
+from h3xrecon.plugins.helper import send_domain_data, send_ip_data
 from loguru import logger
 import asyncio
 import json
@@ -61,25 +62,13 @@ class CIDRIntel(ReconPlugin):
             ip = output_msg.get('output').get('ip')
             if isinstance(ip, str):
                 try:
-                    ip_message = {
-                        "program_id": output_msg.get('program_id'),
-                        "data_type": "ip",
-                        "data": [ip],
-                        "in_scope": output_msg.get('in_scope')
-                    }
-                    await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=ip_message)
+                    await send_ip_data(data=ip, program_id=output_msg.get('program_id'))
                     logger.debug(f"Sent IP {ip} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
                 except Exception as e:
                     logger.error(f"Error processing IP {ip}: {str(e)}")
             else:
                 logger.warning(f"Unexpected IP format: {ip}")
-            domain_message = {
-                "program_id": output_msg.get('program_id'),
-                "data_type": "domain",
-                "data": [domain],
-                "in_scope": output_msg.get('in_scope')
-            }
-            await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=domain_message)
+            await send_domain_data(data=domain, program_id=output_msg.get('program_id'))
             logger.debug(f"Sent domain {domain} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
         except Exception as e:
             logger.error(f"Error in process_resolved_domain: {str(e)}")

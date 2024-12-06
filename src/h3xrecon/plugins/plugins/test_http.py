@@ -1,6 +1,7 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import *
+from h3xrecon.plugins.helper import send_url_data, send_domain_data, send_service_data
 from loguru import logger
 import asyncio
 import json
@@ -78,21 +79,9 @@ class TestHTTP(ReconPlugin):
         logger.debug(domains_to_add)
         for domain in domains_to_add:
             if domain:
-                domain_msg = {
-                    "program_id": output_msg.get('program_id'),
-                    "data_type": "domain",
-                    "data": [domain]
-                }
-                await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=domain_msg)
-
-        service_msg = {
-            "program_id": output_msg.get('program_id'),
-            "data_type": "service",
-            "data": [{
-                "ip": output_msg.get('output').get('host'),
-                "port": int(output_msg.get('output').get('port')),
-                "protocol": "tcp",
-                "service": output_msg.get('output').get('scheme')
-            }]
-        }
-        await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=service_msg)
+                await send_domain_data(data=domain, program_id=output_msg.get('program_id'))
+        await send_service_data(data={
+                "ip": output_msg.get('output').get('host'), 
+                "port": int(output_msg.get('output').get('port')), 
+                "protocol": "tcp"
+        }, program_id=output_msg.get('program_id'))
