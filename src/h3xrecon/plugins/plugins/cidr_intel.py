@@ -64,7 +64,7 @@ class CIDRIntel(ReconPlugin):
                     ip_message = {
                         "program_id": output_msg.get('program_id'),
                         "data_type": "ip",
-                        "data": [ip],
+                        "data": ip,
                         "in_scope": output_msg.get('in_scope')
                     }
                     await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=ip_message)
@@ -76,7 +76,7 @@ class CIDRIntel(ReconPlugin):
             domain_message = {
                 "program_id": output_msg.get('program_id'),
                 "data_type": "domain",
-                "data": [domain],
+                "data": domain,
                 "in_scope": output_msg.get('in_scope')
             }
             await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=domain_message)

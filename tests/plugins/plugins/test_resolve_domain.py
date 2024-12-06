@@ -111,7 +111,7 @@ class TestResolveDomainPlugin:
     
         # Assert helper functions are called once each with correct parameters
         mock_send_domain_data.assert_awaited_once_with(
-            data=[sample_resolve_domain_output_without_cnames['output']['host']],
+            data=sample_resolve_domain_output_without_cnames['output']['host'],
             program_id=sample_resolve_domain_output_without_cnames['program_id'],
             attributes={"cnames": sample_resolve_domain_output_without_cnames['output']['cnames'], "ips": sample_resolve_domain_output_without_cnames['output']['a_records']}
         )
@@ -137,7 +137,7 @@ class TestResolveDomainPlugin:
     
         # Assert helper functions are called once each with correct parameters
         mock_send_domain_data.assert_awaited_once_with(
-            data=[sample_resolve_domain_output_with_cnames['output']['host']],
+            data=sample_resolve_domain_output_with_cnames['output']['host'],
             program_id=sample_resolve_domain_output_with_cnames['program_id'],
             attributes={"cnames": sample_resolve_domain_output_with_cnames['output']['cnames'], "ips": sample_resolve_domain_output_with_cnames['output']['a_records']}
         )
