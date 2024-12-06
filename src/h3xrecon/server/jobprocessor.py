@@ -4,9 +4,8 @@ from h3xrecon.core import Config
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
 
-from typing import Dict, Any, Callable, List
+from typing import Dict, Any, Callable
 from loguru import logger
-from dataclasses import dataclass
 import json
 import os
 import traceback
@@ -14,49 +13,6 @@ import importlib
 import pkgutil
 import redis
 import asyncio
-
-from uuid import UUID
-from datetime import datetime
-
-@dataclass
-class FunctionExecution:
-    execution_id: str
-    timestamp: str
-    program_id: int
-    source: Dict[str, Any]
-    output: List[Dict[str, Any]]
-
-    def __post_init__(self):
-        # Validate execution_id is a valid UUID
-        try:
-            UUID(self.execution_id)
-        except ValueError:
-            logger.error("execution_id must be a valid UUID")
-            raise ValueError("execution_id must be a valid UUID")
-
-        # Validate timestamp is a valid timestamp
-        try:
-            datetime.fromisoformat(self.timestamp)
-        except ValueError:
-            logger.error("timestamp must be a valid ISO format timestamp")
-            raise ValueError("timestamp must be a valid ISO format timestamp")
-
-        # Validate program_id is an integer
-        try:
-            int(self.program_id)
-        except ValueError:
-            logger.error("program_id must be an integer")
-            raise ValueError("program_id must be an integer")
-
-        # Validate source is a dictionary
-        if not isinstance(self.source, dict):
-            logger.error("source must be a dictionary")
-            raise TypeError("source must be a dictionary")
-
-        # Validate output is a list
-        if not isinstance(self.output, list):
-            logger.error("output must be a list")
-            raise TypeError("output must be a list")
 
 class JobProcessor:
     def __init__(self, config: Config):
@@ -125,22 +81,22 @@ class JobProcessor:
 
     async def message_handler(self, msg):
         try:
-            # Validate the message using FunctionExecution dataclass
-            function_execution = FunctionExecution(
-                execution_id=msg['execution_id'],
-                timestamp=msg['timestamp'],
-                program_id=msg['program_id'],
-                source=msg['source'],
-                output=msg.get('data', [])
-            )
-            
+            execution_id = msg['execution_id']
+            timestamp = msg['timestamp']
             # Log or update function execution in database
-            await self.log_or_update_function_execution(msg, function_execution.execution_id, function_execution.timestamp)
-            function_name = function_execution.source.get("function")
+            await self.log_or_update_function_execution(msg, execution_id, timestamp)
+            
+            function_name = msg.get("source", {}).get("function")
             if function_name:
+                target = msg.get('source', {}).get('params', {}).get('target')
+                program_id = msg.get('program_id')
+                msg['in_scope'] = await self.db.check_domain_regex_match(
+                                               domain=target,
+                                               program_id=program_id
+                                           )
                 await self.process_function_output(msg)
             
-        except (KeyError, ValueError, TypeError) as e:
+        except Exception as e:
             error_location = traceback.extract_tb(e.__traceback__)[-1]
             file_name = error_location.filename.split('/')[-1]
             line_number = error_location.lineno

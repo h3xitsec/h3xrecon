@@ -321,11 +321,6 @@ class DatabaseManager():
     
     async def insert_out_of_scope_domain(self, domain: str, program_id: int):
         try:
-            # Validate domain before insertion
-            if not self.is_valid_domain(domain):
-                logger.warning(f"Invalid domain format: {domain}")
-                return
-
             await self._write_records('''
                 INSERT INTO out_of_scope_domains (domain, program_ids)
                 VALUES ($1, ARRAY[$2]::integer[])
@@ -340,40 +335,14 @@ class DatabaseManager():
         except Exception as e:
             logger.error(f"Error inserting/updating out-of-scope domain in database: {str(e)}")
             logger.exception(e)
-
-    def is_valid_domain(self, domain: str) -> bool:
-        """
-        Validate domain name format
-        
-        Args:
-            domain (str): Domain to validate
-        
-        Returns:
-            bool: True if domain is valid, False otherwise
-        """
-        # Regex to validate domain names
-        # Excludes wildcards, email addresses, and invalid characters
-        domain_regex = re.compile(
-            r'^(?!-)'                  # Cannot start with a hyphen
-            r'(?:[a-zA-Z0-9-]{1,63}\.)*'  # Optional subdomains
-            r'[a-zA-Z0-9-]{1,63}'      # Domain name
-            r'\.[a-zA-Z]{2,}$'         # Top-level domain
-        )
-        
-        # Remove any whitespace and convert to lowercase
-        domain = domain.strip().lower()
-        
-        # Check against regex and additional conditions
-        return (
-            domain_regex.match(domain) is not None and
-            not domain.startswith('*.') and  # No wildcards
-            '@' not in domain  # No email addresses
-        )
-
     async def check_domain_regex_match(self, domain: str, program_id: int) -> bool:
         try:
             if isinstance(domain, dict) and 'subdomain' in domain:
                 domain = domain['subdomain']
+            
+            if not isinstance(domain, str):
+                logger.warning(f"Domain is not a string: {domain}, type: {type(domain)}")
+                return False
             
             compiled_regexes = await self.get_compiled_regexes(program_id)
             for regex in compiled_regexes:
@@ -390,14 +359,6 @@ class DatabaseManager():
             logger.debug("Exiting check_domain_regex_match method")
 
     async def insert_ip(self, ip: str, ptr: str, program_id: int) -> bool:
-        # Validate IP address is IPv4 or IPv6
-        import ipaddress
-        try:
-            ipaddress.ip_address(ip)
-        except ValueError:
-            logger.error(f"Invalid IP address: {ip}")
-            return False
-
         query = """
         INSERT INTO ips (ip, ptr, program_id)
         VALUES ($1, LOWER($2), $3)
@@ -544,20 +505,6 @@ class DatabaseManager():
         logger.debug(f"{url}:{httpx_data}")
         await self.ensure_connected()
         try:
-            # Validate URL
-            import re
-            url_pattern = re.compile(
-                r'^https?://'  # http:// or https://
-                r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
-                r'localhost|'  # localhost...
-                r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
-                r'(?::\d+)?'  # optional port
-                r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-            
-            if not url_pattern.match(url):
-                logger.error(f"Invalid URL format: {url}")
-                return False
-
             if self.pool is None:
                 raise Exception("Database connection pool is not initialized")
             

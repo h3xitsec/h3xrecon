@@ -1,7 +1,6 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import *
-from h3xrecon.plugins.helper import send_ip_data, send_domain_data
 from loguru import logger
 import asyncio
 import json
@@ -38,24 +37,37 @@ class ResolveDomain(ReconPlugin):
         self.db = db #DatabaseManager(self.config.database.to_dict())
         self.qm = QueueManager(self.config.nats)
         try:
-            #if await self.db.check_domain_regex_match(output_msg.get('output').get('host'), output_msg.get('program_id')):
-            if isinstance(output_msg.get('output').get('a_records'), list):
-                for ip in output_msg.get('output').get('a_records'):
-                    if isinstance(ip, str):
-                        try:
-                            await send_ip_data(data=ip, program_id=output_msg.get('program_id'))
-                            logger.debug(f"Sent IP {ip} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
-                        except Exception as e:
-                            logger.error(f"Error processing IP {ip}: {str(e)}")
-                    else:
-                        logger.warning(f"Unexpected IP format: {ip}")
+            if await self.db.check_domain_regex_match(output_msg.get('output').get('host'), output_msg.get('program_id')):
+                if isinstance(output_msg.get('output').get('a_records'), list):
+                    for ip in output_msg.get('output').get('a_records'):
+                        if isinstance(ip, str):
+                            try:
+                                ip_message = {
+                                    "program_id": output_msg.get('program_id'),
+                                    "data_type": "ip",
+                                    "data": [ip],
+                                    "in_scope": output_msg.get('in_scope')
+                                }
+                                await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=ip_message)
+                                logger.debug(f"Sent IP {ip} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
+                            except Exception as e:
+                                logger.error(f"Error processing IP {ip}: {str(e)}")
+                        else:
+                            logger.warning(f"Unexpected IP format: {ip}")
+                else:
+                    logger.warning(f"Unexpected IP format: {output_msg.get('output').get('a_records')}")
+                #if output_msg.get('output', {}).get('cnames'):
+                domain_message = {
+                    "program_id": output_msg.get('program_id'),
+                    "data_type": "domain",
+                    "data": [output_msg.get('source', {}).get('target')],
+                    "in_scope": output_msg.get('in_scope'),
+                    "attributes": {"cnames": output_msg.get('output', {}).get('cnames'), "ips": output_msg.get('output', {}).get('a_records')}
+                }
+                await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=domain_message)
+                logger.debug(f"Sent domain {output_msg.get('output').get('cnames')} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
             else:
-                logger.warning(f"Unexpected IP format: {output_msg.get('output').get('a_records')}")
-            #if output_msg.get('output', {}).get('cnames'):
-            await send_domain_data(data=output_msg.get('source', {}).get('params', {}).get('target'), program_id=output_msg.get('program_id'), attributes={"cnames": output_msg.get('output', {}).get('cnames'), "ips": output_msg.get('output', {}).get('a_records')})
-            logger.debug(f"Sent domain {output_msg.get('source', {}).get('params', {}).get('target')} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
-            #else:
-            #    logger.info(f"Domain {output_msg.get('output').get('host')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
+                logger.info(f"Domain {output_msg.get('output').get('host')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
         except Exception as e:
             logger.error(f"Error in process_resolved_domain: {str(e)}")
             logger.exception(e)

@@ -204,9 +204,10 @@ class DataProcessor:
 
     async def process_service(self, msg_data: Dict[str, Any]):
         #logger.info(msg_data)
-        if not isinstance(msg_data.get('data'), list):
-            msg_data['data'] = [msg_data.get('data')]
         for i in msg_data.get('data'):
+            if isinstance(i, str):
+                i = json.loads(i)
+            logger.debug(i)
             inserted = await self.db_manager.insert_service(ip=i.get("ip"), port=i.get("port"), protocol=i.get("protocol"), program_id=msg_data.get('program_id'), service=i.get("service"))
             #if inserted:
             #    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)

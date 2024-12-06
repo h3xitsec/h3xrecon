@@ -56,7 +56,7 @@ class TestDomainCatchall(ReconPlugin):
         msg = {
             "program_id": output_msg.get('program_id'),
             "data_type": "domain",
-            "data": output_msg.get('output', {}).get('domain'),
+            "data": [output_msg.get('output', {}).get('domain')],
             "attributes": {
                 "is_catchall": output_msg.get('output', {}).get('is_catchall')
             }

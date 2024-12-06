@@ -19,9 +19,9 @@
       loop:
         - src: ../../docker/grafana
           dest: "{{ h3xrecon_target_directory }}"
-        - src: "{{ inventory_dir }}/docker-compose.swarm.yaml"
+        - src: ../docker-compose.swarm.yaml
           dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
-        - src: "{{ inventory_dir }}/.env.compose"
+        - src: ../../.env.compose
           dest: "{{ h3xrecon_target_directory }}.env"
         - src: ../../docker/msgbroker
           dest: "{{ h3xrecon_target_directory }}"

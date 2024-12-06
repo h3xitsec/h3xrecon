@@ -4,12 +4,21 @@
     - vaults/vault.yaml
   
   tasks:
-    - name: Remove Docker stack
-      ansible.builtin.shell:
-        chdir: "{{ h3xrecon_target_directory }}"
-        cmd: |
-          export $(cat .env) > /dev/null 2>&1; docker stack rm h3xrecon
-    - name: Wait for stack removal
-      ansible.builtin.shell:
-        cmd: |
-          while docker stack ls | grep h3xrecon; do sleep 1; done
+    - delegate_to: localhost
+      ansible.builtin.copy:
+        dest: /tmp/h3xrecon_processor.key
+        content: "{{ PROCESSOR_PRIVATE_KEY }}"
+        mode: 0600
+    - name: Deploy Docker stack
+      delegate_to: localhost
+      community.docker.docker_stack:
+        state: absent
+        name: h3xrecon
+        compose:
+          - ../deploy/docker-compose.yaml
+      environment:
+        DOCKER_HOST: ssh://{{ ansible_host }}
+    - delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/h3xrecon_processor.key
+        state: absent
