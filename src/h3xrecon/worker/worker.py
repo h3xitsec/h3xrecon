@@ -121,7 +121,8 @@ class Worker:
                     force_execution=function_execution_request.force
                 ):
                 pass
-                    
+        except ValueError as e:
+            logger.error(f"{e}")
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             logger.exception(e)
