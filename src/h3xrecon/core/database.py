@@ -574,13 +574,13 @@ class DatabaseManager():
                 INSERT INTO urls (
                         url, program_id, a, host, path, port, tech, response_time,
                         input, lines, title, words, failed, method, scheme,
-                        cdn_name, cdn_type, final_url, resolvers, timestamp,
+                        cdn_name, cdn_type, final_url, timestamp,
                         webserver, status_code, content_type, content_length,
-                        chain_status_codes
+                        chain_status_codes, page_type, body_preview
                     )
                     VALUES (
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
+                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
                     )
                     ON CONFLICT (url) DO UPDATE SET
                         a = EXCLUDED.a,
@@ -599,13 +599,14 @@ class DatabaseManager():
                         cdn_name = EXCLUDED.cdn_name,
                         cdn_type = EXCLUDED.cdn_type,
                         final_url = EXCLUDED.final_url,
-                        resolvers = EXCLUDED.resolvers,
                         timestamp = EXCLUDED.timestamp,
                         webserver = EXCLUDED.webserver,
                         status_code = EXCLUDED.status_code,
                         content_type = EXCLUDED.content_type,
                         content_length = EXCLUDED.content_length,
-                        chain_status_codes = EXCLUDED.chain_status_codes
+                        chain_status_codes = EXCLUDED.chain_status_codes,
+                        page_type = EXCLUDED.page_type,
+                        body_preview = EXCLUDED.body_preview
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 url.lower(),
@@ -626,13 +627,14 @@ class DatabaseManager():
                 httpx_data.get('cdn_name'),
                 httpx_data.get('cdn_type'),
                 httpx_data.get('final_url'),
-                httpx_data.get('resolvers'),
                 timestamp,
                 httpx_data.get('webserver'),
                 status_code,
                 httpx_data.get('content_type'),
                 content_length,
-                httpx_data.get('chain_status_codes')
+                httpx_data.get('chain_status_codes'),
+                httpx_data.get('knowledgebase', {}).get('PageType'),
+                httpx_data.get('body_preview')
             )
             
             # Handle nested DbResult objects
