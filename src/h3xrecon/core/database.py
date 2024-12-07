@@ -580,7 +580,7 @@ class DatabaseManager():
                     )
                     VALUES (
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
+                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
                     )
                     ON CONFLICT (url) DO UPDATE SET
                         a = EXCLUDED.a,
@@ -627,14 +627,13 @@ class DatabaseManager():
                 httpx_data.get('cdn_name'),
                 httpx_data.get('cdn_type'),
                 httpx_data.get('final_url'),
-                httpx_data.get('resolvers'),
                 timestamp,
                 httpx_data.get('webserver'),
                 status_code,
                 httpx_data.get('content_type'),
                 content_length,
                 httpx_data.get('chain_status_codes'),
-                httpx_data.get('knowledgebase', {}).get('page_type'),
+                httpx_data.get('knowledgebase', {}).get('PageType'),
                 httpx_data.get('body_preview')
             )
             
