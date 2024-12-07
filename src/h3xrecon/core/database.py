@@ -666,7 +666,7 @@ class DatabaseManager():
             # Convert types before insertion
             url = data.get('url')
             matched_at = data.get('matched_at')
-            matcher_name = data.get('matcher-name')
+            matcher_name = data.get('matcher_name')
             template_id = data.get('template_id')
             template_name = data.get('template_name')
             template_path = data.get('template_path')
