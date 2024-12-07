@@ -16,9 +16,10 @@ class FunctionParams():
     extra_params: list = field(default_factory=list)
 
 class FunctionOutput(BaseModel):
-    url: Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')
-    matched_at: Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')
-    type: str = Field(pattern='^(http|tcp|udp)$')
+    url: Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+|[a-zA-Z0-9.-]+:\d+)$')
+    matched_at: str #Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')
+    matcher_name: str
+    type: str = Field(pattern='^(http|tcp|javascript|dns)$')
     ip: str = Field(pattern=r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]+$')
     port: int = Field(ge=1, le=65535)
     scheme: Optional[str] = Field(default=None, pattern='^(http|https|ftp|ssh|tcp|udp)?$')
@@ -59,6 +60,7 @@ class Nuclei(ReconPlugin):
                 nuclei_output = FunctionOutput(
                     url=json_data.get('url', ''),
                     matched_at=json_data.get('matched-at', ''),
+                    matcher_name=json_data.get('matcher-name', ''),
                     type=json_data.get('type', ''),
                     ip=ip_str,
                     port=json_data.get('port', 0),
@@ -85,13 +87,18 @@ class Nuclei(ReconPlugin):
         await send_ip_data(data=output_msg.get('output', {}).get('ip', ""), program_id=output_msg.get('program_id'))
         await send_nuclei_data(data=output_msg.get('output', {}), program_id=output_msg.get('program_id'))
         # Find scheme and protocol
-
+        scheme = None
+        protocol = None
         if output_msg.get('output').get('type') == "http":
             protocol = "tcp"
             scheme = output_msg.get('output').get('scheme', "")
-        else:
-            protocol = output_msg.get('output').get('type', "")
-            scheme = output_msg.get('output').get('scheme', "")
+        elif output_msg.get('output').get('type') == "tcp":
+            protocol = "tcp"
+            if output_msg.get('output').get('template_id') == "openssh-detect":
+                scheme = "ssh"
+            else:
+                scheme = output_msg.get('output').get('scheme', "")
+        
         service = {
             "ip": output_msg.get('output').get('ip'),
             "port": int(output_msg.get('output').get('port')),
