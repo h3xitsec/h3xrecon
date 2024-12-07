@@ -1,3 +1,0 @@
-ALTER TABLE urls ADD COLUMN page_type VARCHAR(50);
-ALTER TABLE urls ADD COLUMN body_preview TEXT;
-ALTER TABLE urls DROP COLUMN resolvers;
