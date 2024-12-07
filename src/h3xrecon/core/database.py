@@ -666,6 +666,7 @@ class DatabaseManager():
             # Convert types before insertion
             url = data.get('url')
             matched_at = data.get('matched_at')
+            matcher_name = data.get('matcher-name')
             template_id = data.get('template_id')
             template_name = data.get('template_name')
             template_path = data.get('template_path')
@@ -674,15 +675,24 @@ class DatabaseManager():
             port = data.get('port')
             ip = data.get('ip')
 
-            
             result = await self._write_records(
                 '''
                 INSERT INTO nuclei (
-                        url, matched_at, type, ip, port, template_path, template_id, template_name, severity, program_id
+                        url, matched_at, type, ip, port, template_path, template_id, template_name, severity, program_id, matcher_name
                     )
                     VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
                     )
+                    ON CONFLICT (url, template_id) DO UPDATE SET
+                        matched_at = EXCLUDED.matched_at,
+                        type = EXCLUDED.type,
+                        ip = EXCLUDED.ip,
+                        port = EXCLUDED.port,
+                        template_path = EXCLUDED.template_path,
+                        template_name = EXCLUDED.template_name,
+                        severity = EXCLUDED.severity,
+                        matcher_name = EXCLUDED.matcher_name,
+                        program_id = EXCLUDED.program_id
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 str(url),
@@ -694,7 +704,8 @@ class DatabaseManager():
                 template_id,
                 template_name,
                 severity,
-                program_id
+                program_id,
+                matcher_name
             )
             
             # Handle nested DbResult objects
@@ -705,10 +716,10 @@ class DatabaseManager():
 
             if data and isinstance(data, list) and len(data) > 0:
                 inserted = data[0]['inserted']
-                #if inserted:
-                #    logger.info(f"New Nuclei hit inserted: {url}")
-                #else:
-                #    logger.info(f"Nuclei hit updated: {url}")
+                if inserted:
+                   logger.info(f"New Nuclei hit inserted: {url}")
+                else:
+                   logger.info(f"Nuclei hit updated: {url}")
                 return inserted
             return False
         except Exception as e:
