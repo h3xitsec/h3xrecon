@@ -10,13 +10,8 @@ class FindSubdomainsCTFR(ReconPlugin):
         return os.path.splitext(os.path.basename(__file__))[0]
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {params.get("target", {})}")
-        command = f"""
-            #!/bin/bash
-            python /opt/ctfr/ctfr.py -d {params.get("target", {})} -o /tmp/ctfr.log > /dev/null 2>&1
-            cat /tmp/ctfr.log | grep -Ev ".*\\*.*" | sort -u
-            rm /tmp/ctfr.log
-        """
+        logger.info(f"Running {self.name} on {params.get('target', {})}")
+        command = f"python /opt/ctfr/ctfr.py -d {params.get('target', {})} -o /tmp/ctfr.log > /dev/null 2>&1 && cat /tmp/ctfr.log | grep -Ev '.*\\*.*' | sort -u && rm /tmp/ctfr.log"
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,

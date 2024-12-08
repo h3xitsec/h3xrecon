@@ -12,10 +12,8 @@ class ReverseResolveIP(ReconPlugin):
         return os.path.splitext(os.path.basename(__file__))[0]
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {params.get("target", {})}")
-        command = f"""
-            echo "{params.get("target", {})}" | dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'
-        """
+        logger.info(f"Running {self.name} on {params.get('target', {})}")
+        command = f"echo \"{params.get('target', {})}\" | ~/.pdtm/go/bin/dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'"
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,

@@ -13,47 +13,60 @@ class TestHTTP(ReconPlugin):
         return os.path.splitext(os.path.basename(__file__))[0]
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {params.get("target", {})}")
-        command = f"""
-            #!/bin/bash
-            httpx -u {params.get("target", {})} \
-                -fr \
-                -silent \
-                -status-code \
-                -content-length \
-                -tech-detect \
-                -threads 50 \
-                -no-color \
-                -json \
-                -p 80-99,443-449,11443,8443-8449,9000-9003,8080-8089,8801-8810,3000,5000 \
-                -efqdn \
-                -tls-grab \
-                -pa \
-                -tls-probe \
-                -pipeline \
-                -http2 \
-                -vhost \
-                -bp \
-                -ip \
-                -cname \
-                -asn \
-                -random-agent
-        """
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            shell=True
+        logger.info(f"Running {self.name} on {params.get('target', {})}")
+        command = (
+            f"~/.pdtm/go/bin/httpx -u {params.get('target', {})} "
+            "-fr "
+            "-silent "
+            "-status-code "
+            "-content-length "
+            "-tech-detect "
+            "-threads 50 "
+            "-no-color "
+            "-json "
+            "-p 80-99,443-449,11443,8443-8449,9000-9003,8080-8089,8801-8810,3000,5000 "
+            "-efqdn "
+            "-tls-grab "
+            "-pa "
+            "-tls-probe "
+            "-pipeline "
+            "-http2 "
+            "-vhost "
+            "-bp "
+            "-ip "
+            "-cname "
+            "-asn "
+            "-random-agent"
         )
         
-        async for output in self._read_subprocess_output(process):
-            try:
-                json_data = json.loads(output)
-                yield json_data
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON output: {e}")
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                shell=True
+            )
+            
+            async with asyncio.timeout(300):  # 5 minute timeout
+                async for output in self._read_subprocess_output(process):
+                    try:
+                        json_data = json.loads(output)
+                        yield json_data
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse JSON output: {e}")
 
-        await process.wait()
+                await process.wait()
+                
+        except asyncio.TimeoutError:
+            logger.error(f"HTTP test timed out for target {params.get('target', {})}")
+            if process:
+                process.kill()
+            raise
+        except Exception as e:
+            logger.error(f"Error during HTTP test: {str(e)}")
+            if process:
+                process.kill()
+            raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
         self.config = Config()

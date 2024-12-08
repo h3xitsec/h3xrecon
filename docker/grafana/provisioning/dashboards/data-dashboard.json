@@ -123,7 +123,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT d.domain, d.discovered_at, i.ip  \nFROM domains d \nJOIN programs p ON p.id = d.program_id \nLEFT JOIN ips i ON i.id = ANY(d.ips) \nWHERE p.name = '$_program_name' \nORDER BY i.ip NULLS LAST \nLIMIT 50",
+          "rawSql": "SELECT d.domain, d.discovered_at, i.ip  \nFROM domains d \nJOIN programs p ON p.id = d.program_id \nLEFT JOIN ips i ON i.id = ANY(d.ips) \nWHERE p.name = '$_program_name' \nORDER BY i.ip NULLS LAST",
           "refId": "A",
           "sql": {
             "columns": [
@@ -649,7 +649,7 @@
           },
           "editorMode": "builder",
           "format": "table",
-          "rawSql": "SELECT COUNT(id) FROM nuclei LIMIT 50 ",
+          "rawSql": "SELECT COUNT(n.id) FROM nuclei n JOIN programs p ON p.id = n.program_id WHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1033,7 +1033,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT u.url, u.title, u.status_code,u.content_type  \nFROM urls u \nJOIN programs p ON p.id = u.program_id \nWHERE p.name = '$_program_name' \nLIMIT 50",
+          "rawSql": "SELECT u.url, u.title, u.status_code,u.content_type  \nFROM urls u \nJOIN programs p ON p.id = u.program_id \nWHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1335,7 +1335,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT c.subject_cn, c.issuer_org, c.serial, c.valid_date, c.expiry_date, array_length(c.subject_an, 1) as subject_an_count\nFROM certificates c\nJOIN programs p ON p.id = c.program_id \nWHERE p.name = '$_program_name' \nLIMIT 50",
+          "rawSql": "SELECT c.subject_cn, c.issuer_org, c.serial, c.valid_date, c.expiry_date, array_length(c.subject_an, 1) as subject_an_count\nFROM certificates c\nJOIN programs p ON p.id = c.program_id \nWHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1474,7 +1474,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT n.url, n.template_id, n.severity, n.matcher_name\nFROM nuclei n\nJOIN programs p ON p.id = n.program_id \nWHERE p.name = '$_program_name' \nLIMIT 50",
+          "rawSql": "SELECT n.url, n.template_id, n.severity, n.matcher_name\nFROM nuclei n\nJOIN programs p ON p.id = n.program_id \nWHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [

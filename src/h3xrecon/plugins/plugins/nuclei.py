@@ -41,9 +41,7 @@ class Nuclei(ReconPlugin):
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
         function_params = asdict(FunctionParams(**params))
         logger.info(f"Running {self.name} on {function_params.get('target', {})}")
-        command = f"""
-            nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}
-        """
+        command = f"~/.pdtm/go/bin/nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}"
         logger.debug(f"Running command: {command}")
         process = await asyncio.create_subprocess_shell(
             command,

@@ -14,7 +14,7 @@ class ResolveDomain(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, ) -> AsyncGenerator[Dict[str, Any], None]:
         logger.info(f"Running {self.name} on {params.get("target", {})}")
-        command = f"echo {params.get("target", {})} | dnsx -nc -resp -a -cname -silent -j | jq -Mc '{{host: .host,a_records: (.a // []),cnames: (.cname // [])}}'"
+        command = f"echo {params.get("target", {})} | ~/.pdtm/go/bin/dnsx -nc -resp -a -cname -silent -j | jq -Mc '{{host: .host,a_records: (.a // []),cnames: (.cname // [])}}'"
         logger.debug(f"Running command: {command}")
         process = await asyncio.create_subprocess_shell(
             command,

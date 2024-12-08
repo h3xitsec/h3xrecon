@@ -14,10 +14,7 @@ class PortScan(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.info(f"Scanning top 1000 ports on {params.get("target", {})}")
-        command = f"""
-            #!/bin/bash
-            nmap -p- --top-ports 1000 -oX /tmp/nmap_scan_{params.get("target", {})}.xml {params.get("target", {})}
-        """
+        command = f"nmap -p- --top-ports 1000 -oX /tmp/nmap_scan_{params.get('target', {})}.xml {params.get('target', {})} && cat /tmp/nmap_scan_{params.get('target', {})}.xml"
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -26,9 +23,9 @@ class PortScan(ReconPlugin):
         )
 
         await process.wait()
-
+        
         # Parse the XML output
-        tree = ET.parse(f"/tmp/nmap_scan_{params.get("target", {})}.xml")
+        tree = ET.parse(f"/tmp/nmap_scan_{params.get('target', {})}.xml")
         root = tree.getroot()
 
         # Extract relevant information
