@@ -655,6 +655,74 @@ class DatabaseManager():
             logger.error(f"Error inserting or updating URL in database: {e}")
             logger.exception(e)
             return False
+    
+    async def insert_certificate(self, program_id: int, data: Dict[str, Any]):
+        await self.ensure_connected()
+        logger.debug(f"Entering insert_certificate for program {program_id}: {data}")
+        try:
+            if self.pool is None:
+                raise Exception("Database connection pool is not initialized")
+            
+            # Convert types before insertion
+            subject_dn = data.get('subject_dn')
+            subject_cn = data.get('subject_cn')
+            subject_an = data.get('subject_an')
+            issuer_dn = data.get('issuer_dn')
+            issuer_cn = data.get('issuer_cn')
+            issuer_org = data.get('issuer_org')[0]
+            serial = data.get('serial')
+            fingerprint_hash = data.get('fingerprint_hash')
+
+            result = await self._write_records(
+                '''
+                INSERT INTO certificates (
+                        subject_dn, subject_cn, subject_an, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9
+                    )
+                    ON CONFLICT (serial) DO UPDATE SET
+                        subject_dn = EXCLUDED.subject_dn,
+                        subject_cn = EXCLUDED.subject_cn,
+                        subject_an = EXCLUDED.subject_an,
+                        issuer_dn = EXCLUDED.issuer_dn,
+                        issuer_cn = EXCLUDED.issuer_cn,
+                        issuer_org = EXCLUDED.issuer_org,
+                        serial = EXCLUDED.serial,
+                        fingerprint_hash = EXCLUDED.fingerprint_hash,
+                        program_id = EXCLUDED.program_id
+                    RETURNING (xmax = 0) AS inserted
+                ''',
+                subject_dn,
+                subject_cn,
+                subject_an,
+                issuer_dn,
+                issuer_cn,
+                issuer_org,
+                serial,
+                fingerprint_hash,
+                program_id
+            )
+            
+            # Handle nested DbResult objects
+            if result.success and isinstance(result.data, DbResult):
+                data = result.data.data
+            else:
+                data = result.data
+
+            if data and isinstance(data, list) and len(data) > 0:
+                inserted = data[0]['inserted']
+                if inserted:
+                   logger.info(f"New certificate inserted: {serial}")
+                else:
+                   logger.info(f"Certificate updated: {serial}")
+                return inserted
+            return False
+        except Exception as e:
+            logger.error(f"Error inserting or updating certificate in database: {e}")
+            logger.exception(e)
+            return False
+
 
     async def insert_nuclei(self, program_id: int, data: Dict[str, Any]):
         await self.ensure_connected()

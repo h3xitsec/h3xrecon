@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import *
-from h3xrecon.plugins.helper import send_url_data, send_domain_data, send_service_data
+from h3xrecon.plugins.helper import send_url_data, send_domain_data, send_service_data, send_certificate_data
 from loguru import logger
 import asyncio
 import json
@@ -84,4 +84,14 @@ class TestHTTP(ReconPlugin):
                 "ip": output_msg.get('output').get('host'), 
                 "port": int(output_msg.get('output').get('port')), 
                 "protocol": "tcp"
+        }, program_id=output_msg.get('program_id'))
+        await send_certificate_data(data={
+            "subject_dn": output_msg.get('output').get('tls', {}).get('subject_dn', []),
+            "subject_cn": output_msg.get('output').get('tls', {}).get('subject_cn', []),
+            "subject_an": output_msg.get('output').get('tls', {}).get('subject_an', []),
+            "issuer_dn": output_msg.get('output').get('tls', {}).get('issuer_dn', []),
+            "issuer_cn": output_msg.get('output').get('tls', {}).get('issuer_cn', []),
+            "issuer_org": output_msg.get('output').get('tls', {}).get('issuer_org', []),
+            "serial": output_msg.get('output').get('tls', {}).get('serial', []),
+            "fingerprint_hash": output_msg.get('output').get('tls', {}).get('fingerprint_hash', {}).get('sha256', "")
         }, program_id=output_msg.get('program_id'))
