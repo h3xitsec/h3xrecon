@@ -2,6 +2,8 @@ version: '3.8'
 configs:
   grafana-dashboards:
     file: ./grafana/provisioning/dashboards/logs-dashboard.json
+  grafana-dashboards-data:
+    file: ./grafana/provisioning/dashboards/data-dashboard.json
   grafana-dashboard-config:
     file: ./grafana/provisioning/dashboards/dashboard.yml
   grafana-datasources:
@@ -50,6 +52,8 @@ services:
     configs:
       - source: grafana-dashboards
         target: /etc/grafana/provisioning/dashboards/logs-dashboard.json
+      - source: grafana-dashboards-data
+        target: /etc/grafana/provisioning/dashboards/data-dashboard.json
       - source: grafana-dashboard-config
         target: /etc/grafana/provisioning/dashboards/dashboard.yml
       - source: grafana-datasources
