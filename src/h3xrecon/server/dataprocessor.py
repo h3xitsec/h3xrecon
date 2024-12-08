@@ -42,8 +42,7 @@ class DataProcessor:
             "domain": self.process_domain,
             "url": self.process_url,
             "service": self.process_service,
-            "nuclei": self.process_nuclei,
-            "certificate": self.process_certificate
+            "nuclei": self.process_nuclei
         }
 
     async def start(self):
@@ -205,42 +204,6 @@ class DataProcessor:
                             logger.info(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
                 except Exception as e:
                     logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
-                    logger.exception(e)
-
-    async def process_service(self, msg_data: Dict[str, Any]):
-        #logger.info(msg_data)
-        if not isinstance(msg_data.get('data'), list):
-            msg_data['data'] = [msg_data.get('data')]
-        for i in msg_data.get('data'):
-            inserted = await self.db_manager.insert_service(ip=i.get("ip"), port=i.get("port"), protocol=i.get("protocol"), program_id=msg_data.get('program_id'), service=i.get("service"))
-            #if inserted:
-            #    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
-
-    async def process_certificate(self, msg: Dict[str, Any]):
-        if msg:
-            logger.debug(f"Processing certificate for program {msg.get('program_id')}: {msg}")
-            msg_data = msg.get('data', {})
-            for d in msg_data:
-                try:
-                    hostname = d.get('subject_cn')
-
-                    if not hostname:
-                        logger.error(f"Failed to extract hostname from certificate: {d}")
-                        continue
-                    else:
-                        is_in_scope = await self.db_manager.check_domain_regex_match(hostname, msg.get('program_id'))
-                        if is_in_scope:
-                            logger.info(f"Processing certificate for program {msg.get('program_id')}: {d.get('subject_cn', {})}")
-                            inserted = await self.db_manager.insert_certificate(
-                                program_id=msg.get('program_id'),
-                                data=d
-                            )
-                            if inserted:
-                                logger.info(f"New certificate inserted: {d.get('subject_cn', {})}")
-                        else:
-                            logger.info(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
-                except Exception as e:
-                    logger.error(f"Failed to process certificate in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
 
     async def process_service(self, msg_data: Dict[str, Any]):
