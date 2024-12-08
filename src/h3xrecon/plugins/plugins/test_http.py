@@ -89,6 +89,8 @@ class TestHTTP(ReconPlugin):
             "subject_dn": output_msg.get('output').get('tls', {}).get('subject_dn', []),
             "subject_cn": output_msg.get('output').get('tls', {}).get('subject_cn', []),
             "subject_an": output_msg.get('output').get('tls', {}).get('subject_an', []),
+            "valid_date": output_msg.get('output').get('tls', {}).get('not_before', []),
+            "expiry_date": output_msg.get('output').get('tls', {}).get('not_after', []),
             "issuer_dn": output_msg.get('output').get('tls', {}).get('issuer_dn', []),
             "issuer_cn": output_msg.get('output').get('tls', {}).get('issuer_cn', []),
             "issuer_org": output_msg.get('output').get('tls', {}).get('issuer_org', []),

@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS certificates (
     subject_dn VARCHAR(255),
     subject_cn VARCHAR(255),
     subject_an VARCHAR(255)[],
+    valid_date TIMESTAMP,
+    expiry_date TIMESTAMP,
     issuer_dn VARCHAR(255),
     issuer_cn VARCHAR(255),
     issuer_org VARCHAR(255),

@@ -663,6 +663,10 @@ class DatabaseManager():
             if self.pool is None:
                 raise Exception("Database connection pool is not initialized")
             
+            # Convert ISO format strings to timezone-aware datetime objects
+            valid_date = dateutil.parser.parse(data.get('valid_date')).replace(tzinfo=None) if data.get('valid_date') else None
+            expiry_date = dateutil.parser.parse(data.get('expiry_date')).replace(tzinfo=None) if data.get('expiry_date') else None
+            
             # Convert types before insertion
             subject_dn = data.get('subject_dn')
             subject_cn = data.get('subject_cn')
@@ -676,15 +680,17 @@ class DatabaseManager():
             result = await self._write_records(
                 '''
                 INSERT INTO certificates (
-                        subject_dn, subject_cn, subject_an, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
+                        subject_dn, subject_cn, subject_an, valid_date, expiry_date, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
                     )
                     VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
                     )
                     ON CONFLICT (serial) DO UPDATE SET
                         subject_dn = EXCLUDED.subject_dn,
                         subject_cn = EXCLUDED.subject_cn,
                         subject_an = EXCLUDED.subject_an,
+                        valid_date = EXCLUDED.valid_date,
+                        expiry_date = EXCLUDED.expiry_date,
                         issuer_dn = EXCLUDED.issuer_dn,
                         issuer_cn = EXCLUDED.issuer_cn,
                         issuer_org = EXCLUDED.issuer_org,
@@ -696,12 +702,14 @@ class DatabaseManager():
                 subject_dn,
                 subject_cn,
                 subject_an,
+                valid_date,
+                expiry_date,
                 issuer_dn,
                 issuer_cn,
                 issuer_org,
                 serial,
                 fingerprint_hash,
-                program_id
+                int(program_id)
             )
             
             # Handle nested DbResult objects
