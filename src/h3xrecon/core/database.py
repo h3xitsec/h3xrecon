@@ -685,7 +685,7 @@ class DatabaseManager():
                     VALUES (
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
                     )
-                    ON CONFLICT (serial) DO UPDATE SET
+                    ON CONFLICT (subject_cn, serial) DO UPDATE SET
                         subject_dn = EXCLUDED.subject_dn,
                         subject_cn = EXCLUDED.subject_cn,
                         subject_an = EXCLUDED.subject_an,

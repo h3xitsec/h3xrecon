@@ -14,4 +14,4 @@ CREATE TABLE IF NOT EXISTS certificates (
     discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE certificates ADD CONSTRAINT unique_certificate_serial UNIQUE (serial);
+ALTER TABLE certificates ADD CONSTRAINT unique_certificate_serial_cn UNIQUE (subject_cn, serial);
