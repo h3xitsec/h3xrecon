@@ -1,6 +1,8 @@
 configs:
   grafana-dashboards:
     file: ./docker/grafana/provisioning/dashboards/logs-dashboard.json
+  grafana-dashboards-data:
+    file: ./docker/grafana/provisioning/dashboards/data-dashboard.json
   grafana-dashboard-config:
     file: ./docker/grafana/provisioning/dashboards/dashboard.yml
   grafana-datasources:
@@ -51,7 +53,8 @@ services:
         target: /etc/grafana/provisioning/dashboards/dashboard.yml
       - source: grafana-datasources
         target: /etc/grafana/provisioning/datasources/datasource.yml
-
+      - source: grafana-dashboards-data
+        target: /etc/grafana/provisioning/dashboards/data-dashboard.json
   cache:
     image: redis:6.2-alpine
     volumes:
