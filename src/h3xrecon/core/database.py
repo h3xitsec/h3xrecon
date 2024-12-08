@@ -574,13 +574,13 @@ class DatabaseManager():
                 INSERT INTO urls (
                         url, program_id, a, host, path, port, tech, response_time,
                         input, lines, title, words, failed, method, scheme,
-                        cdn_name, cdn_type, final_url, timestamp,
+                        cdn_name, cdn_type, final_url, resolvers, timestamp,
                         webserver, status_code, content_type, content_length,
-                        chain_status_codes, page_type, body_preview
+                        chain_status_codes
                     )
                     VALUES (
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
                     )
                     ON CONFLICT (url) DO UPDATE SET
                         a = EXCLUDED.a,
@@ -599,14 +599,13 @@ class DatabaseManager():
                         cdn_name = EXCLUDED.cdn_name,
                         cdn_type = EXCLUDED.cdn_type,
                         final_url = EXCLUDED.final_url,
+                        resolvers = EXCLUDED.resolvers,
                         timestamp = EXCLUDED.timestamp,
                         webserver = EXCLUDED.webserver,
                         status_code = EXCLUDED.status_code,
                         content_type = EXCLUDED.content_type,
                         content_length = EXCLUDED.content_length,
-                        chain_status_codes = EXCLUDED.chain_status_codes,
-                        page_type = EXCLUDED.page_type,
-                        body_preview = EXCLUDED.body_preview
+                        chain_status_codes = EXCLUDED.chain_status_codes
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 url.lower(),
@@ -627,14 +626,13 @@ class DatabaseManager():
                 httpx_data.get('cdn_name'),
                 httpx_data.get('cdn_type'),
                 httpx_data.get('final_url'),
+                httpx_data.get('resolvers'),
                 timestamp,
                 httpx_data.get('webserver'),
                 status_code,
                 httpx_data.get('content_type'),
                 content_length,
-                httpx_data.get('chain_status_codes'),
-                httpx_data.get('knowledgebase', {}).get('PageType'),
-                httpx_data.get('body_preview')
+                httpx_data.get('chain_status_codes')
             )
             
             # Handle nested DbResult objects
@@ -655,82 +653,6 @@ class DatabaseManager():
             logger.error(f"Error inserting or updating URL in database: {e}")
             logger.exception(e)
             return False
-    
-    async def insert_certificate(self, program_id: int, data: Dict[str, Any]):
-        await self.ensure_connected()
-        logger.debug(f"Entering insert_certificate for program {program_id}: {data}")
-        try:
-            if self.pool is None:
-                raise Exception("Database connection pool is not initialized")
-            
-            # Convert ISO format strings to timezone-aware datetime objects
-            valid_date = dateutil.parser.parse(data.get('valid_date')).replace(tzinfo=None) if data.get('valid_date') else None
-            expiry_date = dateutil.parser.parse(data.get('expiry_date')).replace(tzinfo=None) if data.get('expiry_date') else None
-            
-            # Convert types before insertion
-            subject_dn = data.get('subject_dn')
-            subject_cn = data.get('subject_cn')
-            subject_an = data.get('subject_an')
-            issuer_dn = data.get('issuer_dn')
-            issuer_cn = data.get('issuer_cn')
-            issuer_org = data.get('issuer_org')[0]
-            serial = data.get('serial')
-            fingerprint_hash = data.get('fingerprint_hash')
-
-            result = await self._write_records(
-                '''
-                INSERT INTO certificates (
-                        subject_dn, subject_cn, subject_an, valid_date, expiry_date, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
-                    )
-                    VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-                    )
-                    ON CONFLICT (serial) DO UPDATE SET
-                        subject_dn = EXCLUDED.subject_dn,
-                        subject_cn = EXCLUDED.subject_cn,
-                        subject_an = EXCLUDED.subject_an,
-                        valid_date = EXCLUDED.valid_date,
-                        expiry_date = EXCLUDED.expiry_date,
-                        issuer_dn = EXCLUDED.issuer_dn,
-                        issuer_cn = EXCLUDED.issuer_cn,
-                        issuer_org = EXCLUDED.issuer_org,
-                        serial = EXCLUDED.serial,
-                        fingerprint_hash = EXCLUDED.fingerprint_hash,
-                        program_id = EXCLUDED.program_id
-                    RETURNING (xmax = 0) AS inserted
-                ''',
-                subject_dn,
-                subject_cn,
-                subject_an,
-                valid_date,
-                expiry_date,
-                issuer_dn,
-                issuer_cn,
-                issuer_org,
-                serial,
-                fingerprint_hash,
-                int(program_id)
-            )
-            
-            # Handle nested DbResult objects
-            if result.success and isinstance(result.data, DbResult):
-                data = result.data.data
-            else:
-                data = result.data
-
-            if data and isinstance(data, list) and len(data) > 0:
-                inserted = data[0]['inserted']
-                if inserted:
-                   logger.info(f"New certificate inserted: {serial}")
-                else:
-                   logger.info(f"Certificate updated: {serial}")
-                return inserted
-            return False
-        except Exception as e:
-            logger.error(f"Error inserting or updating certificate in database: {e}")
-            logger.exception(e)
-            return False
-
 
     async def insert_nuclei(self, program_id: int, data: Dict[str, Any]):
         await self.ensure_connected()
@@ -742,7 +664,6 @@ class DatabaseManager():
             # Convert types before insertion
             url = data.get('url')
             matched_at = data.get('matched_at')
-            matcher_name = data.get('matcher_name')
             template_id = data.get('template_id')
             template_name = data.get('template_name')
             template_path = data.get('template_path')
@@ -751,24 +672,15 @@ class DatabaseManager():
             port = data.get('port')
             ip = data.get('ip')
 
+            
             result = await self._write_records(
                 '''
                 INSERT INTO nuclei (
-                        url, matched_at, type, ip, port, template_path, template_id, template_name, severity, program_id, matcher_name
+                        url, matched_at, type, ip, port, template_path, template_id, template_name, severity, program_id
                     )
                     VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
                     )
-                    ON CONFLICT (url, template_id) DO UPDATE SET
-                        matched_at = EXCLUDED.matched_at,
-                        type = EXCLUDED.type,
-                        ip = EXCLUDED.ip,
-                        port = EXCLUDED.port,
-                        template_path = EXCLUDED.template_path,
-                        template_name = EXCLUDED.template_name,
-                        severity = EXCLUDED.severity,
-                        matcher_name = EXCLUDED.matcher_name,
-                        program_id = EXCLUDED.program_id
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 str(url),
@@ -780,8 +692,7 @@ class DatabaseManager():
                 template_id,
                 template_name,
                 severity,
-                program_id,
-                matcher_name
+                program_id
             )
             
             # Handle nested DbResult objects
@@ -792,10 +703,10 @@ class DatabaseManager():
 
             if data and isinstance(data, list) and len(data) > 0:
                 inserted = data[0]['inserted']
-                if inserted:
-                   logger.info(f"New Nuclei hit inserted: {url}")
-                else:
-                   logger.info(f"Nuclei hit updated: {url}")
+                #if inserted:
+                #    logger.info(f"New Nuclei hit inserted: {url}")
+                #else:
+                #    logger.info(f"Nuclei hit updated: {url}")
                 return inserted
             return False
         except Exception as e:
