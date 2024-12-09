@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS certificates (
     id SERIAL PRIMARY KEY,
+    url_id INTEGER[] NOT NULL,
     subject_dn VARCHAR(255),
     subject_cn VARCHAR(255),
     subject_an VARCHAR(255)[],
@@ -14,4 +15,4 @@ CREATE TABLE IF NOT EXISTS certificates (
     discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE certificates ADD CONSTRAINT unique_certificate_serial_cn UNIQUE (subject_cn, serial);
+ALTER TABLE certificates ADD CONSTRAINT unique_certificate_serial UNIQUE (serial);

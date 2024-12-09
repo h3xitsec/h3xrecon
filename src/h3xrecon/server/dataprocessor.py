@@ -163,11 +163,12 @@ class DataProcessor:
                         #logger.info(f"Hostname {hostname} is not in scope for program {program_name}. Skipping.")
                         return
                     logger.info(f"Processing URL result for program {msg.get('program_id')}: {d.get('url', {})}")
-                    await self.db_manager.insert_url(
+                    result = await self.db_manager.insert_url(
                         url=d.get('url'),
                         httpx_data=d.get('httpx_data', {}),
                         program_id=msg.get('program_id')
                     )
+                    logger.debug(result)
                     # Send a job to the workers to test the URL if httpx_data is missing
                     if not d.get('httpx_data'):
                         logger.info(f"Sending job to test URL: {d.get('url')}")
@@ -222,23 +223,15 @@ class DataProcessor:
             msg_data = msg.get('data', {})
             for d in msg_data:
                 try:
-                    hostname = d.get('subject_cn')
-
-                    if not hostname:
-                        logger.error(f"Failed to extract hostname from certificate: {d}")
-                        continue
+                    logger.info(f"Processing certificate for program {msg.get('program_id')}: {d.get('subject_cn', {})}")
+                    inserted = await self.db_manager.insert_certificate(
+                        program_id=msg.get('program_id'),
+                        data=d
+                    )
+                    if inserted:
+                        logger.info(f"New certificate inserted: {d.get('cert', {}).get('serial', {})}")
                     else:
-                        is_in_scope = await self.db_manager.check_domain_regex_match(hostname, msg.get('program_id'))
-                        if is_in_scope:
-                            logger.info(f"Processing certificate for program {msg.get('program_id')}: {d.get('subject_cn', {})}")
-                            inserted = await self.db_manager.insert_certificate(
-                                program_id=msg.get('program_id'),
-                                data=d
-                            )
-                            if inserted:
-                                logger.info(f"New certificate inserted: {d.get('subject_cn', {})}")
-                        else:
-                            logger.info(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
+                        logger.info(f"Certificate updated: {d.get('cert', {}).get('serial', {})}")
                 except Exception as e:
                     logger.error(f"Failed to process certificate in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
