@@ -8,7 +8,7 @@ from h3xrecon.core import Config
 from h3xrecon.__about__ import __version__
 
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
 import importlib
 import pkgutil
 import uuid
@@ -22,6 +22,8 @@ class FunctionExecutionRequest:
     program_id: int
     params: Dict[str, Any]
     force: bool
+    execution_id: Optional[str] = str(uuid.uuid4())
+    timestamp: Optional[str] = datetime.now(timezone.utc).isoformat()
 
 class Worker:
     def __init__(self, config: Config):
@@ -94,8 +96,6 @@ class Worker:
             skip = not time_since_last_execution > self.execution_threshold
             if skip:
                 logger.info(f"Skipping {data.function_name} on {data.params.get('target')} : executed recently.")
-            else:
-                logger.info(f"Running {data.function_name} on {data.params.get('target')} ({data.execution_id})")
             return not skip
         return True
 
@@ -113,13 +113,12 @@ class Worker:
                 if not await self.should_execute(function_execution_request):
                     return
             
-            execution_id = msg.get("execution_id", str(uuid.uuid4()))
             async for result in self.function_executor.execute_function(
                     func_name=function_execution_request.function_name,
                     params=function_execution_request.params,
                     program_id=function_execution_request.program_id,
-                    execution_id=execution_id,
-                    timestamp=msg.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                    execution_id=function_execution_request.execution_id,
+                    timestamp=function_execution_request.timestamp,
                     force_execution=function_execution_request.force
                 ):
                 pass
@@ -128,7 +127,6 @@ class Worker:
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             logger.exception(e)
-            #raise  # Let process_messages handle the error
 
     async def stop(self):
         logger.info("Shutting down...")

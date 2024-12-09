@@ -34,10 +34,8 @@ class ExpandCIDR(ReconPlugin):
 
         await process.wait()
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.qm = QueueManager(self.config.nats)
-        await self.qm.publish_message(
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
+        await qm.publish_message(
             subject="function.execute",
             stream="FUNCTION_EXECUTE",
             message={

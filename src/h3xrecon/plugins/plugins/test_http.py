@@ -68,10 +68,7 @@ class TestHTTP(ReconPlugin):
                 process.kill()
             raise
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.db = db #DatabaseManager(self.config.database.to_dict())
-        self.qm = QueueManager(self.config.nats)
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         logger.debug(f"Incoming message:\nObject Type: {type(output_msg)}\nObject:\n{json.dumps(output_msg, indent=4)}")
         #if not await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params', {}).get('target'), output_msg.get('program_id')):
         #    logger.info(f"Domain {output_msg.get('source', {}).get('params', {}).get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
@@ -84,7 +81,7 @@ class TestHTTP(ReconPlugin):
                 "httpx_data": output_msg.get('output', {})
             }]
         }
-        await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=url_msg)
+        await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=url_msg)
         # await self.nc.publish(output_msg.get('recon_data_queue', "recon.data"), json.dumps(url_msg).encode())
         domains_to_add = (output_msg.get('output', {}).get('body_domains', []) + 
                             output_msg.get('output', {}).get('body_fqdn', []) + 
@@ -92,8 +89,8 @@ class TestHTTP(ReconPlugin):
         logger.debug(domains_to_add)
         for domain in domains_to_add:
             if domain:
-                await send_domain_data(data=domain, program_id=output_msg.get('program_id'))
-        await send_service_data(data={
+                await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
+        await send_service_data(qm=qm, data={
                 "ip": output_msg.get('output').get('host'), 
                 "port": int(output_msg.get('output').get('port')), 
                 "protocol": "tcp"

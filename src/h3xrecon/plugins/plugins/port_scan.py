@@ -50,11 +50,9 @@ class PortScan(ReconPlugin):
             count = extraports.get('count')
             logger.info(f"Total filtered ports: {count}")
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.qm = QueueManager(self.config.nats)
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         for service in output_msg.get('output', []):
-            await send_service_data(data={
+            await send_service_data(qm=qm, data={
                 "ip": service.get('ip'),
                 "port": int(service.get('port')),
                 "protocol": service.get('protocol'),

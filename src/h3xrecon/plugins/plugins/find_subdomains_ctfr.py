@@ -24,13 +24,11 @@ class FindSubdomainsCTFR(ReconPlugin):
 
         await process.wait()
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.qm = QueueManager(self.config.nats)
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         domain_msg = {
             "program_id": output_msg.get('program_id'),
             "data_type": "domain",
             "in_scope": output_msg.get('in_scope'),
             "data": output_msg.get('output', {}).get('subdomain')
         }
-        await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=domain_msg)
+        await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=domain_msg)

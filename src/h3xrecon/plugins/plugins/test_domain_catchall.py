@@ -48,13 +48,11 @@ class TestDomainCatchall(ReconPlugin):
         
         yield result
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.db = db
-        self.qm = QueueManager(self.config.nats)
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         #if await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params',{}).get('target'), output_msg.get('program_id')):
-        logger.info(f"Domain {output_msg.get('source', {}).get('params',{}).get('target')} is part of program {output_msg.get('program_id')}. Sending to data processor.")
-        await send_domain_data(data=output_msg.get('output', {}).get('domain'), program_id=output_msg.get('program_id'), attributes={"is_catchall": output_msg.get('output', {}).get('is_catchall')})
+        #if await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params',{}).get('target'), output_msg.get('program_id')):
+        #logger.info(f"Domain {output_msg.get('source', {}).get('params',{}).get('target')} is part of program {output_msg.get('program_id')}. Sending to data processor.")
+        await send_domain_data(qm=qm, data=output_msg.get('output', {}).get('domain'), program_id=output_msg.get('program_id'), attributes={"is_catchall": output_msg.get('output', {}).get('is_catchall')})
         # msg = {
         #     "program_id": output_msg.get('program_id'),
         #     "data_type": "domain",
