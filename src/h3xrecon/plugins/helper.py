@@ -19,12 +19,13 @@ async def send_domain_data(qm, data: str, program_id: int, attributes: Dict[str,
     }
     await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
 
-async def send_ip_data(qm, data: str, program_id: int):
+async def send_ip_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None):
     
     msg = {
         "program_id": program_id,
         "data_type": "ip",
-        "data": [data]
+        "data": [data],
+        "attributes": attributes
     }
     await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
 
