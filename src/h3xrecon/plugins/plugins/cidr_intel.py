@@ -53,22 +53,19 @@ class CIDRIntel(ReconPlugin):
 
         await process.wait()
 
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.db = db #DatabaseManager(self.config.database.to_dict())
-        self.qm = QueueManager(self.config.nats)
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         try:
             domain = output_msg.get('output').get('domain')
             ip = output_msg.get('output').get('ip')
             if isinstance(ip, str):
                 try:
-                    await send_ip_data(data=ip, program_id=output_msg.get('program_id'))
+                    await send_ip_data(qm=qm, data=ip, program_id=output_msg.get('program_id'))
                     logger.debug(f"Sent IP {ip} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
                 except Exception as e:
                     logger.error(f"Error processing IP {ip}: {str(e)}")
             else:
                 logger.warning(f"Unexpected IP format: {ip}")
-            await send_domain_data(data=domain, program_id=output_msg.get('program_id'))
+            await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
             logger.debug(f"Sent domain {domain} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
         except Exception as e:
             logger.error(f"Error in process_resolved_domain: {str(e)}")

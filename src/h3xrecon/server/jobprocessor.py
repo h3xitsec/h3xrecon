@@ -172,7 +172,7 @@ class JobProcessor:
         if function_name in self.processor_map:
             logger.info(f"Processing output from plugin '{function_name}' on target '{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:
-                await self.processor_map[function_name](msg_data, self.db)
+                await self.processor_map[function_name](msg_data, self.db, self.qm)
             except Exception as e:
                 logger.error(f"Error processing output with plugin '{function_name}': {e}", exc_info=True)
         else:

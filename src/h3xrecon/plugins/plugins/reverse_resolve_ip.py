@@ -27,7 +27,6 @@ class ReverseResolveIP(ReconPlugin):
 
         await process.wait()
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        await send_domain_data(data=output_msg.get('output', []).get('domain'), program_id=output_msg.get('program_id'))
-        await send_ip_data(data=output_msg.get('source', []).get('params', {}).get('target'), program_id=output_msg.get('program_id'))
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
+        await send_domain_data(qm=qm, data=output_msg.get('output', []).get('domain'), program_id=output_msg.get('program_id'))
+        await send_ip_data(qm=qm, data=output_msg.get('source', []).get('params', {}).get('target'), program_id=output_msg.get('program_id'))
