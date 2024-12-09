@@ -1033,7 +1033,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT u.url, u.title, u.status_code,u.content_type FROM urls u JOIN programs p ON p.id = u.program_id WHERE p.name = '$_program_name'SELECT u.url, u.title, u.status_code, c.serial as certificate FROM urls u JOIN programs p ON p.id = u.program_id LEFT JOIN certificates c ON u.id = ANY(c.url_id) WHERE p.name = '$_program_name'",
+          "rawSql": "SELECT u.url, u.title, u.status_code, c.serial as certificate FROM urls u JOIN programs p ON p.id = u.program_id LEFT JOIN certificates c ON u.id = ANY(c.url_id) WHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1335,7 +1335,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT c.subject_cn, c.issuer_org, c.serial, c.valid_date, c.expiry_date, array_length(c.subject_an, 1) as subject_an_count FROM certificates c JOIN programs p ON p.id = c.program_id WHERE p.name = '$_program_name'SELECT c.subject_cn, c.issuer_org, c.serial, c.valid_date, c.expiry_date, array_length(c.subject_an, 1) as subject_an_count, array_length(c.url_id, 1) as url_count FROM certificates c JOIN programs p ON p.id = c.program_id WHERE p.name = '$_program_name'",
+          "rawSql": "SELECT c.subject_cn, c.issuer_org, c.serial, c.valid_date, c.expiry_date, array_length(c.subject_an, 1) as subject_an_count, array_length(c.url_id, 1) as url_count FROM certificates c JOIN programs p ON p.id = c.program_id WHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [
