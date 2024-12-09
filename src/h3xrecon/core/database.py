@@ -649,7 +649,7 @@ class DatabaseManager():
                     logger.info(f"New URL inserted: {url}")
                 else:
                     logger.info(f"URL updated: {url}")
-                return inserted
+                return inserted 
             return False
         except Exception as e:
             logger.error(f"Error inserting or updating URL in database: {e}")
@@ -664,41 +664,40 @@ class DatabaseManager():
                 raise Exception("Database connection pool is not initialized")
             
             # Convert ISO format strings to timezone-aware datetime objects
-            valid_date = dateutil.parser.parse(data.get('valid_date')).replace(tzinfo=None) if data.get('valid_date') else None
-            expiry_date = dateutil.parser.parse(data.get('expiry_date')).replace(tzinfo=None) if data.get('expiry_date') else None
+            valid_date = dateutil.parser.parse(data.get('cert', {}).get('valid_date')).replace(tzinfo=None) if data.get('cert', {}).get('valid_date') else None
+            expiry_date = dateutil.parser.parse(data.get('cert', {}).get('expiry_date')).replace(tzinfo=None) if data.get('cert', {}).get('expiry_date') else None
             
             # Convert types before insertion
-            subject_dn = data.get('subject_dn')
-            subject_cn = data.get('subject_cn')
-            subject_an = data.get('subject_an')
-            issuer_dn = data.get('issuer_dn')
-            issuer_cn = data.get('issuer_cn')
-            issuer_org = data.get('issuer_org')[0]
-            serial = data.get('serial')
-            fingerprint_hash = data.get('fingerprint_hash')
+            url_id = await self._fetch_value('''
+                SELECT id FROM urls WHERE url = $1
+            ''', data.get("url"))
+            logger.debug(f"URL ID: {url_id}")
+            url_id = url_id.data
+            subject_dn = data.get("cert", {}).get('subject_dn')
+            subject_cn = data.get("cert", {}).get('subject_cn')
+            subject_an = data.get("cert", {}).get('subject_an')
+            issuer_dn = data.get("cert", {}).get('issuer_dn')
+            issuer_cn = data.get("cert", {}).get('issuer_cn')
+            issuer_org = data.get("cert", {}).get('issuer_org')[0]
+            serial = data.get("cert", {}).get('serial')
+            fingerprint_hash = data.get("cert", {}).get('fingerprint_hash')
 
             result = await self._write_records(
                 '''
                 INSERT INTO certificates (
-                        subject_dn, subject_cn, subject_an, valid_date, expiry_date, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
+                        url_id, subject_dn, subject_cn, subject_an, valid_date, expiry_date, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
                     )
                     VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+                        ARRAY[$1]::integer[], $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
                     )
-                    ON CONFLICT (subject_cn, serial) DO UPDATE SET
-                        subject_dn = EXCLUDED.subject_dn,
-                        subject_cn = EXCLUDED.subject_cn,
-                        subject_an = EXCLUDED.subject_an,
-                        valid_date = EXCLUDED.valid_date,
-                        expiry_date = EXCLUDED.expiry_date,
-                        issuer_dn = EXCLUDED.issuer_dn,
-                        issuer_cn = EXCLUDED.issuer_cn,
-                        issuer_org = EXCLUDED.issuer_org,
-                        serial = EXCLUDED.serial,
-                        fingerprint_hash = EXCLUDED.fingerprint_hash,
-                        program_id = EXCLUDED.program_id
+                    ON CONFLICT (serial) DO UPDATE SET url_id =
+                        CASE 
+                            WHEN $1 = ANY(certificates.url_id) THEN certificates.url_id
+                            ELSE array_append(certificates.url_id, $1)
+                        END
                     RETURNING (xmax = 0) AS inserted
                 ''',
+                url_id,
                 subject_dn,
                 subject_cn,
                 subject_an,
@@ -719,12 +718,7 @@ class DatabaseManager():
                 data = result.data
 
             if data and isinstance(data, list) and len(data) > 0:
-                inserted = data[0]['inserted']
-                if inserted:
-                   logger.info(f"New certificate inserted: {serial}")
-                else:
-                   logger.info(f"Certificate updated: {serial}")
-                return inserted
+                return data[0]['inserted']
             return False
         except Exception as e:
             logger.error(f"Error inserting or updating certificate in database: {e}")
