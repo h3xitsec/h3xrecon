@@ -95,7 +95,7 @@ class TestHTTP(ReconPlugin):
                 "port": int(output_msg.get('output').get('port')), 
                 "protocol": "tcp"
         }, program_id=output_msg.get('program_id'))
-        await send_certificate_data(data={
+        await send_certificate_data(qm=qm,data={
             "subject_dn": output_msg.get('output').get('tls', {}).get('subject_dn', []),
             "subject_cn": output_msg.get('output').get('tls', {}).get('subject_cn', []),
             "subject_an": output_msg.get('output').get('tls', {}).get('subject_an', []),
