@@ -8,6 +8,7 @@ import importlib
 import pkgutil
 import json
 import redis
+import asyncio
 
 class FunctionExecutor():
     def __init__(self, worker_id: str, qm: QueueManager, db: DatabaseManager, config: Config, redis_status: redis.Redis):
@@ -49,15 +50,14 @@ class FunctionExecutor():
                 
                 for attribute_name in dir(module):
                     attribute = getattr(module, attribute_name)
-                    #logger.debug(f"Checking attribute: {attribute_name}, type: {type(attribute)}")
                     
                     if not isinstance(attribute, type) or not issubclass(attribute, ReconPlugin) or attribute is ReconPlugin:
                        continue
                         
                     plugin_instance = attribute()
-                    self.function_map[plugin_instance.name] = plugin_instance.execute
-                    logger.debug(f"Loaded plugin: {plugin_instance.name}")
-                
+                    bound_method = plugin_instance.execute
+                    self.function_map[plugin_instance.name] = bound_method
+                    logger.debug(f"Loaded plugin: {plugin_instance.name} with timeout: {plugin_instance.timeout}s")
                 
             except Exception as e:
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
@@ -74,24 +74,45 @@ class FunctionExecutor():
             logger.error(f"Function '{func_name}' not found in function_map.")
             return
 
+        # Get the plugin instance
+        plugin_instance = next(p for p in self.function_map.values() if p.__self__.name == func_name)
+        plugin_timeout = plugin_instance.__self__.timeout
         plugin_execute = self.function_map[func_name]
         self.set_status(f"{func_name}:{params.get('target')}")
-        async for result in plugin_execute(params, program_id, execution_id):
-            if isinstance(result, str):
-                result = json.loads(result)
-            output_data = {
+
+        try:
+            async with asyncio.timeout(plugin_timeout):
+                async for result in plugin_execute(params, program_id, execution_id):
+                    if isinstance(result, str):
+                        result = json.loads(result)
+                    output_data = {
+                        "program_id": program_id,
+                        "execution_id": execution_id,
+                        "source": {"function": func_name, "params": params, "force": force_execution},
+                        "output": result,
+                        "timestamp": timestamp
+                    }
+                    # Publish the result
+                    await self.qm.publish_message(subject="function.output", stream="FUNCTION_OUTPUT", message=output_data)
+                    yield output_data
+
+        except asyncio.TimeoutError:
+            logger.error(f"Function '{func_name}' timed out after {plugin_timeout} seconds")
+            error_data = {
                 "program_id": program_id,
                 "execution_id": execution_id,
                 "source": {"function": func_name, "params": params, "force": force_execution},
-                "output": result,
+                "output": {"error": f"Function timed out after {plugin_timeout} seconds"},
                 "timestamp": timestamp
             }
-            # Publish the result
-            await self.qm.publish_message(subject="function.output", stream="FUNCTION_OUTPUT", message=output_data)
-
-            
-            yield output_data
-        self.set_status("idle")
-        logger.info(f"Finished running {func_name} on {params.get('target')} ({execution_id})")
+            await self.qm.publish_message(subject="function.output", stream="FUNCTION_OUTPUT", message=error_data)
+            yield error_data
+        except Exception as e:
+            logger.error(f"Error executing function '{func_name}': {e}")
+            self.set_status("idle")
+            raise
+        finally:
+            self.set_status("idle")
+            logger.info(f"Finished running {func_name} on {params.get('target')} ({execution_id})")
 
 
