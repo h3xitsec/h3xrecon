@@ -7,16 +7,23 @@ from loguru import logger
 import importlib
 import pkgutil
 import json
+import redis
 
 class FunctionExecutor():
-    def __init__(self, qm: QueueManager, db: DatabaseManager, config: Config):
+    def __init__(self, worker_id: str, qm: QueueManager, db: DatabaseManager, config: Config, redis_status: redis.Redis):
+        self.worker_id = worker_id
         self.qm = qm
         self.db = db    
         self.config = config
         self.config.setup_logging()
         self.function_map: Dict[str, Callable] = {}
         self.load_plugins()
+        self.redis_status = redis_status
+        self.set_status("idle")
 
+    def set_status(self, status: str):
+        self.redis_status.set(self.worker_id, status)
+    
     def load_plugins(self):
         """Dynamically load all recon plugins."""
         try:
@@ -68,6 +75,7 @@ class FunctionExecutor():
             return
 
         plugin_execute = self.function_map[func_name]
+        self.set_status(f"{func_name}:{params.get('target')}")
         async for result in plugin_execute(params, program_id, execution_id):
             if isinstance(result, str):
                 result = json.loads(result)
@@ -83,6 +91,7 @@ class FunctionExecutor():
 
             
             yield output_data
+        self.set_status("idle")
         logger.info(f"Finished running {func_name} on {params.get('target')} ({execution_id})")
 
 
