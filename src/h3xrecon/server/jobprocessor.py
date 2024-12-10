@@ -7,8 +7,7 @@ from h3xrecon.__about__ import __version__
 from typing import Dict, Any, Callable, List
 from loguru import logger
 from dataclasses import dataclass
-import json
-import os
+import socket
 import traceback
 import importlib
 import pkgutil
@@ -62,15 +61,24 @@ class JobProcessor:
     def __init__(self, config: Config):
         self.db = DatabaseManager()
         self.qm = QueueManager(config.nats)
-        self.jobprocessor_id = f"jobprocessor-{os.getenv('HOSTNAME')}"
+        self.jobprocessor_id = f"jobprocessor-{socket.gethostname()}"
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
         redis_config = config.redis
-        self.redis_client = redis.Redis(
+        self.redis_cache = redis.Redis(
             host=redis_config.host,
             port=redis_config.port,
             db=redis_config.db,
             password=redis_config.password
         )
+        # Connect to the status redis db to flush all worker statuses
+        self.redis_status = redis.Redis(
+            host=config.redis.host,
+            port=config.redis.port,
+            db=1
+        )
+        for key in self.redis_status.scan_iter("*"):
+            self.redis_status.delete(key)
+        
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
             logger.debug(f"Found plugin package at: {package.__path__}")
@@ -163,7 +171,7 @@ class JobProcessor:
             function_name = message_data.get("source", {}).get("function", "unknown")
             target = message_data.get("source", {}).get("params", {}).get("target", "unknown")
             redis_key = f"{function_name}:{target}"
-            self.redis_client.set(redis_key, timestamp)
+            self.redis_cache.set(redis_key, timestamp)
         except Exception as e:
             logger.error(f"Error logging or updating function execution: {e}")
 
@@ -196,7 +204,6 @@ async def main():
         pass
     finally:
         await job_processor.stop()
-
 
 def run():
     asyncio.run(main())

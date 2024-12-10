@@ -1,4 +1,4 @@
-import os
+import socket
 import sys
 from loguru import logger
 from h3xrecon.worker.executor import FunctionExecutor
@@ -31,16 +31,21 @@ class Worker:
         self.db = DatabaseManager() #config.database.to_dict() )
         self.config = config
         self.config.setup_logging()
-        self.worker_id = f"worker-{os.getenv('HOSTNAME')}"
-        self.function_executor = FunctionExecutor(qm=self.qm, db=self.db, config=self.config)
-        self.execution_threshold = timedelta(hours=24)
-        self.result_publisher = None
-        self.redis_client = redis.Redis(
+        self.worker_id = f"worker-{socket.gethostname()}"
+        self.redis_status = redis.Redis(
             host=config.redis.host,
             port=config.redis.port,
-            db=config.redis.db,
-            password=config.redis.password
+            db=1
         )
+        self.function_executor = FunctionExecutor(worker_id=self.worker_id, qm=self.qm, db=self.db, config=self.config, redis_status=self.redis_status)
+        self.execution_threshold = timedelta(hours=24)
+        self.result_publisher = None
+        self.redis_cache = redis.Redis(
+            host=config.redis.host,
+            port=config.redis.port,
+            db=config.redis.db
+        )
+        
 
     async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
         # Validate function_name is a valid plugin
@@ -89,7 +94,7 @@ class Worker:
     async def should_execute(self, function_execution_request: FunctionExecutionRequest) -> bool:
         data = function_execution_request
         redis_key = f"{data.function_name}:{data.params.get('target')}"
-        last_execution = self.redis_client.get(redis_key)
+        last_execution = self.redis_cache.get(redis_key)
         if last_execution:
             last_execution_time = datetime.fromisoformat(last_execution.decode())
             time_since_last_execution = datetime.now(timezone.utc) - last_execution_time
@@ -156,6 +161,7 @@ async def main():
         logger.error(f"Critical error: {str(e)}")
         sys.exit(1)
     finally:
+        worker.redis_status.delete(worker.worker_id)
         logger.info("Worker shutdown complete")
 
 def run():

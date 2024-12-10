@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 import os
 import traceback
 import json
+import socket
 
 
 @dataclass
@@ -36,7 +37,7 @@ class DataProcessor:
     def __init__(self, config: Config):
         self.qm = QueueManager(config.nats)
         self.db_manager = DatabaseManager() #config.database.to_dict())
-        self.dataprocessor_id = f"dataprocessor-{os.getenv('HOSTNAME')}"
+        self.dataprocessor_id = f"dataprocessor-{socket.gethostname()}"
         self.data_type_processors = {
             "ip": self.process_ip,
             "domain": self.process_domain,
