@@ -112,8 +112,12 @@ class DataProcessor:
     ################################
 
     async def process_ip(self, msg_data: Dict[str, Any]):
+        if msg_data.get('attributes') == None:
+            attributes = {}
+        else:
+            attributes = msg_data.get('attributes')
         for ip in msg_data.get('data'):
-            ptr = msg_data.get('attributes', {}).get('ptr')
+            ptr = attributes.get('ptr')
             if isinstance(ptr, list):
                 ptr = ptr[0] if ptr else None  # Take the first PTR record if it's a list
             elif ptr == '':
