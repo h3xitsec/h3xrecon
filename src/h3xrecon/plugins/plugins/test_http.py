@@ -12,6 +12,10 @@ class TestHTTP(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
+    @property
+    def timeout(self) -> int:
+        return 300  # 5 minutes timeout
+
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.info(f"Running {self.name} on {params.get('target', {})}")
         command = (
@@ -47,21 +51,15 @@ class TestHTTP(ReconPlugin):
                 shell=True
             )
             
-            async with asyncio.timeout(300):  # 5 minute timeout
-                async for output in self._read_subprocess_output(process):
-                    try:
-                        json_data = json.loads(output)
-                        yield json_data
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse JSON output: {e}")
+            async for output in self._read_subprocess_output(process):
+                try:
+                    json_data = json.loads(output)
+                    yield json_data
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse JSON output: {e}")
 
-                await process.wait()
+            await process.wait()
                 
-        except asyncio.TimeoutError:
-            logger.error(f"HTTP test timed out for target {params.get('target', {})}")
-            if process:
-                process.kill()
-            raise
         except Exception as e:
             logger.error(f"Error during HTTP test: {str(e)}")
             if process:
