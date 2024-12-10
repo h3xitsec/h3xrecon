@@ -5,6 +5,11 @@ import asyncio
 
 class ReconPlugin(ABC):
     @property
+    def timeout(self) -> int:
+        """Timeout in seconds for the plugin execution. Default is 300 seconds (5 minutes)."""
+        return 120
+
+    @property
     @abstractmethod
     def name(self) -> str:
         """Name of the recon function."""
