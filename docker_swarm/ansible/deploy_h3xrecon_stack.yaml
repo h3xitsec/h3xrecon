@@ -3,6 +3,8 @@
   tasks:
     - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
 
+#- ansible.builtin.import_playbook: remove_h3xrecon_stack.yaml
+
 - name: Start h3xrecon stack
   hosts: processor
   tasks:
