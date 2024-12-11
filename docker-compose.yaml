@@ -125,7 +125,7 @@ services:
     ports:
       - "6432:6432"
     depends_on:
-      pgbouncer:
+      database:
         condition: service_healthy
     restart: unless-stopped
 
@@ -165,7 +165,7 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
-      pgbouncer:
+      database:
         condition: service_healthy
 
   dataprocessor:
@@ -179,7 +179,7 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
-      pgbouncer:
+      database:
         condition: service_healthy
 
   worker:
@@ -191,7 +191,7 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
-      pgbouncer:
+      database:
         condition: service_healthy
     deploy:
       replicas: ${H3XRECON_WORKERS_COUNT}

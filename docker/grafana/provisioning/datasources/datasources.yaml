@@ -30,7 +30,7 @@ datasources:
       pipelineWindow: 0
   - name: h3xrecon_database
     type: postgres
-    url: database:5432
+    url: pgbouncer:6432
     database: h3xrecon
     user: h3xrecon
     secureJsonData:

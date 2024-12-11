@@ -15,6 +15,7 @@ import uuid
 import asyncio
 from datetime import datetime, timezone, timedelta
 import redis
+import time
 
 @dataclass
 class FunctionExecutionRequest:
@@ -32,7 +33,7 @@ class Worker:
         self.config = config
         self.config.setup_logging()
         self.worker_id = f"worker-{socket.gethostname()}"
-        self.redis_status = redis.Redis(
+        self.redis_status = self._init_redis_with_retry(
             host=config.redis.host,
             port=config.redis.port,
             db=1
@@ -46,6 +47,21 @@ class Worker:
             db=config.redis.db
         )
         
+
+    def _init_redis_with_retry(self, host, port, db, max_retries=5, retry_delay=2):
+        for attempt in range(max_retries):
+            try:
+                redis_client = redis.Redis(host=host, port=port, db=db)
+                # Test the connection
+                redis_client.ping()
+                logger.info(f"Successfully connected to Redis on attempt {attempt + 1}")
+                return redis_client
+            except (redis.ConnectionError, redis.TimeoutError) as e:
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to connect to Redis after {max_retries} attempts")
+                    raise
+                logger.warning(f"Failed to connect to Redis (attempt {attempt + 1}/{max_retries}): {e}")
+                time.sleep(retry_delay)
 
     async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
         # Validate function_name is a valid plugin
@@ -75,6 +91,12 @@ class Worker:
     async def start(self):
         logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
         try:
+            # Test Redis connection first
+            try:
+                self.redis_status.ping()
+            except (redis.ConnectionError, redis.TimeoutError) as e:
+                raise ConnectionError(f"Cannot connect to Redis: {e}")
+
             await self.qm.connect()
             await self.qm.subscribe(
                 subject="function.execute",

@@ -1,7 +1,7 @@
-- name: Clean up worker drives
-  hosts: workers
-  tasks:
-    - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
+#- name: Clean up worker drives
+#  hosts: workers
+#  tasks:
+#    - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
 
 #- ansible.builtin.import_playbook: remove_h3xrecon_stack.yaml
 
@@ -20,6 +20,8 @@
         dest: "{{ file['dest'] }}"
       loop:
         - src: ../../docker/grafana
+          dest: "{{ h3xrecon_target_directory }}"
+        - src: ../../docker/pgbouncer
           dest: "{{ h3xrecon_target_directory }}"
         - src: "{{ inventory_dir }}/docker-compose.swarm.yaml"
           dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
