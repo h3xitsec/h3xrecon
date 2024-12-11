@@ -96,8 +96,8 @@ class Config:
             database=os.getenv('H3XRECON_DB_NAME', 'h3xrecon'),
             user=os.getenv('H3XRECON_DB_USER', 'postgres'),
             password=os.getenv('H3XRECON_DB_PASS', ''),
-            min_size=int(os.getenv('H3XRECON_DB_MIN_CONN', '10')),
-            max_size=int(os.getenv('H3XRECON_DB_MAX_CONN', '50'))
+            min_size=int(os.getenv('H3XRECON_DB_MIN_CONN', '2')),
+            max_size=int(os.getenv('H3XRECON_DB_MAX_CONN', '5'))
         )
 
     def _load_nats_config_env(self) -> NatsConfig:

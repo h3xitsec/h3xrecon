@@ -98,8 +98,8 @@ class Nuclei(ReconPlugin):
                 scheme = output_msg.get('output').get('scheme', "")
         
         service = {
-            "ip": output_msg.get('output').get('ip'),
-            "port": int(output_msg.get('output').get('port')),
+            "ip": output_msg.get('output', {}).get('ip', ""),
+            "port": int(output_msg.get('output', {}).get('port')) if "port" in output_msg.get('output', {}) else None,
             "protocol": protocol,
             "state": "open",
             "service": scheme,

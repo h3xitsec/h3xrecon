@@ -55,16 +55,6 @@ class DatabaseManager():
             self.config = config
         logger.debug(f"Database config: {self.config}")
         self.pool = None
-        self.connection = self._connect_to_database()
-
-    def _connect_to_database(self):
-        """
-        Placeholder method for database connection.
-        
-        Returns:
-            str: A placeholder database connection object
-        """
-        return "DatabaseConnectionObject"
         
     def __init__(self, config=None):
         """
