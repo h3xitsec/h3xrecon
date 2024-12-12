@@ -28,11 +28,11 @@ class FunctionExecutionRequest:
 
 class Worker:
     def __init__(self, config: Config):
-        self.qm = QueueManager(config.nats)
+        self.worker_id = f"worker-{socket.gethostname()}"
+        self.qm = QueueManager(client_name=self.worker_id, config=config.nats)
         self.db = DatabaseManager() #config.database.to_dict() )
         self.config = config
         self.config.setup_logging()
-        self.worker_id = f"worker-{socket.gethostname()}"
         logger.debug(f"Redis config: {config.redis}")
         self.redis_status = self._init_redis_with_retry(
             host=config.redis.host,

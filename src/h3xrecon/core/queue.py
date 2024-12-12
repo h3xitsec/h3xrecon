@@ -9,13 +9,14 @@ from .config import Config
 from h3xrecon.__about__ import __version__
 
 class QueueManager:
-    def __init__(self, config: Config = None):
+    def __init__(self, client_name: str = None, config: Config = None):
         """Initialize the QueueManager without connecting to NATS.
         The actual connection is established when connect() is called.
         """
         logger.debug(f"Initializing Queue Manager... (v{__version__})")
         self.nc: Optional[NATS] = None
         self.js = None
+        self.client_name = client_name
         if config is None:  
             self.config = Config().nats
         else:
@@ -45,6 +46,7 @@ class QueueManager:
                 "connect_timeout": 5,  # 5 seconds timeout
                 "max_reconnect_attempts": 10,
                 "reconnect_time_wait": 1,  # 1 second between reconnect attempts
+                "name": f"{self.client_name}-{__version__}"
             }
             await self.nc.connect(**connect_options)
             self.js = self.nc.jetstream()
