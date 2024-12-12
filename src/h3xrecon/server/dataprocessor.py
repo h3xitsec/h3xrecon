@@ -35,7 +35,7 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
 
 class DataProcessor:
     def __init__(self, config: Config):
-        self.qm = QueueManager(config.nats)
+        self.qm = QueueManager(client_name="dataprocessor", config=config.nats)
         self.db_manager = DatabaseManager() #config.database.to_dict())
         self.dataprocessor_id = f"dataprocessor-{socket.gethostname()}"
         self.data_type_processors = {

@@ -60,7 +60,7 @@ class FunctionExecution:
 class JobProcessor:
     def __init__(self, config: Config):
         self.db = DatabaseManager()
-        self.qm = QueueManager(config.nats)
+        self.qm = QueueManager(client_name="jobprocessor", config=config.nats)
         self.jobprocessor_id = f"jobprocessor-{socket.gethostname()}"
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
         redis_config = config.redis
