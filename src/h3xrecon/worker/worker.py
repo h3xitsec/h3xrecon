@@ -48,7 +48,7 @@ class Worker:
         )
         
 
-    def _init_redis_with_retry(self, host, port, db, max_retries=5, retry_delay=2):
+    def _init_redis_with_retry(self, host, port, db, max_retries=20, retry_delay=5):
         for attempt in range(max_retries):
             try:
                 redis_client = redis.Redis(host=host, port=port, db=db)
