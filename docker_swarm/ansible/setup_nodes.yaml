@@ -7,7 +7,7 @@
   vars:
     linux_apt_packages:
     - docker.io
-    - "{{ h3xrecon_dockercompose_pkg }}"
+    - docker-compose-v2
     - python3-venv
     - python3-jsondiff
     - fail2ban
@@ -36,11 +36,11 @@
     become: true
     ansible.builtin.apt:
       update_cache: true
-      name: '{{ pkg }}'
+      name: '{{ linux_apt_packages }}'
       state: present
-    loop: '{{ linux_apt_packages }}'
-    loop_control:
-      loop_var: pkg
+    # loop: '{{ linux_apt_packages }}'
+    # loop_control:
+    #   loop_var: pkg
   
   - name: Enable fail2ban
     become: true
