@@ -33,10 +33,12 @@ class Worker:
         self.config = config
         self.config.setup_logging()
         self.worker_id = f"worker-{socket.gethostname()}"
+        logger.debug(f"Redis config: {config.redis}")
         self.redis_status = self._init_redis_with_retry(
             host=config.redis.host,
             port=config.redis.port,
-            db=1
+            db=1,
+            password=config.redis.password
         )
         self.function_executor = FunctionExecutor(worker_id=self.worker_id, qm=self.qm, db=self.db, config=self.config, redis_status=self.redis_status)
         self.execution_threshold = timedelta(hours=24)
@@ -44,14 +46,15 @@ class Worker:
         self.redis_cache = redis.Redis(
             host=config.redis.host,
             port=config.redis.port,
-            db=config.redis.db
+            db=config.redis.db,
+            password=config.redis.password
         )
         
 
-    def _init_redis_with_retry(self, host, port, db, max_retries=20, retry_delay=5):
+    def _init_redis_with_retry(self, host, port, db, password, max_retries=20, retry_delay=5):
         for attempt in range(max_retries):
             try:
-                redis_client = redis.Redis(host=host, port=port, db=db)
+                redis_client = redis.Redis(host=host, port=port, db=db, password=password)
                 # Test the connection
                 redis_client.ping()
                 logger.info(f"Successfully connected to Redis on attempt {attempt + 1}")

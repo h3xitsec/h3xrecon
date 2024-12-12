@@ -74,7 +74,8 @@ class JobProcessor:
         self.redis_status = redis.Redis(
             host=config.redis.host,
             port=config.redis.port,
-            db=1
+            db=1,
+            password=config.redis.password
         )
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')

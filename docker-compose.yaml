@@ -68,10 +68,16 @@ services:
     #     target: /etc/grafana/provisioning/dashboards/urls-dashboard.json
   
   cache:
-    image: redis:6.2-alpine
+    image: redis:latest
+    env_file:
+      - .env.compose
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --protected-mode no
+    command: >
+      redis-server 
+      --appendonly yes
+      --protected-mode yes
+      --requirepass ${H3XRECON_REDIS_PASS}
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       interval: 5s
