@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 5,
   "links": [],
   "panels": [
     {
@@ -102,7 +102,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -112,7 +112,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT u.url,u.title,u.webserver,u.content_type,u.status_code,u.final_url FROM urls u JOIN programs p ON p.id = u.program_id WHERE p.name = '$_program_name'",
+          "rawSql": "SELECT u.url,u.title,u.webserver,u.content_type,u.status_code,u.final_url,c.subject_cn as certificate FROM urls u JOIN programs p ON p.id = u.program_id LEFT JOIN certificates c ON u.id = ANY(c.url_id) WHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [
