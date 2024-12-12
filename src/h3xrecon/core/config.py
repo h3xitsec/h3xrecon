@@ -115,7 +115,7 @@ class Config:
             host=os.getenv('H3XRECON_PROCESSOR_HOST', os.getenv('H3XRECON_REDIS_HOST', 'localhost')),
             port=int(os.getenv('H3XRECON_REDIS_PORT', '6379')),
             db=int(os.getenv('H3XRECON_REDIS_DB', '0')),
-            password=os.getenv('H3XRECON_REDIS_PASSWORD')
+            password=os.getenv('H3XRECON_REDIS_PASS')
         )
 
     def _load_log_config_env(self) -> LogConfig:

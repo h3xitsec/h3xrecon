@@ -68,10 +68,16 @@ services:
     #     target: /etc/grafana/provisioning/dashboards/urls-dashboard.json
   
   cache:
-    image: redis:6.2-alpine
+    image: redis:latest
+    env_file:
+      - .env.compose
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --protected-mode no
+    command: >
+      redis-server 
+      --appendonly yes
+      --protected-mode yes
+      --requirepass ${H3XRECON_REDIS_PASS}
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       interval: 5s
@@ -88,6 +94,7 @@ services:
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=${H3XRECON_DB_USER}
       - POSTGRES_DB=${H3XRECON_DB_NAME}
+      - POSTGRES_HOST_AUTH_METHOD=md5
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:
@@ -105,6 +112,28 @@ services:
         /migrate.sh &&
         wait
       "
+  
+  pgbouncer:
+    image: bitnami/pgbouncer:latest
+    env_file:
+      - .env.compose
+    environment:
+      - PGBOUNCER_DATABASE=h3xrecon
+      - POSTGRESQL_HOST=database
+      - POSTGRESQL_PORT=5432
+      - POSTGRESQL_DATABASE=h3xrecon
+      - POSTGRESQL_USERNAME=h3xrecon
+      - POSTGRESQL_PASSWORD=h3xrecon
+      - PGBOUNCER_AUTH_TYPE=md5
+    volumes:
+      - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./docker/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "6432:6432"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
 
   msgbroker:
     image: nats:2.10.21-alpine

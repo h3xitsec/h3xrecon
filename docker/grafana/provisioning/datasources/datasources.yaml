@@ -17,6 +17,8 @@ datasources:
       timeout: 10
       pingInterval: 0
       pipelineWindow: 0
+    secureJsonData:
+      password: ${H3XRECON_REDIS_PASS}
   - name: Redis-WorkerStatus
     type: redis-datasource
     access: proxy
@@ -28,9 +30,11 @@ datasources:
       timeout: 10
       pingInterval: 0
       pipelineWindow: 0
+    secureJsonData:
+      password: ${H3XRECON_REDIS_PASS}
   - name: h3xrecon_database
     type: postgres
-    url: database:5432
+    url: pgbouncer:6432
     database: h3xrecon
     user: h3xrecon
     secureJsonData:

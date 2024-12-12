@@ -74,11 +74,9 @@ class JobProcessor:
         self.redis_status = redis.Redis(
             host=config.redis.host,
             port=config.redis.port,
-            db=1
+            db=1,
+            password=config.redis.password
         )
-        for key in self.redis_status.scan_iter("*"):
-            self.redis_status.delete(key)
-        
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
             logger.debug(f"Found plugin package at: {package.__path__}")

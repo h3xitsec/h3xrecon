@@ -1,7 +1,13 @@
 - name: Clean up worker drives
   hosts: workers
   tasks:
-    - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
+    - name: Pull h3xrecon project Docker images
+      ansible.builtin.shell: docker pull {{ item }}
+      loop:
+        - ghcr.io/h3xitsec/h3xrecon/worker:nightly
+  #- {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
+
+#- ansible.builtin.import_playbook: remove_h3xrecon_stack.yaml
 
 #- ansible.builtin.import_playbook: remove_h3xrecon_stack.yaml
 
@@ -21,6 +27,8 @@
       loop:
         - src: ../../docker/grafana
           dest: "{{ h3xrecon_target_directory }}"
+        - src: ../../docker/pgbouncer
+          dest: "{{ h3xrecon_target_directory }}"
         - src: "{{ inventory_dir }}/docker-compose.swarm.yaml"
           dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
         - src: "{{ inventory_dir }}/.env.compose"
@@ -29,7 +37,11 @@
           dest: "{{ h3xrecon_target_directory }}"
       loop_control:
         loop_var: file
-
+    - name: Pull h3xrecon project Docker images
+      ansible.builtin.shell: docker pull {{ item }}
+      loop:
+        - ghcr.io/h3xitsec/h3xrecon/server:nightly
+        - ghcr.io/h3xitsec/h3xrecon/database:nightly
     - name: Deploy Docker stack
       ansible.builtin.shell:
         chdir: "{{ h3xrecon_target_directory }}"
