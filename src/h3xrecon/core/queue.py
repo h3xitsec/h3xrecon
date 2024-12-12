@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional, Callable, Awaitable
 from nats.aio.client import Client as NATS
 from nats.js.api import ConsumerConfig, DeliverPolicy, AckPolicy, ReplayPolicy
 from nats.errors import TimeoutError as NatsTimeoutError
+import random
 from loguru import logger
 import json
 import asyncio
@@ -9,7 +10,7 @@ from .config import Config
 from h3xrecon.__about__ import __version__
 
 class QueueManager:
-    def __init__(self, client_name: str = None, config: Config = None):
+    def __init__(self, client_name: str = f"unknown-{random.randint(1000, 9999)}", config: Config = None):
         """Initialize the QueueManager without connecting to NATS.
         The actual connection is established when connect() is called.
         """
