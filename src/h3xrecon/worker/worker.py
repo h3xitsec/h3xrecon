@@ -2,20 +2,15 @@ import socket
 import sys
 from loguru import logger
 from h3xrecon.worker.executor import FunctionExecutor
-from h3xrecon.core import QueueManager
-from h3xrecon.core import DatabaseManager
-from h3xrecon.core import Config
+from h3xrecon.core import QueueManager, DatabaseManager, Config, PreflightCheck
 from h3xrecon.__about__ import __version__
 
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
-import importlib
-import pkgutil
 import uuid
 import asyncio
 from datetime import datetime, timezone, timedelta
 import redis
-import time
 
 @dataclass
 class FunctionExecutionRequest:
@@ -29,77 +24,53 @@ class FunctionExecutionRequest:
 class Worker:
     def __init__(self, config: Config):
         self.worker_id = f"worker-{socket.gethostname()}"
-        self.qm = QueueManager(client_name=self.worker_id, config=config.nats)
-        self.db = DatabaseManager() #config.database.to_dict() )
         self.config = config
         self.config.setup_logging()
-        logger.debug(f"Redis config: {config.redis}")
-        self.redis_status = self._init_redis_with_retry(
-            host=config.redis.host,
-            port=config.redis.port,
-            db=1,
-            password=config.redis.password
-        )
-        self.function_executor = FunctionExecutor(worker_id=self.worker_id, qm=self.qm, db=self.db, config=self.config, redis_status=self.redis_status)
+        # Initialize components after preflight checks
+        self.qm = None
+        self.db = None
+        self.redis_status = None
+        self.redis_cache = None
+        self.function_executor = None
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
-        self.redis_cache = redis.Redis(
-            host=config.redis.host,
-            port=config.redis.port,
-            db=config.redis.db,
-            password=config.redis.password
+
+    async def initialize_components(self):
+        """Initialize all worker components after successful preflight checks."""
+        self.redis_status = redis.Redis(
+            host=self.config.redis.host,
+            port=self.config.redis.port,
+            db=1,
+            password=self.config.redis.password
         )
-        
-
-    def _init_redis_with_retry(self, host, port, db, password, max_retries=20, retry_delay=5):
-        for attempt in range(max_retries):
-            try:
-                redis_client = redis.Redis(host=host, port=port, db=db, password=password)
-                # Test the connection
-                redis_client.ping()
-                logger.info(f"Successfully connected to Redis on attempt {attempt + 1}")
-                return redis_client
-            except (redis.ConnectionError, redis.TimeoutError) as e:
-                if attempt == max_retries - 1:
-                    logger.error(f"Failed to connect to Redis after {max_retries} attempts")
-                    raise
-                logger.warning(f"Failed to connect to Redis (attempt {attempt + 1}/{max_retries}): {e}")
-                time.sleep(retry_delay)
-
-    async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
-        # Validate function_name is a valid plugin
-        try:
-            # Dynamically import plugins to check if the function_name is valid
-            plugin_found = False
-            
-            # Check if the function name exists in the function map keys
-            plugin_found = any(function_execution_request.function_name in key for key in self.function_executor.function_map.keys())
-            
-            if not plugin_found:
-                logger.debug(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found in {list(self.function_executor.function_map.keys())}")
-                raise ValueError(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found.")
-        
-        except Exception as e:
-            raise ValueError(f"Error validating function_name: {str(e)}")
-        
-        # Validate program_name exists in the database
-        try:
-            program_name = await self.db.get_program_name(function_execution_request.program_id)
-            if not program_name:
-                raise ValueError(f"Invalid program_id: {function_execution_request.program_id}. Program not found in database.")
-        
-        except Exception as e:
-            raise ValueError(f"Error validating program_name: {str(e)}")
+        self.redis_cache = redis.Redis(
+            host=self.config.redis.host,
+            port=self.config.redis.port,
+            db=self.config.redis.db,
+            password=self.config.redis.password
+        )
+        self.qm = QueueManager(client_name=self.worker_id, config=self.config.nats)
+        self.db = DatabaseManager()
+        self.function_executor = FunctionExecutor(
+            worker_id=self.worker_id,
+            qm=self.qm,
+            db=self.db,
+            config=self.config,
+            redis_status=self.redis_status
+        )
 
     async def start(self):
         logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
         try:
-            # Test Redis connection first
-            try:
-                self.redis_status.ping()
-            except (redis.ConnectionError, redis.TimeoutError) as e:
-                raise ConnectionError(f"Cannot connect to Redis: {e}")
+            # Run preflight checks
+            preflight = PreflightCheck(self.config, f"worker-{self.worker_id}")
+            if not await preflight.run_checks():
+                raise ConnectionError("Preflight checks failed. Cannot start worker.")
 
+            # Initialize components
+            await self.initialize_components()
+            
+            # Connect to NATS and subscribe
             await self.qm.connect()
             await self.qm.subscribe(
                 subject="function.execute",
@@ -109,9 +80,6 @@ class Worker:
                 batch_size=1
             )
             logger.info(f"Worker {self.worker_id} started and listening for messages...")
-        except ConnectionError as e:
-            logger.error(str(e))
-            sys.exit(1)
         except Exception as e:
             logger.error(f"Failed to start worker: {str(e)}")
             sys.exit(1)
@@ -186,7 +154,8 @@ async def main():
         logger.error(f"Critical error: {str(e)}")
         sys.exit(1)
     finally:
-        worker.redis_status.delete(worker.worker_id)
+        if hasattr(worker, 'redis_status'):
+            worker.redis_status.delete(worker.worker_id)
         logger.info("Worker shutdown complete")
 
 def run():

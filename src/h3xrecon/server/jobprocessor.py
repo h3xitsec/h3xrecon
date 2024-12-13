@@ -3,6 +3,7 @@ from h3xrecon.core import QueueManager
 from h3xrecon.core import Config
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
+from h3xrecon.core.preflight import PreflightCheck
 
 from typing import Dict, Any, Callable, List
 from loguru import logger
@@ -13,6 +14,7 @@ import importlib
 import pkgutil
 import redis
 import asyncio
+import sys
 
 from uuid import UUID
 from datetime import datetime
@@ -59,6 +61,7 @@ class FunctionExecution:
 
 class JobProcessor:
     def __init__(self, config: Config):
+        self.config = config
         self.db = DatabaseManager()
         self.qm = QueueManager(client_name="jobprocessor", config=config.nats)
         self.jobprocessor_id = f"jobprocessor-{socket.gethostname()}"
@@ -117,14 +120,25 @@ class JobProcessor:
 
     async def start(self):
         logger.info(f"Starting Job Processor (ID: {self.jobprocessor_id}) version {__version__}...")
-        await self.qm.connect()
-        await self.qm.subscribe(
-            subject="function.output",
-            stream="FUNCTION_OUTPUT",
-            durable_name="MY_CONSUMER",
-            message_handler=self.message_handler,
-            batch_size=1
-        )
+        try:
+            # Run preflight checks
+            preflight = PreflightCheck(self.config, f"jobprocessor-{self.jobprocessor_id}")
+            if not await preflight.run_checks():
+                raise ConnectionError("Preflight checks failed. Cannot start job processor.")
+
+            # Initialize components
+            await self.qm.connect()
+            await self.qm.subscribe(
+                subject="function.output",
+                stream="FUNCTION_OUTPUT",
+                durable_name="MY_CONSUMER",
+                message_handler=self.message_handler,
+                batch_size=1
+            )
+            logger.info(f"Job Processor started and listening for messages...")
+        except Exception as e:
+            logger.error(f"Failed to start job processor: {str(e)}")
+            sys.exit(1)
 
     async def stop(self):
         logger.info("Shutting down...")

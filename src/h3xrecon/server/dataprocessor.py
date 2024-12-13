@@ -1,7 +1,8 @@
 from h3xrecon.core import DatabaseManager
 from h3xrecon.core import Config
 from h3xrecon.core import QueueManager
-
+from h3xrecon.core import PreflightCheck
+from h3xrecon.__about__ import __version__
 import asyncio
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable
@@ -11,6 +12,7 @@ import os
 import traceback
 import json
 import socket
+import sys
 
 
 @dataclass
@@ -35,6 +37,7 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
 
 class DataProcessor:
     def __init__(self, config: Config):
+        self.config = config
         self.qm = QueueManager(client_name="dataprocessor", config=config.nats)
         self.db_manager = DatabaseManager() #config.database.to_dict())
         self.dataprocessor_id = f"dataprocessor-{socket.gethostname()}"
@@ -48,15 +51,26 @@ class DataProcessor:
         }
 
     async def start(self):
-        await self.qm.connect()
-        await self.qm.subscribe(
-            subject="recon.data",
-            stream="RECON_DATA",
-            durable_name="MY_CONSUMER",
-            message_handler=self.message_handler,
-            batch_size=1
-        )
-        logger.info(f"Starting data processor (Worker ID: {self.dataprocessor_id})...")
+        logger.info(f"Starting Data Processor (ID: {self.dataprocessor_id}) version {__version__}...")
+        try:
+            # Run preflight checks
+            preflight = PreflightCheck(self.config, f"dataprocessor-{self.dataprocessor_id}")
+            if not await preflight.run_checks():
+                raise ConnectionError("Preflight checks failed. Cannot start data processor.")
+
+            # Initialize components
+            await self.qm.connect()
+            await self.qm.subscribe(
+                subject="recon.data",
+                stream="RECON_DATA",
+                durable_name="MY_CONSUMER",
+                message_handler=self.message_handler,
+                batch_size=1
+            )
+            logger.info(f"Data Processor started and listening for messages...")
+        except Exception as e:
+            logger.error(f"Failed to start data processor: {str(e)}")
+            sys.exit(1)
 
 
     async def stop(self):
