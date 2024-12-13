@@ -15,7 +15,14 @@ class SubdomainPermutation(ReconPlugin):
         logger.debug("Checking if the target is a dns catchall domain")
         
         logger.info(f"Running {self.name} on {params.get("target", {})}")
-        command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm /app/Worker/files/permutations.txt -depth 1 -numbers 10 -mindup -adv -md"
+
+        # For testing purposes, use a different permutation file for h3xit.io
+        if params.get("target", {}) == "h3xit.io":
+            permutation_file = "/app/Worker/files/permutation_test.txt"
+        else:
+            permutation_file = "/app/Worker/files/permutations.txt"
+        command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {permutation_file} -depth 1 -numbers 10 -mindup -adv -md"
+    
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -35,7 +42,7 @@ class SubdomainPermutation(ReconPlugin):
         yield message
 
         await process.wait()
-    
+
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         is_catchall = await db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("output").get("target"))
         logger.info(is_catchall)
