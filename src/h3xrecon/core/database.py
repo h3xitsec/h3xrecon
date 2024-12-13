@@ -77,7 +77,9 @@ class DatabaseManager():
             List[re.Pattern]: A list of compiled regex patterns
         """
         async with self._regex_lock:
-            if not self._regex_cache[program_id]:
+            scope_count = await self._fetch_value('SELECT COUNT(*) FROM program_scopes WHERE program_id = $1', program_id)
+            if not self._regex_cache[program_id] or len(self._regex_cache[program_id]) < scope_count.data:
+                logger.debug(f"Regex cache for program_id {program_id} is empty or has fewer regexes than scope count. Refreshing...")
                 program_regexes = await self._fetch_records(
                     'SELECT regex FROM program_scopes WHERE program_id = $1',
                     program_id
@@ -90,6 +92,8 @@ class DatabaseManager():
                             self._regex_cache[program_id].append(compiled)
                         except re.error as e:
                             logger.error(f"Invalid regex pattern '{regex}' for program_id {program_id}: {e}")
+            else:
+                logger.debug(f"Regex cache for program_id {program_id} already exists: {len(self._regex_cache[program_id])} scopes")
             return self._regex_cache[program_id]
 
     async def __aenter__(self):
@@ -151,7 +155,7 @@ class DatabaseManager():
             async with self.pool.acquire() as conn:
                 records = await conn.fetch(query, *args)
                 formatted_records = await self.format_records(records)
-            logger.debug(f"Fetched records: {formatted_records}")
+            #logger.debug(f"Fetched records: {formatted_records}")
             return DbResult(success=True, data=formatted_records)
         except Exception as e:
             logger.error(f"Error executing query: {str(e)}")
@@ -173,7 +177,7 @@ class DatabaseManager():
             await self.ensure_connected()
             async with self.pool.acquire() as conn:
                 value = await conn.fetchval(query, *args)
-            logger.debug(f"Fetched value: {value}")
+            #logger.debug(f"Fetched value: {value}")
             return DbResult(success=True, data=value)
         except Exception as e:
             logger.error(f"Error executing query: {str(e)}")
