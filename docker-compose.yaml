@@ -69,20 +69,30 @@ services:
   
   cache:
     image: redis:latest
-    env_file:
-      - .env.compose
     volumes:
       - redis_data:/data
     command: >
-      redis-server 
-      --appendonly yes
+      sh -c '
+      echo "Starting with clean slate..." &&
+      find /data -type f -delete &&
+      redis-server --daemonize yes --requirepass ${H3XRECON_REDIS_PASS} &&
+      sleep 2 &&
+      redis-cli -a ${H3XRECON_REDIS_PASS} -n 1 FLUSHDB &&
+      redis-cli -a ${H3XRECON_REDIS_PASS} SAVE &&
+      redis-cli -a ${H3XRECON_REDIS_PASS} shutdown &&
+      exec redis-server 
+      --appendonly yes 
       --protected-mode yes
-      --requirepass ${H3XRECON_REDIS_PASS}
+      --requirepass ${H3XRECON_REDIS_PASS}'
     healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      test: |
+        redis-cli -a ${H3XRECON_REDIS_PASS} set health_check_key health_check_value &&
+        redis-cli -a ${H3XRECON_REDIS_PASS} get health_check_key | grep -q health_check_value &&
+        redis-cli -a ${H3XRECON_REDIS_PASS} del health_check_key
       interval: 5s
       timeout: 3s
       retries: 5
+      start_period: 10s
     ports:
       - "6379:6379"
 

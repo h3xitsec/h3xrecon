@@ -26,29 +26,26 @@ class TestNucleiPlugin:
     
     # Test that nuclei execute method correctly parses HTTP output
     async def test_nuclei_execute_with_http_output(self, nuclei_plugin, mock_process_factory, sample_nuclei_execute_output_http):
-        """
-        Test the execute method with invalid JSON output.
-        """
-        # Prepare test data as invalid JSON bytes
-        test_data = [
-            (json.dumps(sample_nuclei_execute_output_http) + '\n').encode()
-        ]
+        """Test the execute method with HTTP output."""
+        # Prepare test data
+        test_data = [(json.dumps(sample_nuclei_execute_output_http) + '\n').encode()]
         
-        # Create mock process using the factory
+        # Create mock process
         mock_process = mock_process_factory(test_data)
         
-        # Patch the _read_subprocess_output method to use our mock process
-        nuclei_plugin._read_subprocess_output = lambda p: self._mock_read_subprocess_output(p, test_data)
+        # Replace the read method with a simple sync-to-async converter
+        async def quick_read(process):
+            for line in test_data:
+                yield line.decode()
+                
+        nuclei_plugin._read_subprocess_output = quick_read
         
-        # Prepare parameters for execution
-        params = {
+        # Execute and collect results
+        results = []
+        async for result in nuclei_plugin.execute({
             "target": "example.com", 
             "extra_params": ["-t", "http/misconfiguration"]
-        }
-        
-        # Collect results from execute method
-        results = []
-        async for result in nuclei_plugin.execute(params):
+        }):
             results.append(result)
         
         # Assert we got exactly one result
@@ -133,15 +130,18 @@ class TestNucleiPlugin:
         # Assert helper functions are called once each with correct parameters
         mock_send_domain_data.assert_awaited_once_with(
             data="sub.example.com",
-            program_id=sample_nuclei_execute_output['program_id']
+            program_id=sample_nuclei_execute_output['program_id'],
+            qm=None
         )
         mock_send_ip_data.assert_awaited_once_with(
             data="1.2.3.4", 
-            program_id=sample_nuclei_execute_output['program_id']
+            program_id=sample_nuclei_execute_output['program_id'],
+            qm=None
         )
         mock_send_nuclei_data.assert_awaited_once_with(
             data=sample_nuclei_execute_output['output'], 
-            program_id=sample_nuclei_execute_output['program_id']
+            program_id=sample_nuclei_execute_output['program_id'],
+            qm=None
         )
         mock_send_service_data.assert_awaited_once_with(
             data={
@@ -151,7 +151,8 @@ class TestNucleiPlugin:
                 "state": "open",
                 "service": "https",
             }, 
-            program_id=sample_nuclei_execute_output['program_id']
+            program_id=sample_nuclei_execute_output['program_id'],
+            qm=None
         )
 
     @patch('h3xrecon.plugins.plugins.nuclei.send_service_data', new_callable=AsyncMock)
