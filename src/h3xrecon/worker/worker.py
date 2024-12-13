@@ -96,6 +96,31 @@ class Worker:
                 logger.info(f"Skipping {data.function_name} on {data.params.get('target')} : executed recently.")
             return not skip
         return True
+    
+    async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
+        # Validate function_name is a valid plugin
+        try:
+            # Dynamically import plugins to check if the function_name is valid
+            plugin_found = False
+            
+            # Check if the function name exists in the function map keys
+            plugin_found = any(function_execution_request.function_name in key for key in self.function_executor.function_map.keys())
+            
+            if not plugin_found:
+                logger.debug(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found in {list(self.function_executor.function_map.keys())}")
+                raise ValueError(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found.")
+        
+        except Exception as e:
+            raise ValueError(f"Error validating function_name: {str(e)}")
+        
+        # Validate program_name exists in the database
+        try:
+            program_name = await self.db.get_program_name(function_execution_request.program_id)
+            if not program_name:
+                raise ValueError(f"Invalid program_id: {function_execution_request.program_id}. Program not found in database.")
+        
+        except Exception as e:
+            raise ValueError(f"Error validating program_name: {str(e)}")
 
     async def message_handler(self, msg):
         try:
