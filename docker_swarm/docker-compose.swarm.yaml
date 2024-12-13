@@ -2,6 +2,8 @@ version: '3.8'
 configs:
   grafana-dashboards:
     file: ./grafana/provisioning/dashboards/logs-dashboard.json
+  grafana-dashboards-data:
+    file: ./grafana/provisioning/dashboards/data-dashboard.json
   grafana-dashboard-config:
     file: ./grafana/provisioning/dashboards/dashboard.yml
   grafana-datasources:
@@ -50,6 +52,8 @@ services:
     configs:
       - source: grafana-dashboards
         target: /etc/grafana/provisioning/dashboards/logs-dashboard.json
+      - source: grafana-dashboards-data
+        target: /etc/grafana/provisioning/dashboards/data-dashboard.json
       - source: grafana-dashboard-config
         target: /etc/grafana/provisioning/dashboards/dashboard.yml
       - source: grafana-datasources
@@ -60,15 +64,31 @@ services:
           - node.labels.H3XRECON_SWARM_ROLE == processor
 
   cache:
-    image: redis:6.2-alpine
+    image: redis:latest
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --protected-mode no
+    command: >
+      sh -c '
+      echo "Starting with clean slate..." &&
+      find /data -type f -delete &&
+      redis-server --daemonize yes --requirepass ${H3XRECON_REDIS_PASS} &&
+      sleep 2 &&
+      redis-cli -a ${H3XRECON_REDIS_PASS} -n 1 FLUSHDB &&
+      redis-cli -a ${H3XRECON_REDIS_PASS} SAVE &&
+      redis-cli -a ${H3XRECON_REDIS_PASS} shutdown &&
+      exec redis-server 
+      --appendonly yes 
+      --protected-mode yes
+      --requirepass ${H3XRECON_REDIS_PASS}'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: |
+        redis-cli -a ${H3XRECON_REDIS_PASS} set health_check_key health_check_value &&
+        redis-cli -a ${H3XRECON_REDIS_PASS} get health_check_key | grep -q health_check_value &&
+        redis-cli -a ${H3XRECON_REDIS_PASS} del health_check_key
       interval: 5s
       timeout: 3s
       retries: 5
+      start_period: 10s
     ports:
       - target: 6379
         published: 6379

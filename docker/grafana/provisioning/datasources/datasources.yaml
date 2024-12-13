@@ -1,0 +1,56 @@
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+  - name: Redis-FunctionExecutionCache
+    type: redis-datasource
+    access: proxy
+    url: redis://cache:6379/0
+    isDefault: false
+    jsonData:
+      client: standalone
+      poolSize: 5
+      timeout: 10
+      pingInterval: 0
+      pipelineWindow: 0
+    secureJsonData:
+      password: ${H3XRECON_REDIS_PASS}
+  - name: Redis-WorkerStatus
+    type: redis-datasource
+    access: proxy
+    url: redis://cache:6379/1
+    isDefault: false
+    jsonData:
+      client: standalone
+      poolSize: 5
+      timeout: 10
+      pingInterval: 0
+      pipelineWindow: 0
+    secureJsonData:
+      password: ${H3XRECON_REDIS_PASS}
+  - name: h3xrecon_database
+    type: postgres
+    url: pgbouncer:6432
+    database: h3xrecon
+    user: h3xrecon
+    secureJsonData:
+      password: "h3xrecon"
+    jsonData:
+      sslmode: "disable" # disable/require/verify-ca/verify-full
+      maxOpenConns: 25         # Grafana v5.4+
+      maxIdleConns: 2         # Grafana v5.4+
+      connMaxLifetime: 14400  # Grafana v5.4+
+      postgresVersion: 903 # 903=9.3, 904=9.4, 905=9.5, 906=9.6, 1000=10
+      timescaledb: false
+  - name: NATS Monitoring
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    url: http://msgbroker:8222
+    isDefault: false
+    jsonData:
+      url: http://msgbroker:8222
+  

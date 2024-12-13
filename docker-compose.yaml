@@ -1,6 +1,12 @@
 configs:
   grafana-dashboards:
     file: ./docker/grafana/provisioning/dashboards/logs-dashboard.json
+  grafana-dashboards-data:
+    file: ./docker/grafana/provisioning/dashboards/data-dashboard.json
+  grafana-dashboards-nuclei:
+    file: ./docker/grafana/provisioning/dashboards/nuclei-dashboard.json
+  grafana-dashboards-urls:
+    file: ./docker/grafana/provisioning/dashboards/urls-dashboard.json
   grafana-dashboard-config:
     file: ./docker/grafana/provisioning/dashboards/dashboard.yml
   grafana-datasources:
@@ -34,7 +40,7 @@ services:
       - source: promtail-config
         target: /etc/promtail/config.yml
     command: -config.file=/etc/promtail/config.yml
-  
+
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -44,21 +50,36 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
-    configs:
-      - source: grafana-dashboards
-        target: /etc/grafana/provisioning/dashboards/logs-dashboard.json
-      - source: grafana-dashboard-config
-        target: /etc/grafana/provisioning/dashboards/dashboard.yml
-      - source: grafana-datasources
-        target: /etc/grafana/provisioning/datasources/datasource.yml
-
+      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource,redis-datasource
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+    # configs:
+    #   - source: grafana-dashboards
+    #     target: /etc/grafana/provisioning/dashboards/logs-dashboard.json
+    #   - source: grafana-dashboard-config
+    #     target: /etc/grafana/provisioning/dashboards/dashboard.yml
+    #   - source: grafana-datasources
+    #     target: /etc/grafana/provisioning/datasources/datasource.yml
+    #   - source: grafana-dashboards-data
+    #     target: /etc/grafana/provisioning/dashboards/data-dashboard.json
+    #   - source: grafana-dashboards-nuclei
+    #     target: /etc/grafana/provisioning/dashboards/nuclei-dashboard.json
+    #   - source: grafana-dashboards-urls
+    #     target: /etc/grafana/provisioning/dashboards/urls-dashboard.json
+  
   cache:
-    image: redis:6.2-alpine
+    image: redis:latest
+    env_file:
+      - .env.compose
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --protected-mode no
+    command: >
+      redis-server 
+      --appendonly yes
+      --protected-mode yes
+      --requirepass ${H3XRECON_REDIS_PASS}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -73,6 +94,7 @@ services:
       - POSTGRES_PASSWORD=${H3XRECON_DB_PASS}
       - POSTGRES_USER=${H3XRECON_DB_USER}
       - POSTGRES_DB=${H3XRECON_DB_NAME}
+      - POSTGRES_HOST_AUTH_METHOD=md5
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     ports:
@@ -90,6 +112,28 @@ services:
         /migrate.sh &&
         wait
       "
+  
+  pgbouncer:
+    image: bitnami/pgbouncer:latest
+    env_file:
+      - .env.compose
+    environment:
+      - PGBOUNCER_DATABASE=h3xrecon
+      - POSTGRESQL_HOST=database
+      - POSTGRESQL_PORT=5432
+      - POSTGRESQL_DATABASE=h3xrecon
+      - POSTGRESQL_USERNAME=h3xrecon
+      - POSTGRESQL_PASSWORD=h3xrecon
+      - PGBOUNCER_AUTH_TYPE=md5
+    volumes:
+      - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./docker/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "6432:6432"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
 
   msgbroker:
     image: nats:2.10.21-alpine
@@ -99,6 +143,8 @@ services:
       - nats_data:/data
     ports:
       - "4222:4222"
+      - "8222:8222"
+    command: "--http_port 8222"
     entrypoint:
       - /bin/sh
       - /entrypoint.sh
@@ -125,6 +171,8 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
+      database:
+        condition: service_healthy
 
   dataprocessor:
     image: ghcr.io/h3xitsec/h3xrecon/server:${H3XRECON_IMAGE_VERSION}
@@ -137,6 +185,8 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
+      database:
+        condition: service_healthy
 
   worker:
     image: ghcr.io/h3xitsec/h3xrecon/worker:${H3XRECON_IMAGE_VERSION}
@@ -146,6 +196,8 @@ services:
       msgbroker:
         condition: service_healthy
       cache:
+        condition: service_healthy
+      database:
         condition: service_healthy
     deploy:
       replicas: ${H3XRECON_WORKERS_COUNT}

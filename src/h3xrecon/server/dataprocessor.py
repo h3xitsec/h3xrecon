@@ -1,7 +1,8 @@
 from h3xrecon.core import DatabaseManager
 from h3xrecon.core import Config
 from h3xrecon.core import QueueManager
-
+from h3xrecon.core import PreflightCheck
+from h3xrecon.__about__ import __version__
 import asyncio
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable
@@ -10,6 +11,8 @@ from urllib.parse import urlparse
 import os
 import traceback
 import json
+import socket
+import sys
 
 
 @dataclass
@@ -34,27 +37,40 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
 
 class DataProcessor:
     def __init__(self, config: Config):
-        self.qm = QueueManager(config.nats)
+        self.config = config
+        self.qm = QueueManager(client_name="dataprocessor", config=config.nats)
         self.db_manager = DatabaseManager() #config.database.to_dict())
-        self.dataprocessor_id = f"dataprocessor-{os.getenv('HOSTNAME')}"
+        self.dataprocessor_id = f"dataprocessor-{socket.gethostname()}"
         self.data_type_processors = {
             "ip": self.process_ip,
             "domain": self.process_domain,
             "url": self.process_url,
             "service": self.process_service,
-            "nuclei": self.process_nuclei
+            "nuclei": self.process_nuclei,
+            "certificate": self.process_certificate
         }
 
     async def start(self):
-        await self.qm.connect()
-        await self.qm.subscribe(
-            subject="recon.data",
-            stream="RECON_DATA",
-            durable_name="MY_CONSUMER",
-            message_handler=self.message_handler,
-            batch_size=1
-        )
-        logger.info(f"Starting data processor (Worker ID: {self.dataprocessor_id})...")
+        logger.info(f"Starting Data Processor (ID: {self.dataprocessor_id}) version {__version__}...")
+        try:
+            # Run preflight checks
+            preflight = PreflightCheck(self.config, f"dataprocessor-{self.dataprocessor_id}")
+            if not await preflight.run_checks():
+                raise ConnectionError("Preflight checks failed. Cannot start data processor.")
+
+            # Initialize components
+            await self.qm.connect()
+            await self.qm.subscribe(
+                subject="recon.data",
+                stream="RECON_DATA",
+                durable_name="MY_CONSUMER",
+                message_handler=self.message_handler,
+                batch_size=1
+            )
+            logger.info(f"Data Processor started and listening for messages...")
+        except Exception as e:
+            logger.error(f"Failed to start data processor: {str(e)}")
+            sys.exit(1)
 
 
     async def stop(self):
@@ -110,8 +126,12 @@ class DataProcessor:
     ################################
 
     async def process_ip(self, msg_data: Dict[str, Any]):
+        if msg_data.get('attributes') == None:
+            attributes = {}
+        else:
+            attributes = msg_data.get('attributes')
         for ip in msg_data.get('data'):
-            ptr = msg_data.get('attributes', {}).get('ptr')
+            ptr = attributes.get('ptr')
             if isinstance(ptr, list):
                 ptr = ptr[0] if ptr else None  # Take the first PTR record if it's a list
             elif ptr == '':
@@ -162,11 +182,12 @@ class DataProcessor:
                         #logger.info(f"Hostname {hostname} is not in scope for program {program_name}. Skipping.")
                         return
                     logger.info(f"Processing URL result for program {msg.get('program_id')}: {d.get('url', {})}")
-                    await self.db_manager.insert_url(
+                    result = await self.db_manager.insert_url(
                         url=d.get('url'),
                         httpx_data=d.get('httpx_data', {}),
                         program_id=msg.get('program_id')
                     )
+                    logger.debug(result)
                     # Send a job to the workers to test the URL if httpx_data is missing
                     if not d.get('httpx_data'):
                         logger.info(f"Sending job to test URL: {d.get('url')}")
@@ -204,6 +225,34 @@ class DataProcessor:
                             logger.info(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
                 except Exception as e:
                     logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
+                    logger.exception(e)
+
+    async def process_service(self, msg_data: Dict[str, Any]):
+        #logger.info(msg_data)
+        if not isinstance(msg_data.get('data'), list):
+            msg_data['data'] = [msg_data.get('data')]
+        for i in msg_data.get('data'):
+            inserted = await self.db_manager.insert_service(ip=i.get("ip"), port=i.get("port"), protocol=i.get("protocol"), program_id=msg_data.get('program_id'), service=i.get("service"))
+            #if inserted:
+            #    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
+
+    async def process_certificate(self, msg: Dict[str, Any]):
+        if msg:
+            logger.debug(f"Processing certificate for program {msg.get('program_id')}: {msg}")
+            msg_data = msg.get('data', {})
+            for d in msg_data:
+                try:
+                    logger.info(f"Processing certificate for program {msg.get('program_id')}: {d.get('subject_cn', {})}")
+                    inserted = await self.db_manager.insert_certificate(
+                        program_id=msg.get('program_id'),
+                        data=d
+                    )
+                    if inserted:
+                        logger.info(f"New certificate inserted: {d.get('cert', {}).get('serial', {})}")
+                    else:
+                        logger.info(f"Certificate updated: {d.get('cert', {}).get('serial', {})}")
+                except Exception as e:
+                    logger.error(f"Failed to process certificate in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
 
     async def process_service(self, msg_data: Dict[str, Any]):

@@ -1,0 +1,1 @@
+ALTER TABLE nuclei ADD COLUMN matcher_name VARCHAR(255);

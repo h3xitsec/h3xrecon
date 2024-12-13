@@ -55,16 +55,6 @@ class DatabaseManager():
             self.config = config
         logger.debug(f"Database config: {self.config}")
         self.pool = None
-        self.connection = self._connect_to_database()
-
-    def _connect_to_database(self):
-        """
-        Placeholder method for database connection.
-        
-        Returns:
-            str: A placeholder database connection object
-        """
-        return "DatabaseConnectionObject"
         
     def __init__(self, config=None):
         """
@@ -87,7 +77,9 @@ class DatabaseManager():
             List[re.Pattern]: A list of compiled regex patterns
         """
         async with self._regex_lock:
-            if not self._regex_cache[program_id]:
+            scope_count = await self._fetch_value('SELECT COUNT(*) FROM program_scopes WHERE program_id = $1', program_id)
+            if not self._regex_cache[program_id] or len(self._regex_cache[program_id]) < scope_count.data:
+                logger.debug(f"Regex cache for program_id {program_id} is empty or has fewer regexes than scope count. Refreshing...")
                 program_regexes = await self._fetch_records(
                     'SELECT regex FROM program_scopes WHERE program_id = $1',
                     program_id
@@ -100,6 +92,8 @@ class DatabaseManager():
                             self._regex_cache[program_id].append(compiled)
                         except re.error as e:
                             logger.error(f"Invalid regex pattern '{regex}' for program_id {program_id}: {e}")
+            else:
+                logger.debug(f"Regex cache for program_id {program_id} already exists: {len(self._regex_cache[program_id])} scopes")
             return self._regex_cache[program_id]
 
     async def __aenter__(self):
@@ -161,7 +155,7 @@ class DatabaseManager():
             async with self.pool.acquire() as conn:
                 records = await conn.fetch(query, *args)
                 formatted_records = await self.format_records(records)
-            logger.debug(f"Fetched records: {formatted_records}")
+            #logger.debug(f"Fetched records: {formatted_records}")
             return DbResult(success=True, data=formatted_records)
         except Exception as e:
             logger.error(f"Error executing query: {str(e)}")
@@ -183,7 +177,7 @@ class DatabaseManager():
             await self.ensure_connected()
             async with self.pool.acquire() as conn:
                 value = await conn.fetchval(query, *args)
-            logger.debug(f"Fetched value: {value}")
+            #logger.debug(f"Fetched value: {value}")
             return DbResult(success=True, data=value)
         except Exception as e:
             logger.error(f"Error executing query: {str(e)}")
@@ -574,13 +568,13 @@ class DatabaseManager():
                 INSERT INTO urls (
                         url, program_id, a, host, path, port, tech, response_time,
                         input, lines, title, words, failed, method, scheme,
-                        cdn_name, cdn_type, final_url, resolvers, timestamp,
+                        cdn_name, cdn_type, final_url, timestamp,
                         webserver, status_code, content_type, content_length,
-                        chain_status_codes
+                        chain_status_codes, page_type, body_preview
                     )
                     VALUES (
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
+                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
                     )
                     ON CONFLICT (url) DO UPDATE SET
                         a = EXCLUDED.a,
@@ -599,13 +593,14 @@ class DatabaseManager():
                         cdn_name = EXCLUDED.cdn_name,
                         cdn_type = EXCLUDED.cdn_type,
                         final_url = EXCLUDED.final_url,
-                        resolvers = EXCLUDED.resolvers,
                         timestamp = EXCLUDED.timestamp,
                         webserver = EXCLUDED.webserver,
                         status_code = EXCLUDED.status_code,
                         content_type = EXCLUDED.content_type,
                         content_length = EXCLUDED.content_length,
-                        chain_status_codes = EXCLUDED.chain_status_codes
+                        chain_status_codes = EXCLUDED.chain_status_codes,
+                        page_type = EXCLUDED.page_type,
+                        body_preview = EXCLUDED.body_preview
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 url.lower(),
@@ -626,13 +621,14 @@ class DatabaseManager():
                 httpx_data.get('cdn_name'),
                 httpx_data.get('cdn_type'),
                 httpx_data.get('final_url'),
-                httpx_data.get('resolvers'),
                 timestamp,
                 httpx_data.get('webserver'),
                 status_code,
                 httpx_data.get('content_type'),
                 content_length,
-                httpx_data.get('chain_status_codes')
+                httpx_data.get('chain_status_codes'),
+                httpx_data.get('knowledgebase', {}).get('PageType'),
+                httpx_data.get('body_preview')
             )
             
             # Handle nested DbResult objects
@@ -647,12 +643,82 @@ class DatabaseManager():
                     logger.info(f"New URL inserted: {url}")
                 else:
                     logger.info(f"URL updated: {url}")
-                return inserted
+                return inserted 
             return False
         except Exception as e:
             logger.error(f"Error inserting or updating URL in database: {e}")
             logger.exception(e)
             return False
+    
+    async def insert_certificate(self, program_id: int, data: Dict[str, Any]):
+        await self.ensure_connected()
+        logger.debug(f"Entering insert_certificate for program {program_id}: {data}")
+        try:
+            if self.pool is None:
+                raise Exception("Database connection pool is not initialized")
+            
+            # Convert ISO format strings to timezone-aware datetime objects
+            valid_date = dateutil.parser.parse(data.get('cert', {}).get('valid_date')).replace(tzinfo=None) if data.get('cert', {}).get('valid_date') else None
+            expiry_date = dateutil.parser.parse(data.get('cert', {}).get('expiry_date')).replace(tzinfo=None) if data.get('cert', {}).get('expiry_date') else None
+            
+            # Convert types before insertion
+            url_id = await self._fetch_value('''
+                SELECT id FROM urls WHERE url = $1
+            ''', data.get("url"))
+            logger.debug(f"URL ID: {url_id}")
+            url_id = url_id.data
+            subject_dn = data.get("cert", {}).get('subject_dn')
+            subject_cn = data.get("cert", {}).get('subject_cn')
+            subject_an = data.get("cert", {}).get('subject_an')
+            issuer_dn = data.get("cert", {}).get('issuer_dn')
+            issuer_cn = data.get("cert", {}).get('issuer_cn')
+            issuer_org = data.get("cert", {}).get('issuer_org')[0]
+            serial = data.get("cert", {}).get('serial')
+            fingerprint_hash = data.get("cert", {}).get('fingerprint_hash')
+
+            result = await self._write_records(
+                '''
+                INSERT INTO certificates (
+                        url_id, subject_dn, subject_cn, subject_an, valid_date, expiry_date, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
+                    )
+                    VALUES (
+                        ARRAY[$1]::integer[], $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+                    )
+                    ON CONFLICT (serial) DO UPDATE SET url_id =
+                        CASE 
+                            WHEN $1 = ANY(certificates.url_id) THEN certificates.url_id
+                            ELSE array_append(certificates.url_id, $1)
+                        END
+                    RETURNING (xmax = 0) AS inserted
+                ''',
+                url_id,
+                subject_dn,
+                subject_cn,
+                subject_an,
+                valid_date,
+                expiry_date,
+                issuer_dn,
+                issuer_cn,
+                issuer_org,
+                serial,
+                fingerprint_hash,
+                int(program_id)
+            )
+            
+            # Handle nested DbResult objects
+            if result.success and isinstance(result.data, DbResult):
+                data = result.data.data
+            else:
+                data = result.data
+
+            if data and isinstance(data, list) and len(data) > 0:
+                return data[0]['inserted']
+            return False
+        except Exception as e:
+            logger.error(f"Error inserting or updating certificate in database: {e}")
+            logger.exception(e)
+            return False
+
 
     async def insert_nuclei(self, program_id: int, data: Dict[str, Any]):
         await self.ensure_connected()
@@ -664,6 +730,7 @@ class DatabaseManager():
             # Convert types before insertion
             url = data.get('url')
             matched_at = data.get('matched_at')
+            matcher_name = data.get('matcher_name')
             template_id = data.get('template_id')
             template_name = data.get('template_name')
             template_path = data.get('template_path')
@@ -672,15 +739,24 @@ class DatabaseManager():
             port = data.get('port')
             ip = data.get('ip')
 
-            
             result = await self._write_records(
                 '''
                 INSERT INTO nuclei (
-                        url, matched_at, type, ip, port, template_path, template_id, template_name, severity, program_id
+                        url, matched_at, type, ip, port, template_path, template_id, template_name, severity, program_id, matcher_name
                     )
                     VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
                     )
+                    ON CONFLICT (url, template_id) DO UPDATE SET
+                        matched_at = EXCLUDED.matched_at,
+                        type = EXCLUDED.type,
+                        ip = EXCLUDED.ip,
+                        port = EXCLUDED.port,
+                        template_path = EXCLUDED.template_path,
+                        template_name = EXCLUDED.template_name,
+                        severity = EXCLUDED.severity,
+                        matcher_name = EXCLUDED.matcher_name,
+                        program_id = EXCLUDED.program_id
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 str(url),
@@ -692,7 +768,8 @@ class DatabaseManager():
                 template_id,
                 template_name,
                 severity,
-                program_id
+                program_id,
+                matcher_name
             )
             
             # Handle nested DbResult objects
@@ -703,10 +780,10 @@ class DatabaseManager():
 
             if data and isinstance(data, list) and len(data) > 0:
                 inserted = data[0]['inserted']
-                #if inserted:
-                #    logger.info(f"New Nuclei hit inserted: {url}")
-                #else:
-                #    logger.info(f"Nuclei hit updated: {url}")
+                if inserted:
+                   logger.info(f"New Nuclei hit inserted: {url}")
+                else:
+                   logger.info(f"Nuclei hit updated: {url}")
                 return inserted
             return False
         except Exception as e:

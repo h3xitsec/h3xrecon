@@ -3,17 +3,18 @@ from h3xrecon.core import QueueManager
 from h3xrecon.core import Config
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
+from h3xrecon.core.preflight import PreflightCheck
 
 from typing import Dict, Any, Callable, List
 from loguru import logger
 from dataclasses import dataclass
-import json
-import os
+import socket
 import traceback
 import importlib
 import pkgutil
 import redis
 import asyncio
+import sys
 
 from uuid import UUID
 from datetime import datetime
@@ -60,16 +61,24 @@ class FunctionExecution:
 
 class JobProcessor:
     def __init__(self, config: Config):
+        self.config = config
         self.db = DatabaseManager()
-        self.qm = QueueManager(config.nats)
-        self.jobprocessor_id = f"jobprocessor-{os.getenv('HOSTNAME')}"
+        self.qm = QueueManager(client_name="jobprocessor", config=config.nats)
+        self.jobprocessor_id = f"jobprocessor-{socket.gethostname()}"
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
         redis_config = config.redis
-        self.redis_client = redis.Redis(
+        self.redis_cache = redis.Redis(
             host=redis_config.host,
             port=redis_config.port,
             db=redis_config.db,
             password=redis_config.password
+        )
+        # Connect to the status redis db to flush all worker statuses
+        self.redis_status = redis.Redis(
+            host=config.redis.host,
+            port=config.redis.port,
+            db=1,
+            password=config.redis.password
         )
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
@@ -111,14 +120,25 @@ class JobProcessor:
 
     async def start(self):
         logger.info(f"Starting Job Processor (ID: {self.jobprocessor_id}) version {__version__}...")
-        await self.qm.connect()
-        await self.qm.subscribe(
-            subject="function.output",
-            stream="FUNCTION_OUTPUT",
-            durable_name="MY_CONSUMER",
-            message_handler=self.message_handler,
-            batch_size=1
-        )
+        try:
+            # Run preflight checks
+            preflight = PreflightCheck(self.config, f"jobprocessor-{self.jobprocessor_id}")
+            if not await preflight.run_checks():
+                raise ConnectionError("Preflight checks failed. Cannot start job processor.")
+
+            # Initialize components
+            await self.qm.connect()
+            await self.qm.subscribe(
+                subject="function.output",
+                stream="FUNCTION_OUTPUT",
+                durable_name="MY_CONSUMER",
+                message_handler=self.message_handler,
+                batch_size=1
+            )
+            logger.info(f"Job Processor started and listening for messages...")
+        except Exception as e:
+            logger.error(f"Failed to start job processor: {str(e)}")
+            sys.exit(1)
 
     async def stop(self):
         logger.info("Shutting down...")
@@ -163,7 +183,7 @@ class JobProcessor:
             function_name = message_data.get("source", {}).get("function", "unknown")
             target = message_data.get("source", {}).get("params", {}).get("target", "unknown")
             redis_key = f"{function_name}:{target}"
-            self.redis_client.set(redis_key, timestamp)
+            self.redis_cache.set(redis_key, timestamp)
         except Exception as e:
             logger.error(f"Error logging or updating function execution: {e}")
 
@@ -172,7 +192,7 @@ class JobProcessor:
         if function_name in self.processor_map:
             logger.info(f"Processing output from plugin '{function_name}' on target '{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:
-                await self.processor_map[function_name](msg_data, self.db)
+                await self.processor_map[function_name](msg_data, self.db, self.qm)
             except Exception as e:
                 logger.error(f"Error processing output with plugin '{function_name}': {e}", exc_info=True)
         else:
@@ -196,7 +216,6 @@ async def main():
         pass
     finally:
         await job_processor.stop()
-
 
 def run():
     asyncio.run(main())

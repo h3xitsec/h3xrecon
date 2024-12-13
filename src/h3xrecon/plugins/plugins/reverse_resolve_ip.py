@@ -12,10 +12,8 @@ class ReverseResolveIP(ReconPlugin):
         return os.path.splitext(os.path.basename(__file__))[0]
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {params.get("target", {})}")
-        command = f"""
-            echo "{params.get("target", {})}" | dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'
-        """
+        logger.info(f"Running {self.name} on {params.get('target', {})}")
+        command = f"echo \"{params.get('target', {})}\" | ~/.pdtm/go/bin/dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'"
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -29,7 +27,6 @@ class ReverseResolveIP(ReconPlugin):
 
         await process.wait()
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        await send_domain_data(data=output_msg.get('output', []).get('domain'), program_id=output_msg.get('program_id'))
-        await send_ip_data(data=output_msg.get('source', []).get('params', {}).get('target'), program_id=output_msg.get('program_id'))
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
+        await send_domain_data(qm=qm, data=output_msg.get('output', []).get('domain'), program_id=output_msg.get('program_id'))
+        await send_ip_data(qm=qm, data=output_msg.get('source', []).get('params', {}).get('target'), program_id=output_msg.get('program_id'), attributes={"ptr": output_msg.get('output', []).get('domain')})

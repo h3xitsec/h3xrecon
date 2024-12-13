@@ -36,17 +36,14 @@ class SubdomainPermutation(ReconPlugin):
 
         await process.wait()
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.qm = QueueManager(self.config.nats)
-        self.db = db
-        is_catchall = await self.db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("output").get("target"))
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
+        is_catchall = await db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("output").get("target"))
         logger.info(is_catchall)
         if len(is_catchall.data) == 0:
             logger.info(f"Domain {output_msg.get('output').get('target')} not found in database. Requeting for insertion.")
-            await send_domain_data(data=output_msg.get("output").get("target"), program_id=output_msg.get("program_id"))
+            await send_domain_data(qm=qm, data=output_msg.get("output").get("target"), program_id=output_msg.get("program_id"))
             await asyncio.sleep(5)
-            await self.qm.publish_message(
+            await qm.publish_message(
                 subject="function.execute",
                 stream="FUNCTION_EXECUTE",
                 message={
@@ -63,7 +60,7 @@ class SubdomainPermutation(ReconPlugin):
             elif is_catchall.data[0].get("is_catchall") is None:
                 logger.info(f"Failed to check if target {output_msg.get('output').get('target')} is a dns catchall domain. Requesting a new check.")
                 logger.debug("Publishing test_domain_catchall message")
-                await self.qm.publish_message(
+                await qm.publish_message(
                     subject="function.execute",
                     stream="FUNCTION_EXECUTE",
                     message={
@@ -74,7 +71,7 @@ class SubdomainPermutation(ReconPlugin):
                     }
                 )
                 logger.debug("First message published, publishing subdomain_permutation message")
-                await self.qm.publish_message(
+                await qm.publish_message(
                     subject="function.execute",
                     stream="FUNCTION_EXECUTE",
                     message={
@@ -88,7 +85,7 @@ class SubdomainPermutation(ReconPlugin):
 
             else:
                 for t in output_msg.get("output").get("to_test"):
-                    await self.qm.publish_message(
+                    await qm.publish_message(
                         subject="function.execute",
                         stream="FUNCTION_EXECUTE",
                         message={

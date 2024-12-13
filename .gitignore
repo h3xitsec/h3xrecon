@@ -53,3 +53,5 @@ logs/
 build/
 dist/
 *.egg-info/
+.coverage*
+.env.compose

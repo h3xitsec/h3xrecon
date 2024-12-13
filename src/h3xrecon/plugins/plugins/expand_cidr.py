@@ -16,10 +16,8 @@ class ExpandCIDR(ReconPlugin):
         
         :param target: The CIDR range (e.g., "192.168.1.0/24")
         """
-        logger.info(f"Running {self.name} on CIDR: {params.get("target", {})}")
-        command = f"""
-            prips {params.get("target", {})}
-        """
+        logger.info(f"Running {self.name} on CIDR: {params.get('target', {})}")
+        command = f"prips {params.get('target', {})} && cat /tmp/prips.log"
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -36,10 +34,8 @@ class ExpandCIDR(ReconPlugin):
 
         await process.wait()
     
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.qm = QueueManager(self.config.nats)
-        await self.qm.publish_message(
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
+        await qm.publish_message(
             subject="function.execute",
             stream="FUNCTION_EXECUTE",
             message={

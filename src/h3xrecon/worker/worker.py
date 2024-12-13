@@ -1,16 +1,12 @@
-import os
+import socket
 import sys
 from loguru import logger
 from h3xrecon.worker.executor import FunctionExecutor
-from h3xrecon.core import QueueManager
-from h3xrecon.core import DatabaseManager
-from h3xrecon.core import Config
+from h3xrecon.core import QueueManager, DatabaseManager, Config, PreflightCheck
 from h3xrecon.__about__ import __version__
 
 from dataclasses import dataclass
-from typing import Dict, Any, List
-import importlib
-import pkgutil
+from typing import Dict, Any, Optional
 import uuid
 import asyncio
 from datetime import datetime, timezone, timedelta
@@ -22,52 +18,59 @@ class FunctionExecutionRequest:
     program_id: int
     params: Dict[str, Any]
     force: bool
+    execution_id: Optional[str] = str(uuid.uuid4())
+    timestamp: Optional[str] = datetime.now(timezone.utc).isoformat()
 
 class Worker:
     def __init__(self, config: Config):
-        self.qm = QueueManager(config.nats)
-        self.db = DatabaseManager() #config.database.to_dict() )
+        self.worker_id = f"worker-{socket.gethostname()}"
         self.config = config
         self.config.setup_logging()
-        self.worker_id = f"worker-{os.getenv('HOSTNAME')}"
-        self.function_executor = FunctionExecutor(qm=self.qm, db=self.db, config=self.config)
+        # Initialize components after preflight checks
+        self.qm = None
+        self.db = None
+        self.redis_status = None
+        self.redis_cache = None
+        self.function_executor = None
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
-        self.redis_client = redis.Redis(
-            host=config.redis.host,
-            port=config.redis.port,
-            db=config.redis.db,
-            password=config.redis.password
-        )
 
-    async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
-        # Validate function_name is a valid plugin
-        try:
-            # Dynamically import plugins to check if the function_name is valid
-            plugin_found = False
-            
-            # Check if the function name exists in the function map keys
-            plugin_found = any(function_execution_request.function_name in key for key in self.function_executor.function_map.keys())
-            
-            if not plugin_found:
-                logger.debug(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found in {list(self.function_executor.function_map.keys())}")
-                raise ValueError(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found.")
-        
-        except Exception as e:
-            raise ValueError(f"Error validating function_name: {str(e)}")
-        
-        # Validate program_name exists in the database
-        try:
-            program_name = await self.db.get_program_name(function_execution_request.program_id)
-            if not program_name:
-                raise ValueError(f"Invalid program_id: {function_execution_request.program_id}. Program not found in database.")
-        
-        except Exception as e:
-            raise ValueError(f"Error validating program_name: {str(e)}")
+    async def initialize_components(self):
+        """Initialize all worker components after successful preflight checks."""
+        self.redis_status = redis.Redis(
+            host=self.config.redis.host,
+            port=self.config.redis.port,
+            db=1,
+            password=self.config.redis.password
+        )
+        self.redis_cache = redis.Redis(
+            host=self.config.redis.host,
+            port=self.config.redis.port,
+            db=self.config.redis.db,
+            password=self.config.redis.password
+        )
+        self.qm = QueueManager(client_name=self.worker_id, config=self.config.nats)
+        self.db = DatabaseManager()
+        self.function_executor = FunctionExecutor(
+            worker_id=self.worker_id,
+            qm=self.qm,
+            db=self.db,
+            config=self.config,
+            redis_status=self.redis_status
+        )
 
     async def start(self):
         logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
         try:
+            # Run preflight checks
+            preflight = PreflightCheck(self.config, f"worker-{self.worker_id}")
+            if not await preflight.run_checks():
+                raise ConnectionError("Preflight checks failed. Cannot start worker.")
+
+            # Initialize components
+            await self.initialize_components()
+            
+            # Connect to NATS and subscribe
             await self.qm.connect()
             await self.qm.subscribe(
                 subject="function.execute",
@@ -77,9 +80,6 @@ class Worker:
                 batch_size=1
             )
             logger.info(f"Worker {self.worker_id} started and listening for messages...")
-        except ConnectionError as e:
-            logger.error(str(e))
-            sys.exit(1)
         except Exception as e:
             logger.error(f"Failed to start worker: {str(e)}")
             sys.exit(1)
@@ -87,15 +87,13 @@ class Worker:
     async def should_execute(self, function_execution_request: FunctionExecutionRequest) -> bool:
         data = function_execution_request
         redis_key = f"{data.function_name}:{data.params.get('target')}"
-        last_execution = self.redis_client.get(redis_key)
+        last_execution = self.redis_cache.get(redis_key)
         if last_execution:
             last_execution_time = datetime.fromisoformat(last_execution.decode())
             time_since_last_execution = datetime.now(timezone.utc) - last_execution_time
             skip = not time_since_last_execution > self.execution_threshold
             if skip:
                 logger.info(f"Skipping {data.function_name} on {data.params.get('target')} : executed recently.")
-            else:
-                logger.info(f"Running {data.function_name} on {data.params.get('target')} ({data.execution_id})")
             return not skip
         return True
 
@@ -113,13 +111,12 @@ class Worker:
                 if not await self.should_execute(function_execution_request):
                     return
             
-            execution_id = msg.get("execution_id", str(uuid.uuid4()))
             async for result in self.function_executor.execute_function(
                     func_name=function_execution_request.function_name,
                     params=function_execution_request.params,
                     program_id=function_execution_request.program_id,
-                    execution_id=execution_id,
-                    timestamp=msg.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                    execution_id=function_execution_request.execution_id,
+                    timestamp=function_execution_request.timestamp,
                     force_execution=function_execution_request.force
                 ):
                 pass
@@ -128,7 +125,6 @@ class Worker:
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             logger.exception(e)
-            #raise  # Let process_messages handle the error
 
     async def stop(self):
         logger.info("Shutting down...")
@@ -158,6 +154,8 @@ async def main():
         logger.error(f"Critical error: {str(e)}")
         sys.exit(1)
     finally:
+        if hasattr(worker, 'redis_status'):
+            worker.redis_status.delete(worker.worker_id)
         logger.info("Worker shutdown complete")
 
 def run():
