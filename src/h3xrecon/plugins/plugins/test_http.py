@@ -67,7 +67,7 @@ class TestHTTP(ReconPlugin):
             raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        logger.debug(f"Incoming message:\nObject Type: {type(output_msg)}\nObject:\n{json.dumps(output_msg, indent=4)}")
+        logger.debug(f"Incoming message:\nObject Type: {type(output_msg)} : {json.dumps(output_msg)}")
         #if not await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params', {}).get('target'), output_msg.get('program_id')):
         #    logger.info(f"Domain {output_msg.get('source', {}).get('params', {}).get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
         #else:
@@ -85,14 +85,17 @@ class TestHTTP(ReconPlugin):
                             output_msg.get('output', {}).get('body_fqdn', []) + 
                             output_msg.get('output', {}).get('tls', {}).get('subject_an', []))
         logger.debug(domains_to_add)
-        #for domain in domains_to_add:
-        #    if domain:
-        #        await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
-        #await send_service_data(qm=qm, data={
-        #        "ip": output_msg.get('output').get('host'), 
-        #        "port": int(output_msg.get('output').get('port')), 
-        #        "protocol": "tcp"
-        #}, program_id=output_msg.get('program_id'))
+        if len(domains_to_add) > 0:
+            for domain in domains_to_add:
+                await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
+
+        await send_service_data(qm=qm, data={
+                "ip": output_msg.get('output').get('host'), 
+                "port": int(output_msg.get('output').get('port')), 
+                "protocol": "tcp",
+                "scheme": output_msg.get('output').get('scheme', "")
+            }, program_id=output_msg.get('program_id'))
+
         if output_msg.get('output').get('tls', {}).get('subject_dn', "") != "":
             await send_certificate_data(qm=qm,data={
                 "url": output_msg.get('output', {}).get('url', ""),
