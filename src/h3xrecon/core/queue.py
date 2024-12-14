@@ -92,7 +92,7 @@ class QueueManager:
                 payload.encode(),
                 stream=stream
             )
-            logger.debug(f"Published message to {subject} on stream {stream}\nMessage:\n{json.dumps(json.loads(payload), indent=4)}")
+            logger.debug(f"Published message to {subject} on stream {stream}\nMessage:\n{json.dumps(json.loads(payload))}")
         except Exception as e:
             logger.error(f"Failed to publish message: {e}")
             raise

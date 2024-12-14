@@ -76,9 +76,8 @@ class DataProcessor:
     async def stop(self):
         logger.info("Shutting down...")
 
-
     async def message_handler(self, msg):
-        logger.debug(f"Incoming message:\nObject Type: {type(msg)}\nObject:\n{json.dumps(msg, indent=4)}")
+        logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
         try:
             if isinstance(msg.get("data"), list):
                 data_item = msg.get("data")[0]
@@ -147,20 +146,28 @@ class DataProcessor:
                 logger.info(f"Domain {domain} is not part of program {msg_data.get('program_id')}. Skipping processing.")
                 continue
             else:
-                if msg_data.get('attributes') == None:
+                # Get existing domain data first
+                existing_domain = await self.db_manager.get_domain(domain)
+                
+                # Get attributes with defaults from existing data
+                if msg_data.get('attributes') is None:
                     attributes = {}
                 else:
                     attributes = msg_data.get('attributes')
+                
+                # Only update is_catchall if explicitly provided
+                is_catchall = attributes.get('is_catchall', existing_domain.get('is_catchall', False) if existing_domain else False)
+                
                 inserted = await self.db_manager.insert_domain(
                     domain=domain, 
                     ips=attributes.get('ips', []), 
                     cnames=attributes.get('cnames', []), 
-                    is_catchall=attributes.get('is_catchall', False), 
+                    is_catchall=is_catchall,
                     program_id=msg_data.get('program_id')
                 )
-            if inserted:
-                logger.info(f"New domain inserted: {domain}")
-                await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
+                if inserted:
+                    logger.info(f"New domain inserted: {domain}")
+                    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
     
     async def process_url(self, msg: Dict[str, Any]):
         if msg:
