@@ -175,6 +175,7 @@ services:
     env_file:
       - .env.compose
     environment:
+      - H3XRECON_LOG_LEVEL
       - H3XRECON_ROLE=jobprocessor
     depends_on:
       msgbroker:
@@ -189,6 +190,7 @@ services:
     env_file:
       - .env.compose
     environment:
+      - H3XRECON_LOG_LEVEL
       - H3XRECON_ROLE=dataprocessor
     depends_on:
       msgbroker:
@@ -202,6 +204,8 @@ services:
     image: ghcr.io/h3xitsec/h3xrecon/worker:${H3XRECON_IMAGE_VERSION}
     env_file:
       - .env.compose
+    environment:
+      - H3XRECON_LOG_LEVEL
     depends_on:
       msgbroker:
         condition: service_healthy
