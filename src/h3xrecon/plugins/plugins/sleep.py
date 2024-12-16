@@ -12,8 +12,8 @@ class Sleep(ReconPlugin):
         return os.path.splitext(os.path.basename(__file__))[0]
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, ) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {params.get("target", {})}")
-        command = f"sleep 45"
+        logger.info(f"Running {self.name} for {params.get("target", {})} seconds")
+        command = f"sleep {params.get('target', 45)}"
         logger.debug(f"Running command: {command}")
         process = await asyncio.create_subprocess_shell(
             command,

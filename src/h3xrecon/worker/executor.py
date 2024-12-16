@@ -9,6 +9,7 @@ import pkgutil
 import json
 import redis
 import asyncio
+from datetime import datetime, timezone
 
 class FunctionExecutor():
     def __init__(self, worker_id: str, qm: QueueManager, db: DatabaseManager, config: Config, redis_status: redis.Redis):
@@ -78,11 +79,20 @@ class FunctionExecutor():
         plugin_instance = next(p for p in self.function_map.values() if p.__self__.name == func_name)
         plugin_timeout = plugin_instance.__self__.timeout
         plugin_execute = self.function_map[func_name]
-        self.set_status(f"{func_name}:{params.get('target')}")
+        self.set_status(f"{func_name}__{params.get('target')}__{execution_id}")
 
         try:
             async with asyncio.timeout(plugin_timeout):
                 async for result in plugin_execute(params, program_id, execution_id):
+                    try:
+                        # Check if the task has been cancelled
+                        await asyncio.sleep(0)  # Allow cancellation to propagate
+                        if asyncio.current_task().cancelled():
+                            raise asyncio.CancelledError()
+                    except asyncio.CancelledError:
+                        logger.info(f"Execution {execution_id} received cancellation signal.")
+                        raise
+
                     if isinstance(result, str):
                         result = json.loads(result)
                     output_data = {
@@ -107,6 +117,22 @@ class FunctionExecutor():
             }
             await self.qm.publish_message(subject="function.output", stream="FUNCTION_OUTPUT", message=error_data)
             yield error_data
+        except asyncio.CancelledError:
+            logger.info(f"Function '{func_name}' execution was cancelled.")
+            # Optionally, handle cleanup here or publish cancellation status
+            # cancel_data = {
+            #     "program_id": program_id,
+            #     "execution_id": execution_id,
+            #     "source": {"function": func_name, "params": params, "force": force_execution},
+            #     "output": {"error": "Function execution was cancelled."},
+            #     "timestamp": datetime.now(timezone.utc).isoformat()
+            # }
+            # try:
+            #     await self.qm.publish_message(subject="function.output", stream="FUNCTION_OUTPUT", message=cancel_data)
+            #     yield cancel_data
+            # except Exception as e:
+            #     logger.error(f"Failed to publish cancellation message: {e}")
+            # raise  # Re-raise to allow the caller to handle the cancellation
         except Exception as e:
             logger.error(f"Error executing function '{func_name}': {e}")
             self.set_status("idle")
