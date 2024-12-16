@@ -149,7 +149,7 @@ class DatabaseManager():
         Returns:
             DbResult: Result of the database query
         """
-        logger.debug(f"Executing SELECT query: {query} with args: {args}")
+        logger.debug(f"Executing SELECT query: {query.replace(chr(10), ' ')} with args: {args}")
         try:
             await self.ensure_connected()
             async with self.pool.acquire() as conn:
@@ -172,7 +172,7 @@ class DatabaseManager():
         Returns:
             DbResult: Result of the database query
         """
-        logger.debug(f"Executing SELECT query: {query} with args: {args}")
+        logger.debug(f"Executing SELECT query: {query.replace(chr(10), ' ')} with args: {args}")
         try:
             await self.ensure_connected()
             async with self.pool.acquire() as conn:
@@ -194,7 +194,7 @@ class DatabaseManager():
         Returns:
             DbResult: Result of the database modification
         """
-        logger.debug(f"Executing modification query: {query} with args: {args}")
+        logger.debug(f"Executing modification query: {query.replace(chr(10), ' ')} with args: {args}")
         return_data = DbResult(success=False, data=None, error=None)
         try:
             await self.ensure_connected()
