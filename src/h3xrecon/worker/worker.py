@@ -124,27 +124,31 @@ class Worker:
 
     async def message_handler(self, msg):
         try:
-            logger.debug(msg)
-            function_execution_request = FunctionExecutionRequest(
-                program_id=msg.get('program_id'),
-                function_name=msg.get('function'),
-                params=msg.get('params'),
-                force=msg.get("force", False)
-            )
-            await self.validate_function_execution_request(function_execution_request)
-            if not function_execution_request.force:
-                if not await self.should_execute(function_execution_request):
-                    return
-            
-            async for result in self.function_executor.execute_function(
-                    func_name=function_execution_request.function_name,
-                    params=function_execution_request.params,
-                    program_id=function_execution_request.program_id,
-                    execution_id=function_execution_request.execution_id,
-                    timestamp=function_execution_request.timestamp,
-                    force_execution=function_execution_request.force
-                ):
-                pass
+            if isinstance(msg, dict):
+                messages = [msg]
+            else:
+                messages = msg
+            for message in messages:
+                function_execution_request = FunctionExecutionRequest(
+                    program_id=message.get('program_id'),
+                    function_name=message.get('function'),
+                    params=message.get('params'),
+                    force=message.get("force", False)
+                )
+                await self.validate_function_execution_request(function_execution_request)
+                if not function_execution_request.force:
+                    if not await self.should_execute(function_execution_request):
+                        return
+                
+                async for result in self.function_executor.execute_function(
+                        func_name=function_execution_request.function_name,
+                        params=function_execution_request.params,
+                        program_id=function_execution_request.program_id,
+                        execution_id=function_execution_request.execution_id,
+                        timestamp=function_execution_request.timestamp,
+                        force_execution=function_execution_request.force
+                    ):
+                    pass
         except ValueError as e:
             logger.error(f"{e}")
         except Exception as e:
