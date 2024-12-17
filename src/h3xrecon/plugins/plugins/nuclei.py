@@ -16,10 +16,10 @@ class FunctionParams():
     extra_params: list = field(default_factory=list)
 
 class FunctionOutput(BaseModel):
-    url: Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+|[a-zA-Z0-9.-]+:\d+)$')
+    url: Optional[Union[AnyHttpUrl, str]] = Field(default=None, pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+|[a-zA-Z0-9.-]+:\d+)$')
     matched_at: str #Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')
     matcher_name: str
-    type: str = Field(pattern='^(http|tcp|javascript|dns)$')
+    type: str = Field(pattern='^(http|tcp|javascript|dns|ssl)$')
     ip: str = Field(pattern=r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]+$')
     port: int = Field(ge=1, le=65535)
     scheme: Optional[str] = Field(default=None, pattern='^(http|https|ftp|ssh|tcp|udp)?$')
