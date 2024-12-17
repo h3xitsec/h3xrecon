@@ -10,6 +10,7 @@ stream_exists() {
 }
 
 # Create FUNCTION_EXECUTE stream if it doesn't exist
+nats stream rm FUNCTION_EXECUTE --server=nats://localhost:4222 --force
 if ! stream_exists "FUNCTION_EXECUTE"; then
     nats stream add FUNCTION_EXECUTE \
         --subjects "function.execute" \
@@ -35,21 +36,19 @@ fi
 if ! stream_exists "FUNCTION_CONTROL"; then
     nats stream add FUNCTION_CONTROL \
         --subjects "function.control" \
-        --retention work \
+        --retention interest \
         --max-age 1h \
-        --storage memory \
+        --storage file \
         --replicas 1 \
         --discard old \
         --max-msgs=-1 \
         --max-msgs-per-subject=-1 \
         --max-bytes=-1 \
         --max-msg-size=-1 \
-        --dupe-window 2m \
+        --dupe-window 1m \
         --no-allow-rollup \
         --no-deny-delete \
         --no-deny-purge \
-        --deliver all \
-        --ack none \
         --server=nats://localhost:4222
     echo "Created FUNCTION_CONTROL stream"
 fi
@@ -70,8 +69,6 @@ if ! stream_exists "FUNCTION_CONTROL_RESPONSE"; then
         --no-allow-rollup \
         --no-deny-delete \
         --no-deny-purge \
-        --deliver all \
-        --ack explicit \
         --server=nats://localhost:4222
     echo "Created FUNCTION_CONTROL_RESPONSE stream"
 else

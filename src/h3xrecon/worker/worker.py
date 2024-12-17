@@ -96,13 +96,7 @@ class Worker:
                 stream="FUNCTION_EXECUTE",
                 durable_name="MY_CONSUMER",
                 message_handler=self.message_handler,
-                batch_size=1,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'max_deliver': 1,
-                    'ack_wait': 60,  # Increased timeout
-                    'max_ack_pending': 1,  # Only allow one unacknowledged message
-                }
+                batch_size=1
             )
             logger.info(f"Worker {self.worker_id} started and listening for messages...")
         except Exception as e:
