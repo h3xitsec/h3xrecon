@@ -130,8 +130,6 @@ class Worker:
                                     await task
                                 except asyncio.CancelledError:
                                     logger.info(f"Successfully cancelled task {execution_id}")
-                        else:
-                            logger.warning(f"No running tasks found to kill")
                             
                     elif command == 'stop' and execution_id:
                         task = self.running_tasks.get(execution_id)

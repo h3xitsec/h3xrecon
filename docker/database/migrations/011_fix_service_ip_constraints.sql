@@ -1,0 +1,5 @@
+ALTER TABLE services DROP CONSTRAINT IF EXISTS services_ip_fkey;
+
+ALTER TABLE services
+ADD CONSTRAINT services_ip_fkey
+FOREIGN KEY (ip) REFERENCES ips(id) ON DELETE CASCADE;

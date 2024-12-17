@@ -16,7 +16,7 @@ class FunctionParams():
     extra_params: list = field(default_factory=list)
 
 class FunctionOutput(BaseModel):
-    url: Optional[Union[AnyHttpUrl, str]] = Field(default=None, pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+|[a-zA-Z0-9.-]+:\d+)$')
+    url: Optional[Union[AnyHttpUrl, str]] = Field(default=None, pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+|[a-zA-Z0-9.-]+:\d+)?$')
     matched_at: str #Union[AnyHttpUrl, str] = Field(pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+)$')
     matcher_name: str
     type: str = Field(pattern='^(http|tcp|javascript|dns|ssl)$')
@@ -40,7 +40,6 @@ class Nuclei(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
         function_params = asdict(FunctionParams(**params))
-        logger.info(f"Running {self.name} on {function_params.get('target', {})}")
         command = f"~/.pdtm/go/bin/nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}"
         logger.debug(f"Running command: {command}")
         process = await asyncio.create_subprocess_shell(
