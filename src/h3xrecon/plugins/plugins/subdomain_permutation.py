@@ -21,8 +21,9 @@ class SubdomainPermutation(ReconPlugin):
             permutation_file = "/app/Worker/files/permutation_test.txt"
         else:
             permutation_file = "/app/Worker/files/permutations.txt"
+        logger.debug(f"Using permutation file {permutation_file}")
         command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {permutation_file} -depth 1 -numbers 10 -mindup -adv -md"
-    
+        logger.debug(f"Running command {command}")
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
@@ -33,7 +34,8 @@ class SubdomainPermutation(ReconPlugin):
         async for output in self._read_subprocess_output(process):
             # Prepare the message for reverse_resolve_ip
             to_test.append(output)
-
+            logger.debug(f"Adding {output} to to_test")
+        logger.debug(to_test)
         message = {
             "function": "resolve_domain",
             "target": params.get("target", {}),
@@ -47,7 +49,7 @@ class SubdomainPermutation(ReconPlugin):
         is_catchall = await db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("output").get("target"))
         logger.info(is_catchall)
         if len(is_catchall.data) == 0:
-            logger.info(f"Domain {output_msg.get('output').get('target')} not found in database. Requeting for insertion.")
+            logger.info(f"Domain {output_msg.get('output').get('target')} not found in database. Requesting for insertion.")
             await send_domain_data(qm=qm, data=output_msg.get("output").get("target"), program_id=output_msg.get("program_id"))
             await asyncio.sleep(5)
             await qm.publish_message(
@@ -70,25 +72,18 @@ class SubdomainPermutation(ReconPlugin):
                 await qm.publish_message(
                     subject="function.execute",
                     stream="FUNCTION_EXECUTE",
-                    message={
+                    message=[{
                         "function": "test_domain_catchall",
                         "program_id": output_msg.get("program_id"),
                         "params": {"target": output_msg.get("output").get("target")},
                         "force": True
-                    }
-                )
-                logger.debug("First message published, publishing subdomain_permutation message")
-                await qm.publish_message(
-                    subject="function.execute",
-                    stream="FUNCTION_EXECUTE",
-                    message={
+                    },{
                         "function": "subdomain_permutation",
                         "program_id": output_msg.get("program_id"),
                         "params": {"target": output_msg.get("output").get("target")},
                         "force": True
-                    }
+                    }]
                 )
-                logger.debug("Second message published")
 
             else:
                 for t in output_msg.get("output").get("to_test"):

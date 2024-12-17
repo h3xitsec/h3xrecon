@@ -149,7 +149,7 @@ class DatabaseManager():
         Returns:
             DbResult: Result of the database query
         """
-        logger.debug(f"Executing SELECT query: {query} with args: {args}")
+        logger.debug(f"Executing SELECT query: {query.replace(chr(10), ' ')} with args: {args}")
         try:
             await self.ensure_connected()
             async with self.pool.acquire() as conn:
@@ -172,7 +172,7 @@ class DatabaseManager():
         Returns:
             DbResult: Result of the database query
         """
-        logger.debug(f"Executing SELECT query: {query} with args: {args}")
+        logger.debug(f"Executing SELECT query: {query.replace(chr(10), ' ')} with args: {args}")
         try:
             await self.ensure_connected()
             async with self.pool.acquire() as conn:
@@ -194,23 +194,24 @@ class DatabaseManager():
         Returns:
             DbResult: Result of the database modification
         """
-        logger.debug(f"Executing modification query: {query} with args: {args}")
+        logger.debug(f"Executing modification query: {query.replace(chr(10), ' ')} with args: {args}")
         return_data = DbResult(success=False, data=None, error=None)
         try:
             await self.ensure_connected()
             async with self.pool.acquire() as conn:
-                if 'RETURNING' in query.upper():
-                    records = await conn.fetch(query, *args)  # Directly use the acquired connection
-                    formatted_records = await self.format_records(records)
-                    if formatted_records:
-                        return_data.success = True
-                        return_data.data = formatted_records
+                async with conn.transaction():  # Explicit transaction
+                    if 'RETURNING' in query.upper():
+                        records = await conn.fetch(query, *args)
+                        formatted_records = await self.format_records(records)
+                        if formatted_records:
+                            return_data.success = True
+                            return_data.data = formatted_records
+                        else:
+                            return_data.error = "No data returned from query."
                     else:
-                        return_data.error = "No data returned from query."
-                else:
-                    result = await conn.execute(query, *args)
-                    return_data.success = True
-                    return_data.data = result
+                        result = await conn.execute(query, *args)
+                        return_data.success = True
+                        return_data.data = result
             return return_data
         except asyncpg.UniqueViolationError:
             return_data.error = "Unique violation error."
@@ -494,7 +495,7 @@ class DatabaseManager():
     
     async def insert_domain(self, domain: str, program_id: int, ips: List[str] = None, cnames: List[str] = None, is_catchall: bool = False):
         try:
-            logger.debug(f"Checking domain regex match for {domain} in program {program_id}")
+            logger.debug(f"insert_domain called with is_catchall={is_catchall}, type={type(is_catchall)}")
             if await self.check_domain_regex_match(domain, program_id):
                 # Get IP IDs
                 ip_ids = []
@@ -507,10 +508,13 @@ class DatabaseManager():
                 result = await self._write_records(
                     '''
                     INSERT INTO domains (domain, program_id, ips, cnames, is_catchall) 
-                    VALUES ($1, $2, $3, $4, $5) 
+                    VALUES ($1, $2, $3, $4, $5::boolean) 
                     ON CONFLICT (domain) DO UPDATE 
-                    SET program_id = EXCLUDED.program_id, ips = EXCLUDED.ips, cnames = EXCLUDED.cnames, is_catchall = EXCLUDED.is_catchall
-                    RETURNING (xmax = 0) AS inserted
+                    SET program_id = EXCLUDED.program_id, 
+                        ips = EXCLUDED.ips, 
+                        cnames = EXCLUDED.cnames, 
+                        is_catchall = EXCLUDED.is_catchall::boolean
+                    RETURNING (xmax = 0) AS inserted, is_catchall
                     ''',
                     domain.lower(),
                     program_id,
@@ -518,14 +522,17 @@ class DatabaseManager():
                     [c.lower() for c in cnames] if cnames else None,
                     is_catchall
                 )
+                logger.debug(f"Insert result: {result}")
                 
-                if result.success and isinstance(result.data, DbResult):
-                    data = result.data.data
-                else:
-                    data = result.data
-
-                if data and isinstance(data, list) and len(data) > 0:
-                    return data[0]['inserted']
+                # Verify the insert
+                verify = await self._fetch_records(
+                    'SELECT is_catchall FROM domains WHERE domain = $1',
+                    domain.lower()
+                )
+                logger.debug(f"Verification query result: {verify}")
+                
+                if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                    return result.data[0]['inserted']
                 return False
             else:
                 return False
@@ -828,3 +835,21 @@ class DatabaseManager():
         except Exception as e:
             logger.error(f"Error logging or updating function execution in database: {e}")
             logger.exception(e)
+
+    async def get_domain(self, domain: str) -> Dict[str, Any]:
+        """
+        Get existing domain data.
+        
+        Args:
+            domain (str): Domain to retrieve
+        
+        Returns:
+            Dict[str, Any]: Domain data or None if not found
+        """
+        result = await self._fetch_records(
+            'SELECT * FROM domains WHERE domain = $1',
+            domain.lower()
+        )
+        if result.success and result.data:
+            return result.data[0]
+        return None

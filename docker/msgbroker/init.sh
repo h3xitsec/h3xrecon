@@ -32,6 +32,55 @@ else
     echo "FUNCTION_EXECUTE stream already exists"
 fi
 
+if ! stream_exists "FUNCTION_CONTROL"; then
+    nats stream add FUNCTION_CONTROL \
+        --subjects "function.control" \
+        --retention work \
+        --max-age 1h \
+        --storage memory \
+        --replicas 1 \
+        --discard old \
+        --max-msgs=-1 \
+        --max-msgs-per-subject=-1 \
+        --max-bytes=-1 \
+        --max-msg-size=-1 \
+        --dupe-window 2m \
+        --no-allow-rollup \
+        --no-deny-delete \
+        --no-deny-purge \
+        --deliver all \
+        --ack none \
+        --server=nats://localhost:4222
+    echo "Created FUNCTION_CONTROL stream"
+fi
+
+if ! stream_exists "FUNCTION_CONTROL_RESPONSE"; then
+    nats stream add FUNCTION_CONTROL_RESPONSE \
+        --subjects "function.control.response" \
+        --retention limits \
+        --max-age 24h \
+        --storage file \
+        --replicas 1 \
+        --discard old \
+        --max-msgs=-1 \
+        --max-msgs-per-subject=-1 \
+        --max-bytes=-1 \
+        --max-msg-size=-1 \
+        --dupe-window 2m \
+        --no-allow-rollup \
+        --no-deny-delete \
+        --no-deny-purge \
+        --deliver all \
+        --ack explicit \
+        --server=nats://localhost:4222
+    echo "Created FUNCTION_CONTROL_RESPONSE stream"
+else
+    # Purge existing messages from the stream
+    nats stream purge FUNCTION_CONTROL_RESPONSE --server=nats://localhost:4222 --force
+    echo "Purged existing FUNCTION_CONTROL_RESPONSE stream"
+fi
+
+
 # Create FUNCTION_OUTPUT stream if it doesn't exist
 if ! stream_exists "FUNCTION_OUTPUT"; then
     nats stream add FUNCTION_OUTPUT \

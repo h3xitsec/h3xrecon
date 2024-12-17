@@ -24,6 +24,7 @@ class QueueManager:
             self.config = config
         logger.debug(f"NATS config: {self.config.url}")
         self._subscriptions = {}
+        self._subscription_subjects = {}
 
     async def connect(self) -> None:
         """Connect to NATS server using environment variables for configuration."""
@@ -92,7 +93,7 @@ class QueueManager:
                 payload.encode(),
                 stream=stream
             )
-            logger.debug(f"Published message to {subject} on stream {stream}\nMessage:\n{json.dumps(json.loads(payload), indent=4)}")
+            logger.debug(f"Published message to {subject} on stream {stream}\nMessage:\n{json.dumps(json.loads(payload))}")
         except Exception as e:
             logger.error(f"Failed to publish message: {e}")
             raise
@@ -100,10 +101,12 @@ class QueueManager:
     async def subscribe(self, 
                        subject: str,
                        stream: str,
-                       durable_name: str,
                        message_handler: Callable[[Any], Awaitable[None]],
+                       durable_name: str = None,
                        batch_size: int = 1,
-                       consumer_config: Optional[Dict[str, Any]] = None) -> None:
+                       queue_group: str = None,
+                       consumer_config: Optional[Dict[str, Any]] = None,
+                       broadcast: bool = False) -> None:
         """
         Subscribe to a subject and process messages using the provided handler.
         
@@ -114,14 +117,15 @@ class QueueManager:
             message_handler: Async function to handle received messages
             batch_size: Number of messages to fetch in each batch
             consumer_config: Optional custom consumer configuration
+            broadcast: If True, configures subscription for broadcast-style delivery
         """
         await self.ensure_jetstream()
         
         # Default consumer configuration
         default_config = ConsumerConfig(
-            durable_name=durable_name,
+            durable_name=None if broadcast else durable_name,  # No durable name for broadcast
             deliver_policy=DeliverPolicy.ALL,
-            ack_policy=AckPolicy.EXPLICIT,
+            ack_policy=AckPolicy.NONE if broadcast else AckPolicy.EXPLICIT,  # No acks needed for broadcast
             replay_policy=ReplayPolicy.INSTANT,
             max_deliver=1,
             ack_wait=30,
@@ -136,13 +140,15 @@ class QueueManager:
             # Create pull subscription
             subscription = await self.js.pull_subscribe(
                 subject,
-                durable_name,
+                durable_name if not broadcast else None,
                 stream=stream,
                 config=default_config
             )
             
-            # Store subscription for cleanup
-            self._subscriptions[f"{stream}:{subject}:{durable_name}"] = subscription
+            # Store subscription and its subject for cleanup and reference
+            sub_key = f"{stream}:{subject}:{durable_name if not broadcast else 'broadcast'}"
+            self._subscriptions[sub_key] = subscription
+            self._subscription_subjects[subscription] = subject
             
             # Start message processing
             asyncio.create_task(self._process_messages(
@@ -151,55 +157,50 @@ class QueueManager:
                 batch_size
             ))
             
-            logger.debug(f"Subscribed to '{subject}' on stream '{stream}' with durable name '{durable_name}'")
+            logger.debug(f"Subscribed to '{subject}' on stream '{stream}' with {'broadcast mode' if broadcast else f'durable name {durable_name}'}")
             
         except Exception as e:
             logger.error(f"Failed to create subscription: {e}")
             raise
 
     async def _process_messages(self,
-                              subscription,
-                              message_handler: Callable[[Any], Awaitable[None]],
-                              batch_size: int) -> None:
+                          subscription,
+                          message_handler: Callable[[Any], Awaitable[None]],
+                          batch_size: int) -> None:
         """
         Process messages from a subscription.
-        
-        Args:
-            subscription: The NATS subscription object
-            message_handler: Async function to handle received messages
-            batch_size: Number of messages to fetch in each batch
         """
+        subject = self._subscription_subjects.get(subscription)
+        
         while True:
             try:
-                messages = await subscription.fetch(batch=batch_size, timeout=1)
+                # Use pull with shorter timeout for control messages
+                timeout = 0.1 if subject and "function.control" in subject else 1
+                messages = await subscription.fetch(batch=1, timeout=timeout)
                 
                 for msg in messages:
                     try:
-                        #logger.debug(f"Processing message sequence: {msg.metadata.sequence}")
-
-                        # Parse message data
                         data = json.loads(msg.data.decode())
                         
                         # Process message
                         await message_handler(data)
                         
-                        # Acknowledge message
-                        if not msg._ackd:
+                        # Check if this is a control message (which doesn't need acknowledgment)
+                        is_control_message = subject and "function.control" in subject
+                        
+                        # Acknowledge if needed (not for control messages)
+                        if not is_control_message and hasattr(msg, 'ack'):
                             await msg.ack()
-                            #logger.debug(f"Message {msg.metadata.sequence} acknowledged")
                             
-                    except Exception:
-                        #logger.error(f"Error processing message {msg.metadata.sequence}: {e}")
-                        if not msg._ackd:
+                    except Exception as e:
+                        logger.error(f"Error processing message: {e}")
+                        # Only NAK non-control messages
+                        if not is_control_message and hasattr(msg, 'nak'):
                             await msg.nak()
-                            #logger.debug(f"Message {msg.metadata.sequence} negative acknowledged")
                             
             except NatsTimeoutError:
                 await asyncio.sleep(0.1)
                 continue
-            except Exception as e:
-                logger.error(f"Error in message processing loop: {e}")
-                await asyncio.sleep(0.1)
 
     async def close(self) -> None:
         """Close the NATS connection and clean up resources."""

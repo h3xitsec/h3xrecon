@@ -4,14 +4,14 @@ from loguru import logger
 from h3xrecon.worker.executor import FunctionExecutor
 from h3xrecon.core import QueueManager, DatabaseManager, Config, PreflightCheck
 from h3xrecon.__about__ import __version__
-
+from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import uuid
 import asyncio
 from datetime import datetime, timezone, timedelta
 import redis
-
+import random
 @dataclass
 class FunctionExecutionRequest:
     function_name: str
@@ -23,7 +23,7 @@ class FunctionExecutionRequest:
 
 class Worker:
     def __init__(self, config: Config):
-        self.worker_id = f"worker-{socket.gethostname()}"
+        self.worker_id = f"worker-{socket.gethostname()}-{random.randint(1000, 9999)}"
         self.config = config
         self.config.setup_logging()
         # Initialize components after preflight checks
@@ -34,7 +34,11 @@ class Worker:
         self.function_executor = None
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
-
+        self.running_tasks: Dict[str, asyncio.Task] = {}
+        self._execution_semaphore = asyncio.Semaphore(1) 
+        self._processing = False
+        self._processing_lock = asyncio.Lock()
+        
     async def initialize_components(self):
         """Initialize all worker components after successful preflight checks."""
         self.redis_status = redis.Redis(
@@ -58,6 +62,7 @@ class Worker:
             config=self.config,
             redis_status=self.redis_status
         )
+        
 
     async def start(self):
         logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
@@ -72,18 +77,98 @@ class Worker:
             
             # Connect to NATS and subscribe
             await self.qm.connect()
+            # Subscribe to control messages
+            await self.qm.subscribe(
+                subject="function.control",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_{self.worker_id}",
+                message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.NONE,  # No acks needed for control messages
+                    'deliver_policy': DeliverPolicy.ALL,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
             await self.qm.subscribe(
                 subject="function.execute",
                 stream="FUNCTION_EXECUTE",
                 durable_name="MY_CONSUMER",
                 message_handler=self.message_handler,
-                batch_size=1
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'max_deliver': 1,
+                    'ack_wait': 60,  # Increased timeout
+                    'max_ack_pending': 1,  # Only allow one unacknowledged message
+                }
             )
             logger.info(f"Worker {self.worker_id} started and listening for messages...")
         except Exception as e:
             logger.error(f"Failed to start worker: {str(e)}")
             sys.exit(1)
 
+    async def control_message_handler(self, msg):
+        try:
+            if isinstance(msg, dict):
+                messages = [msg]
+            else:
+                messages = msg
+            for message in messages:
+                try:
+                    logger.debug(f"Received control message: {message}")
+                    command = message.get('command')
+                    execution_id = message.get('execution_id')
+                    target_worker_id = message.get('target_worker_id')
+                    
+                    if target_worker_id and target_worker_id != self.worker_id:
+                        continue
+                        
+                    if command == 'killjob':
+                        if len(list(self.running_tasks.keys())) > 0:
+                            execution_id = list(self.running_tasks.keys())[0]
+                            task = self.running_tasks.get(execution_id)
+                            if task:
+                                logger.debug(f"Killing job with Execution ID: {execution_id}")
+                                task.cancel()
+                                try:
+                                    await task
+                                except asyncio.CancelledError:
+                                    logger.info(f"Successfully cancelled task {execution_id}")
+                        else:
+                            logger.warning(f"No running tasks found to kill")
+                            
+                    elif command == 'stop' and execution_id:
+                        task = self.running_tasks.get(execution_id)
+                        if task:
+                            logger.debug(f"Stopping job with Execution ID: {execution_id}")
+                            task.cancel()
+                            try:
+                                await task
+                            except asyncio.CancelledError:
+                                logger.info(f"Successfully cancelled task {execution_id}")
+                        else:
+                            logger.warning(f"No running task found with Execution ID: {execution_id}")
+                    else:
+                        logger.warning(f"Received unknown control command or missing execution_id: {message}")
+
+                    # Acknowledge the message
+                    if hasattr(msg, 'ack'):
+                        await msg.ack()
+
+                except Exception as e:
+                    logger.error(f"Error processing individual control message: {e}")
+                    if hasattr(msg, 'ack'):
+                        await msg.ack()
+                    continue
+
+        except Exception as e:
+            logger.error(f"Error processing control message batch: {e}")
+            logger.exception(e)
+            if hasattr(msg, 'ack'):
+                await msg.ack()
+    
     async def should_execute(self, function_execution_request: FunctionExecutionRequest) -> bool:
         data = function_execution_request
         redis_key = f"{data.function_name}:{data.params.get('target')}"
@@ -124,35 +209,89 @@ class Worker:
 
     async def message_handler(self, msg):
         try:
-            logger.debug(msg)
-            function_execution_request = FunctionExecutionRequest(
-                program_id=msg.get('program_id'),
-                function_name=msg.get('function'),
-                params=msg.get('params'),
-                force=msg.get("force", False)
-            )
-            await self.validate_function_execution_request(function_execution_request)
-            if not function_execution_request.force:
-                if not await self.should_execute(function_execution_request):
-                    return
-            
-            async for result in self.function_executor.execute_function(
-                    func_name=function_execution_request.function_name,
-                    params=function_execution_request.params,
-                    program_id=function_execution_request.program_id,
-                    execution_id=function_execution_request.execution_id,
-                    timestamp=function_execution_request.timestamp,
-                    force_execution=function_execution_request.force
-                ):
-                pass
-        except ValueError as e:
-            logger.error(f"{e}")
+            # Check if we're already processing a message
+            async with self._processing_lock:
+                if self._processing:
+                    logger.info("Already processing a job, skipping new message")
+                    return  # Skip this message, it will be redelivered
+                
+                self._processing = True
+
+            try:
+                if isinstance(msg, dict):
+                    messages = [msg]
+                else:
+                    messages = msg
+
+                for message in messages:
+                    function_execution_request = FunctionExecutionRequest(
+                        program_id=message.get('program_id'),
+                        function_name=message.get('function'),
+                        params=message.get('params'),
+                        force=message.get("force", False)
+                    )
+                    
+                    await self.validate_function_execution_request(function_execution_request)
+                    if not function_execution_request.force:
+                        if not await self.should_execute(function_execution_request):
+                            continue
+
+                    # Create and track the task
+                    task = asyncio.create_task(
+                        self.run_function_execution(function_execution_request)
+                    )
+                    self.running_tasks[function_execution_request.execution_id] = task
+
+                    # Add callback to remove task when done
+                    task.add_done_callback(
+                        lambda t, eid=function_execution_request.execution_id: self.running_tasks.pop(eid, None)
+                    )
+
+                    try:
+                        # Instead of awaiting the task directly, use asyncio.shield to prevent cancellation
+                        # and wait_for to allow other tasks to run
+                        await asyncio.wait(
+                            [asyncio.shield(task)],
+                            return_when=asyncio.ALL_COMPLETED
+                        )
+                    except asyncio.CancelledError:
+                        # If the task was cancelled, we still want to wait for it to clean up
+                        await task
+
+            finally:
+                async with self._processing_lock:
+                    self._processing = False
+
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             logger.exception(e)
+    
+    async def run_function_execution(self, request: FunctionExecutionRequest):
+        try:
+            logger.info(f"Running function {request.function_name} on {request.params.get('target')} ({request.execution_id})")
+            async for result in self.function_executor.execute_function(
+                    func_name=request.function_name,
+                    params=request.params,
+                    program_id=request.program_id,
+                    execution_id=request.execution_id,
+                    timestamp=request.timestamp,
+                    force_execution=request.force
+                ):
+                pass  # Handle the result as needed
+            
+        except asyncio.CancelledError:
+            logger.info(f"Execution {request.execution_id} was cancelled.")
+        except Exception as e:
+            logger.error(f"Error executing function {request.execution_id}: {e}")
+            raise
 
     async def stop(self):
         logger.info("Shutting down...")
+        # Cancel all running tasks
+        for execution_id, task in self.running_tasks.items():
+            task.cancel()
+            logger.info(f"Cancelled task with Execution ID: {execution_id}")
+        await self.qm.disconnect()
 
 async def main():
     try:
@@ -187,4 +326,4 @@ def run():
     asyncio.run(main())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()
