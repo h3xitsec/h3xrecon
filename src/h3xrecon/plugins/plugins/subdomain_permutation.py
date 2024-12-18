@@ -11,7 +11,7 @@ class SubdomainPermutation(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug("Checking if the target is a dns catchall domain")
         
         logger.info(f"Running {self.name} on {params.get("target", {})}")

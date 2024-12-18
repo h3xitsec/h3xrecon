@@ -364,7 +364,21 @@ class DatabaseManager():
             not domain.startswith('*.') and  # No wildcards
             '@' not in domain  # No email addresses
         )
-
+    async def get_cloud_provider(self, ip: str) -> str:
+        try:
+            query = """
+            SELECT cloud_provider FROM ips WHERE ip = $1
+            """
+            result = await self._fetch_value(query, ip)
+            if result.data:
+                return result.data
+            else:
+                return None
+        except Exception as e:
+            logger.error(f"Error getting cloud provider: {str(e)}")
+            logger.exception(e)
+            return None
+    
     async def check_domain_regex_match(self, domain: str, program_id: int) -> bool:
         try:
             if isinstance(domain, dict) and 'subdomain' in domain:
@@ -384,7 +398,7 @@ class DatabaseManager():
         finally:
             logger.debug("Exiting check_domain_regex_match method")
 
-    async def insert_ip(self, ip: str, ptr: str, program_id: int) -> bool:
+    async def insert_ip(self, ip: str, ptr: str, cloud_provider: str, program_id: int) -> bool:
         # Validate IP address is IPv4 or IPv6
         import ipaddress
         try:
@@ -394,19 +408,23 @@ class DatabaseManager():
             return False
 
         query = """
-        INSERT INTO ips (ip, ptr, program_id)
-        VALUES ($1, LOWER($2), $3)
+        INSERT INTO ips (ip, ptr, cloud_provider, program_id)
+        VALUES ($1, LOWER($2), $3, $4)
         ON CONFLICT (ip) DO UPDATE
         SET ptr = CASE
                 WHEN EXCLUDED.ptr IS NOT NULL AND EXCLUDED.ptr <> '' THEN EXCLUDED.ptr
                 ELSE ips.ptr
+            END,
+            cloud_provider = CASE
+                WHEN EXCLUDED.cloud_provider IS NOT NULL AND EXCLUDED.cloud_provider <> '' THEN EXCLUDED.cloud_provider
+                ELSE ips.cloud_provider
             END,
             program_id = EXCLUDED.program_id,
             discovered_at = CURRENT_TIMESTAMP
         RETURNING id, (xmax = 0) AS inserted
         """
         try:
-            result = await self._write_records(query, ip, ptr, program_id)
+            result = await self._write_records(query, ip, ptr, cloud_provider, program_id)
             
             # Handle nested DbResult objects
             if result.success and isinstance(result.data, DbResult):

@@ -1,10 +1,12 @@
 from h3xrecon.core import DatabaseManager
 from h3xrecon.core import QueueManager
 from h3xrecon.core import Config
+from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
 from h3xrecon.core.preflight import PreflightCheck
-
+from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Callable, List
 from loguru import logger
 from dataclasses import dataclass
@@ -118,6 +120,9 @@ class JobProcessor:
             except Exception as e:
                 logger.warning(f"Error loading plugin '{module_name}': {e}", exc_info=True)
 
+        self._last_message_time = None
+        self._health_check_task = None
+
     async def start(self):
         logger.info(f"Starting Job Processor (ID: {self.jobprocessor_id}) version {__version__}...")
         try:
@@ -126,16 +131,33 @@ class JobProcessor:
             if not await preflight.run_checks():
                 raise ConnectionError("Preflight checks failed. Cannot start job processor.")
 
-            # Initialize components
-            await self.qm.connect()
-            await self.qm.subscribe(
-                subject="function.output",
-                stream="FUNCTION_OUTPUT",
-                durable_name="MY_CONSUMER",
-                message_handler=self.message_handler,
-                batch_size=1
-            )
-            logger.info(f"Job Processor started and listening for messages...")
+            # Initialize components with retry logic
+            retry_count = 0
+            max_retries = 3
+            while retry_count < max_retries:
+                try:
+                    await self.qm.connect()
+                    await self.qm.subscribe(
+                        subject="function.output",
+                        stream="FUNCTION_OUTPUT",
+                        durable_name=f"JOBPROCESSOR",
+                        message_handler=self.message_handler,
+                        batch_size=1,
+                        consumer_config={
+                            'ack_policy': AckPolicy.EXPLICIT,  # Correct attribute
+                            'deliver_policy': DeliverPolicy.ALL,
+                            'replay_policy': ReplayPolicy.INSTANT
+                        },
+                        queue_group="jobprocessor",
+                        broadcast=False
+                    )
+                    logger.info(f"Job Processor started and listening for messages...")
+                    break
+                except Exception as e:
+                    pass
+
+            # Start health check
+            self._health_check_task = asyncio.create_task(self._health_check())
         except Exception as e:
             logger.error(f"Failed to start job processor: {str(e)}")
             sys.exit(1)
@@ -192,9 +214,19 @@ class JobProcessor:
         if function_name in self.processor_map:
             logger.info(f"Processing output from plugin '{function_name}' on target '{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:
-                await self.processor_map[function_name](msg_data, self.db, self.qm)
+                try:
+                    await self.processor_map[function_name](msg_data, self.db, self.qm)
+                except StreamUnavailableError as e:
+                    logger.error(f"Failed to process output - stream unavailable: {str(e)}")
+                    # Optionally store failed outputs for retry
+                    # await self.store_failed_output(msg_data)
+                except Exception as e:
+                    logger.error(f"Error processing output with plugin '{function_name}': {e}")
+                    logger.exception(e)
+                    raise
             except Exception as e:
-                logger.error(f"Error processing output with plugin '{function_name}': {e}", exc_info=True)
+                logger.error(f"Error in output processor for '{function_name}': {e}")
+                logger.exception(e)
         else:
             logger.warning(f"No processor found for function: {function_name}")
 
@@ -202,6 +234,50 @@ class JobProcessor:
     ## Recon tools output processing functions ##
     #############################################
     
+    async def _health_check(self):
+        """Monitor processor health and subscription status."""
+        while True:
+            try:
+                current_time = datetime.now(timezone.utc)
+                if self._last_message_time:
+                    time_since_last_message = current_time - self._last_message_time
+                    if time_since_last_message > timedelta(minutes=5):
+                        logger.warning(f"No messages received for {time_since_last_message}. Reconnecting subscriptions...")
+                        await self._reconnect_subscriptions()
+                
+                # Check if we're still connected to NATS
+                if not self.qm.nc.is_connected:
+                    logger.error("NATS connection lost. Attempting to reconnect...")
+                    await self.qm.ensure_connected()
+                
+                await asyncio.sleep(30)  # Check every 30 seconds
+                
+            except Exception as e:
+                logger.error(f"Error in health check: {e}")
+                await asyncio.sleep(5)
+
+    async def _reconnect_subscriptions(self):
+        """Reconnect all subscriptions."""
+        try:
+            logger.info("Reconnecting subscriptions...")
+            await self.qm.subscribe(
+                subject="function.output",
+                stream="FUNCTION_OUTPUT",
+                durable_name=f"JOBPROCESSOR",
+                message_handler=self.message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.ALL,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                queue_group="jobprocessor",
+                broadcast=False
+            )
+            logger.info("Successfully reconnected subscriptions")
+        except Exception as e:
+            logger.error(f"Error reconnecting subscriptions: {e}")
+
 async def main():
     config = Config()
     config.setup_logging()

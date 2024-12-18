@@ -16,7 +16,7 @@ class TestHTTP(ReconPlugin):
     def timeout(self) -> int:
         return 300  # 5 minutes timeout
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.info(f"Running {self.name} on {params.get('target', {})}")
         command = (
             f"~/.pdtm/go/bin/httpx -u {params.get('target', {})} "
@@ -43,6 +43,7 @@ class TestHTTP(ReconPlugin):
             "-random-agent"
         )
         
+        process = None
         try:
             process = await asyncio.create_subprocess_shell(
                 command,
@@ -51,13 +52,44 @@ class TestHTTP(ReconPlugin):
                 shell=True
             )
             
-            async for output in self._read_subprocess_output(process):
-                try:
-                    json_data = json.loads(output)
-                    yield json_data
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse JSON output: {e}")
-
+            try:
+                while True:
+                    try:
+                        # Check if the task is being cancelled
+                        if asyncio.current_task().cancelled():
+                            logger.info(f"Task cancelled, terminating {self.name}")
+                            if process:
+                                process.terminate()  # Send SIGTERM first
+                                try:
+                                    await asyncio.wait_for(process.wait(), timeout=5.0)
+                                except asyncio.TimeoutError:
+                                    process.kill()  # If it doesn't terminate, force kill
+                            return
+                            
+                        line = await asyncio.wait_for(process.stdout.readline(), timeout=0.1)
+                        if not line:
+                            break
+                            
+                        try:
+                            json_data = json.loads(line.decode())
+                            yield json_data
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse JSON output: {e}")
+                            
+                    except asyncio.TimeoutError:
+                        # Just continue the loop on timeout
+                        continue
+                        
+            except asyncio.CancelledError:
+                logger.info(f"Task cancelled, terminating {self.name}")
+                if process:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        process.kill()
+                raise
+                
             await process.wait()
                 
         except Exception as e:
@@ -87,6 +119,7 @@ class TestHTTP(ReconPlugin):
         logger.debug(domains_to_add)
         if len(domains_to_add) > 0:
             for domain in domains_to_add:
+                logger.debug(f"Sending domain data for {domain}")
                 await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
 
         await send_service_data(qm=qm, data={

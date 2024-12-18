@@ -2,17 +2,21 @@ from h3xrecon.core import DatabaseManager
 from h3xrecon.core import Config
 from h3xrecon.core import QueueManager
 from h3xrecon.core import PreflightCheck
+from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.__about__ import __version__
+from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 import asyncio
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable
 from loguru import logger
 from urllib.parse import urlparse 
+import time
 import os
 import traceback
 import json
 import socket
 import sys
+from datetime import datetime, timezone, timedelta
 
 
 @dataclass
@@ -26,7 +30,7 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
         JobConfig(function="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
         JobConfig(function="resolve_domain", param_map=lambda result: {"target": result.lower()}),
         JobConfig(function="test_http", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": "-as"}),
+        JobConfig(function="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
         # JobConfig(function="find_subdomains_subfinder", param_map=lambda result: {"target": result}),
         #JobConfig(function="find_subdomains_ctfr", param_map=lambda result: {"target": result})
     ],
@@ -50,6 +54,8 @@ class DataProcessor:
             "nuclei": self.process_nuclei,
             "certificate": self.process_certificate
         }
+        self._last_message_time = None
+        self._health_check_task = None
 
     async def start(self):
         logger.info(f"Starting Data Processor (ID: {self.dataprocessor_id}) version {__version__}...")
@@ -61,13 +67,32 @@ class DataProcessor:
 
             # Initialize components
             await self.qm.connect()
+            
+            # Start health check
+            self._health_check_task = asyncio.create_task(self._health_check())
+
+            # Updated subscription configuration
             await self.qm.subscribe(
                 subject="recon.data",
                 stream="RECON_DATA",
-                durable_name="MY_CONSUMER",
+                durable_name=f"DATAPROCESSOR",
                 message_handler=self.message_handler,
-                batch_size=1
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.ALL,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                queue_group="dataprocessor",
+                broadcast=False
             )
+            # await self.qm.subscribe(
+            #     subject="recon.data",
+            #     stream="RECON_DATA",
+            #     durable_name="MY_CONSUMER",
+            #     message_handler=self.message_handler,
+            #     batch_size=1
+            # )
             logger.info(f"Data Processor started and listening for messages...")
         except Exception as e:
             logger.error(f"Failed to start data processor: {str(e)}")
@@ -78,6 +103,7 @@ class DataProcessor:
         logger.info("Shutting down...")
 
     async def message_handler(self, msg):
+        self._last_message_time = datetime.now(timezone.utc)
         logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
         try:
             if isinstance(msg.get("data"), list):
@@ -119,7 +145,45 @@ class DataProcessor:
                     "params": job.param_map(result)
                 }
                 logger.info(f"Triggering {job.function} for {result}")
-                await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message=new_job)
+                try:
+                    await self.qm.publish_message(
+                        subject="function.execute",
+                        stream="FUNCTION_EXECUTE",
+                        message=new_job
+                    )
+                except StreamUnavailableError as e:
+                    logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
+                    # Optionally store failed jobs for retry
+                    # await self.store_failed_job(new_job)
+                    break  # Stop triggering more jobs if stream is unavailable
+                except Exception as e:
+                    logger.error(f"Failed to trigger job: {str(e)}")
+                    raise
+
+                # Instead of awaiting sleep directly, create a background task
+                current_job_index = JOB_MAPPING[data_type].index(job)
+                if current_job_index < len(JOB_MAPPING[data_type]) - 1:
+                    logger.debug("scheduling next job trigger in 10 seconds")
+                    # Create background task for the delay
+                    asyncio.create_task(self._delay_next_job(program_id, data_type, result, current_job_index + 1))
+                    break  # Exit the loop as remaining jobs will be handled by the background task
+
+    async def _delay_next_job(self, program_id: int, data_type: str, result: Any, next_job_index: int):
+        """Helper method to handle delayed job triggering"""
+        await asyncio.sleep(5)
+        job = JOB_MAPPING[data_type][next_job_index]
+        new_job = {
+            "function": job.function,
+            "program_id": program_id,
+            "params": job.param_map(result)
+        }
+        logger.info(f"Triggering delayed job {job.function} for {result}")
+        await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message=new_job)
+        
+        # Schedule next job if there are more
+        if next_job_index < len(JOB_MAPPING[data_type]) - 1:
+            logger.debug("scheduling next job trigger in 10 seconds")
+            asyncio.create_task(self._delay_next_job(program_id, data_type, result, next_job_index + 1))
 
     ################################
     ## Data processing functions ##
@@ -136,7 +200,8 @@ class DataProcessor:
                 ptr = ptr[0] if ptr else None  # Take the first PTR record if it's a list
             elif ptr == '':
                 ptr = None  # Set empty string to None
-            inserted = await self.db_manager.insert_ip(ip=ip, ptr=ptr, program_id=msg_data.get('program_id'))
+            cloud_provider = attributes.get('cloud_provider', None)
+            inserted = await self.db_manager.insert_ip(ip=ip, ptr=ptr, cloud_provider=cloud_provider, program_id=msg_data.get('program_id'))
             if inserted:
                 await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
     
@@ -271,6 +336,50 @@ class DataProcessor:
             inserted = await self.db_manager.insert_service(ip=i.get("ip"), port=i.get("port"), protocol=i.get("protocol"), program_id=msg_data.get('program_id'), service=i.get("service"))
             #if inserted:
             #    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
+
+    async def _health_check(self):
+        """Monitor processor health and subscription status."""
+        while True:
+            try:
+                current_time = datetime.now(timezone.utc)
+                if self._last_message_time:
+                    time_since_last_message = current_time - self._last_message_time
+                    if time_since_last_message > timedelta(minutes=5):
+                        logger.warning(f"No messages received for {time_since_last_message}. Reconnecting subscriptions...")
+                        await self._reconnect_subscriptions()
+                
+                # Check if we're still connected to NATS
+                if not self.qm.nc.is_connected:
+                    logger.error("NATS connection lost. Attempting to reconnect...")
+                    await self.qm.ensure_connected()
+                
+                await asyncio.sleep(30)  # Check every 30 seconds
+                
+            except Exception as e:
+                logger.error(f"Error in health check: {e}")
+                await asyncio.sleep(5)
+
+    async def _reconnect_subscriptions(self):
+        """Reconnect all subscriptions."""
+        try:
+            logger.info("Reconnecting subscriptions...")
+            await self.qm.subscribe(
+                subject="recon.data",
+                stream="RECON_DATA",
+                durable_name=f"DATAPROCESSOR",
+                message_handler=self.message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.ALL,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                queue_group="dataprocessor",
+                broadcast=False
+            )
+            logger.info("Successfully reconnected subscriptions")
+        except Exception as e:
+            logger.error(f"Error reconnecting subscriptions: {e}")
 
 async def main():
     config = Config()
