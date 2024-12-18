@@ -14,7 +14,7 @@ class ReverseResolveIP(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.info(f"Running {self.name} on {params.get('target', {})}")
-        command = f"~/.pdtm/go/bin/dnsx -l {params.get('target', {})} -json -ptr"
+        command = f"echo \"{params.get('target', {})}\" | ~/.pdtm/go/bin/dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'"
         
         process = None
         try:
@@ -42,11 +42,9 @@ class ReverseResolveIP(ReconPlugin):
                         line = await asyncio.wait_for(process.stdout.readline(), timeout=0.1)
                         if not line:
                             break
-                            
+                        logger.debug(f"Received line: {line.decode()}")
                         try:
-                            json_data = json.loads(line.decode())
-                            if json_data.get("ptr"):
-                                yield {"domain": json_data.get("ptr")}
+                            yield {"domain": line.decode().strip().strip('"')}
                         except json.JSONDecodeError as e:
                             logger.error(f"Failed to parse JSON output: {e}")
                             

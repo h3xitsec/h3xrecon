@@ -119,6 +119,7 @@ class TestHTTP(ReconPlugin):
         logger.debug(domains_to_add)
         if len(domains_to_add) > 0:
             for domain in domains_to_add:
+                logger.debug(f"Sending domain data for {domain}")
                 await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
 
         await send_service_data(qm=qm, data={

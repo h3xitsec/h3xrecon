@@ -40,6 +40,7 @@ class Nuclei(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         function_params = asdict(FunctionParams(**params))
+        logger.debug(f"Function params: {function_params}")
         command = f"~/.pdtm/go/bin/nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}"
         logger.debug(f"Running command: {command}")
         process = None
@@ -68,7 +69,6 @@ class Nuclei(ReconPlugin):
                         line = await asyncio.wait_for(process.stdout.readline(), timeout=0.1)
                         if not line:
                             break
-                            
                         try:
                             json_data = json.loads(line.decode())
                             logger.debug(f"Nuclei output: {json_data}")
