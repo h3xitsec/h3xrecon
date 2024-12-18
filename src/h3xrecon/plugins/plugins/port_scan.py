@@ -12,44 +12,89 @@ class PortScan(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Scanning top 1000 ports on {params.get("target", {})}")
-        command = f"nmap -p- --top-ports 1000 -oX /tmp/nmap_scan_{params.get('target', {})}.xml {params.get('target', {})} && cat /tmp/nmap_scan_{params.get('target', {})}.xml"
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            shell=True
-        )
-
-        await process.wait()
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+        cloud_provider = await db.get_cloud_provider(params.get("target", {}))
+        if cloud_provider:
+            logger.info(f"Skipping port scan for cloud provider {cloud_provider}")
+            return
         
-        # Parse the XML output
-        tree = ET.parse(f"/tmp/nmap_scan_{params.get('target', {})}.xml")
-        root = tree.getroot()
+        logger.info(f"Scanning top 1000 ports on {params.get('target', {})}")
+        command = f"nmap -p- --top-ports 1000 -oX /tmp/nmap_scan_{params.get('target', {})}.xml {params.get('target', {})} && cat /tmp/nmap_scan_{params.get('target', {})}.xml"
+        
+        process = None
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                shell=True
+            )
+            
+            try:
+                while True:
+                    try:
+                        # Check if the task is being cancelled
+                        if asyncio.current_task().cancelled():
+                            logger.info(f"Task cancelled, terminating {self.name}")
+                            if process:
+                                process.terminate()
+                                try:
+                                    await asyncio.wait_for(process.wait(), timeout=5.0)
+                                except asyncio.TimeoutError:
+                                    process.kill()
+                            return
 
-        # Extract relevant information
-        for port in root.findall('.//port'):
-            port_id = port.get('portid')
-            protocol = port.get('protocol')
-            state = port.find('state').get('state')
-            service = port.find('service')
-            service_name = service.get('name') if service is not None else None
+                        # Wait for process to complete with timeout
+                        try:
+                            await asyncio.wait_for(process.wait(), timeout=0.1)
+                            break  # Process completed
+                        except asyncio.TimeoutError:
+                            continue  # Keep checking for cancellation
 
-            yield [{
-                "ip": params.get("target", {}),
-                "port": port_id,
-                "protocol": protocol,
-                "state": state,
-                "service": service_name
-            }]
+                    except asyncio.TimeoutError:
+                        continue
+                        
+            except asyncio.CancelledError:
+                logger.info(f"Task cancelled, terminating {self.name}")
+                if process:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        process.kill()
+                raise
 
-        # Handle extraports if needed
-        extraports = root.find('.//extraports')
-        if extraports is not None:
-            count = extraports.get('count')
-            logger.info(f"Total filtered ports: {count}")
-    
+            # Parse the XML output
+            try:
+                tree = ET.parse(f"/tmp/nmap_scan_{params.get('target', {})}.xml")
+                root = tree.getroot()
+
+                # Extract relevant information
+                for port in root.findall('.//port'):
+                    port_id = port.get('portid')
+                    protocol = port.get('protocol')
+                    state = port.find('state').get('state')
+                    service = port.find('service')
+                    service_name = service.get('name') if service is not None else None
+
+                    yield [{
+                        "ip": params.get("target", {}),
+                        "port": port_id,
+                        "protocol": protocol,
+                        "state": state,
+                        "service": service_name
+                    }]
+
+            except Exception as e:
+                logger.error(f"Error parsing nmap output: {str(e)}")
+                raise
+                
+        except Exception as e:
+            logger.error(f"Error during {self.name} execution: {str(e)}")
+            if process:
+                process.kill()
+            raise
+
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         for service in output_msg.get('output', []):
             await send_service_data(qm=qm, data={
