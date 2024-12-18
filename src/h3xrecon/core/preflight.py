@@ -33,9 +33,8 @@ class PreflightCheck:
         """Check NATS connectivity."""
         try:
             logger.info("Checking NATS connectivity...")
-            temp_qm = QueueManager(client_name=f"{self.service_name}-preflight", config=self.config.nats)
-            await temp_qm.connect()
-            await temp_qm.close()
+            self.qm = QueueManager(self.config.nats)
+            await self.qm.connect()
             return True
         except Exception as e:
             logger.error(f"NATS check failed: {e}")
