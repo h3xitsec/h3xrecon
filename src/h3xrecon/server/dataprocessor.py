@@ -30,7 +30,7 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
         JobConfig(function="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
         JobConfig(function="resolve_domain", param_map=lambda result: {"target": result.lower()}),
         JobConfig(function="test_http", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": "-as"}),
+        JobConfig(function="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
         # JobConfig(function="find_subdomains_subfinder", param_map=lambda result: {"target": result}),
         #JobConfig(function="find_subdomains_ctfr", param_map=lambda result: {"target": result})
     ],
