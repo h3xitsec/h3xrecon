@@ -10,6 +10,7 @@ import json
 import redis
 import asyncio
 from datetime import datetime, timezone
+from h3xrecon.core.queue import StreamUnavailableError
 
 class FunctionExecutor():
     def __init__(self, worker_id: str, qm: QueueManager, db: DatabaseManager, config: Config, redis_status: redis.Redis):
@@ -64,81 +65,54 @@ class FunctionExecutor():
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
         logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
     
-    async def execute_function(self, 
-                              func_name: str, 
-                              params: Dict[str, Any], 
-                              program_id: int, 
-                              execution_id: str, 
-                              timestamp: str, 
-                              force_execution: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
-        if func_name not in self.function_map:
-            logger.error(f"Function '{func_name}' not found in function_map.")
-            return
-
-        # Get the plugin instance
-        plugin_instance = next(p for p in self.function_map.values() if p.__self__.name == func_name)
-        plugin_timeout = plugin_instance.__self__.timeout
-        plugin_execute = self.function_map[func_name]
-        self.set_status(f"{func_name}__{params.get('target')}__{execution_id}")
-
+    async def execute_function(self, function_name: str, params: Dict[str, Any], program_id: int, execution_id: str) -> AsyncGenerator[Dict[str, Any], None]:
         try:
-            async with asyncio.timeout(plugin_timeout):
-                async for result in plugin_execute(params, program_id, execution_id):
-                    try:
-                        # Check if the task has been cancelled
-                        await asyncio.sleep(0)  # Allow cancellation to propagate
-                        if asyncio.current_task().cancelled():
-                            raise asyncio.CancelledError()
-                    except asyncio.CancelledError:
-                        logger.info(f"Execution {execution_id} received cancellation signal.")
-                        raise
+            plugin = self.function_map.get(function_name)
+            if not plugin:
+                logger.error(f"Function {function_name} not found")
+                raise ValueError(f"Function {function_name} not found")
 
-                    if isinstance(result, str):
-                        result = json.loads(result)
+            logger.info(f"Running function {function_name} on {params.get('target')} ({execution_id})")
+            self.set_status(f"running {function_name}")
+            
+            try:
+                async for result in plugin(params, program_id, execution_id, self.db):
                     output_data = {
                         "program_id": program_id,
                         "execution_id": execution_id,
-                        "source": {"function": func_name, "params": params, "force": force_execution},
+                        "source": {
+                            "function": function_name,
+                            "params": params
+                        },
                         "output": result,
-                        "timestamp": timestamp
+                        "timestamp": datetime.now().isoformat()
                     }
-                    # Publish the result
-                    await self.qm.publish_message(subject="function.output", stream="FUNCTION_OUTPUT", message=output_data)
+                    
+                    # Yield the result first
                     yield output_data
+                    
+                    # Then attempt to publish it
+                    try:
+                        await self.qm.publish_message(
+                            subject="function.output",
+                            stream="FUNCTION_OUTPUT",
+                            message=output_data
+                        )
+                    except StreamUnavailableError as e:
+                        logger.warning(f"Stream locked, dropping message: {str(e)}")
+                        continue  # Continue with the next result
 
-        except asyncio.TimeoutError:
-            logger.error(f"Function '{func_name}' timed out after {plugin_timeout} seconds")
-            error_data = {
-                "program_id": program_id,
-                "execution_id": execution_id,
-                "source": {"function": func_name, "params": params, "force": force_execution},
-                "output": {"error": f"Function timed out after {plugin_timeout} seconds"},
-                "timestamp": timestamp
-            }
-            await self.qm.publish_message(subject="function.output", stream="FUNCTION_OUTPUT", message=error_data)
-            yield error_data
-        except asyncio.CancelledError:
-            logger.info(f"Function '{func_name}' execution was cancelled.")
-            # Optionally, handle cleanup here or publish cancellation status
-            # cancel_data = {
-            #     "program_id": program_id,
-            #     "execution_id": execution_id,
-            #     "source": {"function": func_name, "params": params, "force": force_execution},
-            #     "output": {"error": "Function execution was cancelled."},
-            #     "timestamp": datetime.now(timezone.utc).isoformat()
-            # }
-            # try:
-            #     await self.qm.publish_message(subject="function.output", stream="FUNCTION_OUTPUT", message=cancel_data)
-            #     yield cancel_data
-            # except Exception as e:
-            #     logger.error(f"Failed to publish cancellation message: {e}")
-            # raise  # Re-raise to allow the caller to handle the cancellation
+            except Exception as e:
+                logger.error(f"Error executing function {function_name}: {str(e)}")
+                logger.exception(e)
+                raise
+            finally:
+                self.set_status("idle")
+                logger.info(f"Finished running {function_name} on {params.get('target')} ({execution_id})")
+
         except Exception as e:
-            logger.error(f"Error executing function '{func_name}': {e}")
-            self.set_status("idle")
+            logger.error(f"Error executing function {function_name}: {str(e)}")
+            logger.exception(e)
             raise
-        finally:
-            self.set_status("idle")
-            logger.info(f"Finished running {func_name} on {params.get('target')} ({execution_id})")
 
 

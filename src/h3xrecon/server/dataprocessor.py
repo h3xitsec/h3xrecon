@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Callable
 from loguru import logger
 from urllib.parse import urlparse 
+import time
 import os
 import traceback
 import json
@@ -119,7 +120,45 @@ class DataProcessor:
                     "params": job.param_map(result)
                 }
                 logger.info(f"Triggering {job.function} for {result}")
-                await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message=new_job)
+                try:
+                    await self.qm.publish_message(
+                        subject="function.execute",
+                        stream="FUNCTION_EXECUTE",
+                        message=new_job
+                    )
+                except StreamUnavailableError as e:
+                    logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
+                    # Optionally store failed jobs for retry
+                    # await self.store_failed_job(new_job)
+                    break  # Stop triggering more jobs if stream is unavailable
+                except Exception as e:
+                    logger.error(f"Failed to trigger job: {str(e)}")
+                    raise
+
+                # Instead of awaiting sleep directly, create a background task
+                current_job_index = JOB_MAPPING[data_type].index(job)
+                if current_job_index < len(JOB_MAPPING[data_type]) - 1:
+                    logger.debug("scheduling next job trigger in 10 seconds")
+                    # Create background task for the delay
+                    asyncio.create_task(self._delay_next_job(program_id, data_type, result, current_job_index + 1))
+                    break  # Exit the loop as remaining jobs will be handled by the background task
+
+    async def _delay_next_job(self, program_id: int, data_type: str, result: Any, next_job_index: int):
+        """Helper method to handle delayed job triggering"""
+        await asyncio.sleep(5)
+        job = JOB_MAPPING[data_type][next_job_index]
+        new_job = {
+            "function": job.function,
+            "program_id": program_id,
+            "params": job.param_map(result)
+        }
+        logger.info(f"Triggering delayed job {job.function} for {result}")
+        await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message=new_job)
+        
+        # Schedule next job if there are more
+        if next_job_index < len(JOB_MAPPING[data_type]) - 1:
+            logger.debug("scheduling next job trigger in 10 seconds")
+            asyncio.create_task(self._delay_next_job(program_id, data_type, result, next_job_index + 1))
 
     ################################
     ## Data processing functions ##
@@ -136,7 +175,8 @@ class DataProcessor:
                 ptr = ptr[0] if ptr else None  # Take the first PTR record if it's a list
             elif ptr == '':
                 ptr = None  # Set empty string to None
-            inserted = await self.db_manager.insert_ip(ip=ip, ptr=ptr, program_id=msg_data.get('program_id'))
+            cloud_provider = attributes.get('cloud_provider', None)
+            inserted = await self.db_manager.insert_ip(ip=ip, ptr=ptr, cloud_provider=cloud_provider, program_id=msg_data.get('program_id'))
             if inserted:
                 await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
     

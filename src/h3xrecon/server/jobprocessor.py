@@ -126,16 +126,27 @@ class JobProcessor:
             if not await preflight.run_checks():
                 raise ConnectionError("Preflight checks failed. Cannot start job processor.")
 
-            # Initialize components
-            await self.qm.connect()
-            await self.qm.subscribe(
-                subject="function.output",
-                stream="FUNCTION_OUTPUT",
-                durable_name="MY_CONSUMER",
-                message_handler=self.message_handler,
-                batch_size=1
-            )
-            logger.info(f"Job Processor started and listening for messages...")
+            # Initialize components with retry logic
+            retry_count = 0
+            max_retries = 3
+            while retry_count < max_retries:
+                try:
+                    await self.qm.connect()
+                    await self.qm.subscribe(
+                        subject="function.output",
+                        stream="FUNCTION_OUTPUT",
+                        durable_name="MY_CONSUMER",
+                        message_handler=self.message_handler,
+                        batch_size=1
+                    )
+                    logger.info(f"Job Processor started and listening for messages...")
+                    break
+                except StreamUnavailableError as e:
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        raise ConnectionError(f"Failed to connect after {max_retries} attempts: {str(e)}")
+                    logger.warning(f"Stream unavailable, attempt {retry_count}/{max_retries}. Retrying...")
+                    await asyncio.sleep(2 ** retry_count)  # Exponential backoff
         except Exception as e:
             logger.error(f"Failed to start job processor: {str(e)}")
             sys.exit(1)
@@ -192,9 +203,19 @@ class JobProcessor:
         if function_name in self.processor_map:
             logger.info(f"Processing output from plugin '{function_name}' on target '{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:
-                await self.processor_map[function_name](msg_data, self.db, self.qm)
+                try:
+                    await self.processor_map[function_name](msg_data, self.db, self.qm)
+                except StreamUnavailableError as e:
+                    logger.error(f"Failed to process output - stream unavailable: {str(e)}")
+                    # Optionally store failed outputs for retry
+                    # await self.store_failed_output(msg_data)
+                except Exception as e:
+                    logger.error(f"Error processing output with plugin '{function_name}': {e}")
+                    logger.exception(e)
+                    raise
             except Exception as e:
-                logger.error(f"Error processing output with plugin '{function_name}': {e}", exc_info=True)
+                logger.error(f"Error in output processor for '{function_name}': {e}")
+                logger.exception(e)
         else:
             logger.warning(f"No processor found for function: {function_name}")
 
