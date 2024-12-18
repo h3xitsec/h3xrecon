@@ -33,7 +33,7 @@ class TestDomainCatchall(ReconPlugin):
         except Exception:
             return False
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.info(f"Running {self.name} on {params.get("target", {})}")
         
         resolver = dns.resolver.Resolver()

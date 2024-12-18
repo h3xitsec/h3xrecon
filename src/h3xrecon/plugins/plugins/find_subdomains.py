@@ -13,7 +13,7 @@ class FindSubdomainsPlugin(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, params: Dict[str, Any], program_id: int, execution_id: str) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int, execution_id: str, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Execute the meta plugin by dispatching multiple subdomain discovery jobs
         """

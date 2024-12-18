@@ -29,7 +29,7 @@ class CIDRIntel(ReconPlugin):
         }
         return output_data
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, ) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.info(f"Running {self.name} on {params.get("target", {})}")
         command = f"amass intel -active -cidr {params.get("target", {})} -ipv4"
         logger.debug(f"Running command: {command}")

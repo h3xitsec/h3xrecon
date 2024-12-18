@@ -38,41 +38,79 @@ class Nuclei(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         function_params = asdict(FunctionParams(**params))
         command = f"~/.pdtm/go/bin/nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}"
         logger.debug(f"Running command: {command}")
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            shell=True
-        )
-        
-        async for output in self._read_subprocess_output(process):
+        process = None
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                shell=True
+            )
+            
             try:
-                json_data = json.loads(output)
-                logger.debug(f"Nuclei output: {json_data}")
-                ip_str = str(json_data.get('ip', ''))
-                nuclei_output = FunctionOutput(
-                    url=json_data.get('url', ''),
-                    matched_at=json_data.get('matched-at', ''),
-                    matcher_name=json_data.get('matcher-name', ''),
-                    type=json_data.get('type', ''),
-                    ip=ip_str,
-                    port=json_data.get('port', 0),
-                    scheme=json_data.get('scheme', ''),
-                    template_path=json_data.get('template', ''),
-                    template_id=json_data.get('template-id', ''),
-                    template_name=json_data.get('info', {}).get('name', ''),
-                    severity=json_data.get('info', {}).get('severity', 'info')
-                )
-                yield nuclei_output.model_dump()
-            except Exception as e:
-                logger.error(f"Error processing Nuclei output: {e}")
-                yield {}
-
-        await process.wait()
+                while True:
+                    try:
+                        # Check if the task is being cancelled
+                        if asyncio.current_task().cancelled():
+                            logger.info(f"Task cancelled, terminating {self.name}")
+                            if process:
+                                process.terminate()
+                                try:
+                                    await asyncio.wait_for(process.wait(), timeout=5.0)
+                                except asyncio.TimeoutError:
+                                    process.kill()
+                            return
+                            
+                        line = await asyncio.wait_for(process.stdout.readline(), timeout=0.1)
+                        if not line:
+                            break
+                            
+                        try:
+                            json_data = json.loads(line.decode())
+                            logger.debug(f"Nuclei output: {json_data}")
+                            ip_str = str(json_data.get('ip', ''))
+                            nuclei_output = FunctionOutput(
+                                url=json_data.get('url', ''),
+                                matched_at=json_data.get('matched-at', ''),
+                                matcher_name=json_data.get('matcher-name', ''),
+                                type=json_data.get('type', ''),
+                                ip=ip_str,
+                                port=json_data.get('port', 0),
+                                scheme=json_data.get('scheme', ''),
+                                template_path=json_data.get('template', ''),
+                                template_id=json_data.get('template-id', ''),
+                                template_name=json_data.get('info', {}).get('name', ''),
+                                severity=json_data.get('info', {}).get('severity', 'info')
+                            )
+                            yield nuclei_output.model_dump()
+                        except Exception as e:
+                            logger.error(f"Error processing Nuclei output: {e}")
+                            yield {}
+                            
+                    except asyncio.TimeoutError:
+                        continue
+                        
+            except asyncio.CancelledError:
+                logger.info(f"Task cancelled, terminating {self.name}")
+                if process:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        process.kill()
+                raise
+                
+            await process.wait()
+                
+        except Exception as e:
+            logger.error(f"Error during Nuclei test: {str(e)}")
+            if process:
+                process.kill()
+            raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         #if output_msg.get('in_scope', False):
