@@ -10,7 +10,6 @@ stream_exists() {
 }
 
 # Create FUNCTION_EXECUTE stream if it doesn't exist
-nats stream rm FUNCTION_EXECUTE --server=nats://localhost:4222 --force
 if ! stream_exists "FUNCTION_EXECUTE"; then
     nats stream add FUNCTION_EXECUTE \
         --subjects "function.execute" \
@@ -33,6 +32,7 @@ else
     echo "FUNCTION_EXECUTE stream already exists"
 fi
 
+nats stream rm FUNCTION_CONTROL --server=nats://localhost:4222 --force
 if ! stream_exists "FUNCTION_CONTROL"; then
     nats stream add FUNCTION_CONTROL \
         --subjects "function.control" \
