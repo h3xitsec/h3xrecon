@@ -104,13 +104,15 @@ class QueueManager:
             try:
                 await self.js.publish(subject, json.dumps(message).encode())
             except NoStreamResponseError:
-                if retry_count < self._stream_retry_attempts:
-                    logger.warning(f"Stream {stream} unavailable, attempt {retry_count + 1}/{self._stream_retry_attempts}")
-                    await asyncio.sleep(self._stream_retry_delay)
-                    return await self.publish_message(subject, stream, message, retry_count + 1)
-                else:
-                    logger.error(f"Stream {stream} unavailable after {self._stream_retry_attempts} attempts")
-                    raise StreamUnavailableError(f"Stream {stream} is unavailable or locked")
+                logger.debug(f"No stream response for {stream}, dropping message")
+                pass
+                #if retry_count < self._stream_retry_attempts:
+                #    logger.warning(f"Stream {stream} unavailable, attempt {retry_count + 1}/{self._stream_retry_attempts}")
+                #    await asyncio.sleep(self._stream_retry_delay)
+                #    return await self.publish_message(subject, stream, message, retry_count + 1)
+                #else:
+                #    logger.error(f"Stream {stream} unavailable after {self._stream_retry_attempts} attempts")
+                #    raise StreamUnavailableError(f"Stream {stream} is unavailable or locked")
             except NoRespondersError:
                 if retry_count < self._stream_retry_attempts:
                     logger.warning(f"No responders for {stream}, attempt {retry_count + 1}/{self._stream_retry_attempts}")

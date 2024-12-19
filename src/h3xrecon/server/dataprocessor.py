@@ -86,13 +86,6 @@ class DataProcessor:
                 queue_group="dataprocessor",
                 broadcast=False
             )
-            # await self.qm.subscribe(
-            #     subject="recon.data",
-            #     stream="RECON_DATA",
-            #     durable_name="MY_CONSUMER",
-            #     message_handler=self.message_handler,
-            #     batch_size=1
-            # )
             logger.info(f"Data Processor started and listening for messages...")
         except Exception as e:
             logger.error(f"Failed to start data processor: {str(e)}")
