@@ -17,6 +17,7 @@ import json
 import socket
 import sys
 from datetime import datetime, timezone, timedelta
+from enum import Enum
 
 
 @dataclass
@@ -40,6 +41,10 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
     ]
 }
 
+class ProcessorState(Enum):
+    RUNNING = "running"
+    PAUSED = "paused"
+
 class DataProcessor:
     def __init__(self, config: Config):
         self.config = config
@@ -56,6 +61,8 @@ class DataProcessor:
         }
         self._last_message_time = None
         self._health_check_task = None
+        self.state = ProcessorState.RUNNING
+        self.control_subscription = None
 
     async def start(self):
         logger.info(f"Starting Data Processor (ID: {self.dataprocessor_id}) version {__version__}...")
@@ -86,6 +93,21 @@ class DataProcessor:
                 queue_group="dataprocessor",
                 broadcast=False
             )
+
+            # Add control message subscription
+            await self.qm.subscribe(
+                subject="function.control",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"DATAPROCESSOR_CONTROL",
+                message_handler=self.control_message_handler,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.ALL,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
+
             logger.info(f"Data Processor started and listening for messages...")
         except Exception as e:
             logger.error(f"Failed to start data processor: {str(e)}")
@@ -96,6 +118,10 @@ class DataProcessor:
         logger.info("Shutting down...")
 
     async def message_handler(self, msg):
+        if self.state == ProcessorState.PAUSED:
+            logger.debug("Processor is paused, skipping message")
+            return
+
         self._last_message_time = datetime.now(timezone.utc)
         logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
         try:
@@ -373,6 +399,48 @@ class DataProcessor:
             logger.info("Successfully reconnected subscriptions")
         except Exception as e:
             logger.error(f"Error reconnecting subscriptions: {e}")
+
+    async def control_message_handler(self, msg):
+        """Handle control messages for pausing/unpausing the processor"""
+        try:
+            command = msg.get("command")
+            target = msg.get("target", "all")
+            
+            if target not in ["all", "dataprocessor"]:
+                return
+
+            if command == "pause":
+                logger.info("Received pause command")
+                self.state = ProcessorState.PAUSED
+                # Send acknowledgment
+                await self.qm.publish_message(
+                    subject="function.control.response",
+                    stream="FUNCTION_CONTROL_RESPONSE",
+                    message={
+                        "processor_id": self.dataprocessor_id,
+                        "type": "dataprocessor",
+                        "status": "paused",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+            
+            elif command == "unpause":
+                logger.info("Received unpause command")
+                self.state = ProcessorState.RUNNING
+                # Send acknowledgment
+                await self.qm.publish_message(
+                    subject="function.control.response",
+                    stream="FUNCTION_CONTROL_RESPONSE",
+                    message={
+                        "processor_id": self.dataprocessor_id,
+                        "type": "dataprocessor",
+                        "status": "running",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+
+        except Exception as e:
+            logger.error(f"Error handling control message: {e}")
 
 async def main():
     config = Config()

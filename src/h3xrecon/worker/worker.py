@@ -15,6 +15,12 @@ from typing import Dict, Any, Optional
 
 import redis
 import random
+from enum import Enum
+
+class ProcessorState(Enum):
+    RUNNING = "running"
+    PAUSED = "paused"
+
 @dataclass
 class FunctionExecutionRequest:
     program_id: int
@@ -32,6 +38,7 @@ class Worker:
         self.worker_id = f"worker-{socket.gethostname()}-{random.randint(1000, 9999)}"
         self.config = config
         self.config.setup_logging()
+        self.state = ProcessorState.RUNNING
         # Initialize components after preflight checks
         self.qm = None
         self.db = None
@@ -46,7 +53,9 @@ class Worker:
         self._processing_lock = asyncio.Lock()
         self._health_check_task = None
         self._last_message_time = None
-        
+    
+    
+    
     async def initialize_components(self):
         """Initialize all worker components after successful preflight checks."""
         self.redis_status = redis.Redis(
@@ -70,7 +79,10 @@ class Worker:
             config=self.config,
             redis_status=self.redis_status
         )
-        
+    
+    def set_status(self, status: str):
+        self.redis_status.set(self.worker_id, status)
+    
     async def start(self):
         logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
         try:
@@ -86,7 +98,7 @@ class Worker:
             # Start health check
             self._health_check_task = asyncio.create_task(self._health_check())
 
-            # Subscribe to control messages with AckPolicy.EXPLICIT
+            # Subscribe to control messages with updated configuration
             await self.qm.subscribe(
                 subject="function.control",
                 stream="FUNCTION_CONTROL",
@@ -94,8 +106,8 @@ class Worker:
                 message_handler=self.control_message_handler,
                 batch_size=1,
                 consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,  # Correct attribute
-                    'deliver_policy': DeliverPolicy.ALL,
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
                     'replay_policy': ReplayPolicy.INSTANT
                 },
                 broadcast=True
@@ -140,13 +152,54 @@ class Worker:
                     command = message.get('command')
                     execution_id = message.get('execution_id')
                     target_worker_id = message.get('target_worker_id')
+                    target = message.get('target', 'all')
                     
                     # If the message is targeted to a specific worker and it's not this worker, skip
                     if target_worker_id and target_worker_id != self.worker_id:
                         logger.debug(f"Control message targeted to worker {target_worker_id}, skipping.")
                         continue
-                        
-                    if command == 'killjob':
+
+                    # Skip messages not meant for workers
+                    if target not in ["all", "worker"]:
+                        logger.debug(f"Control message targeted to {target}, skipping.")
+                        if hasattr(msg, 'ack'):
+                            await msg.ack()
+                        continue
+
+                    # Handle pause/unpause commands
+                    if command == "pause":
+                        logger.info("Received pause command")
+                        self.state = ProcessorState.PAUSED
+                        self.set_status("paused")
+                        # Send acknowledgment
+                        await self.qm.publish_message(
+                            subject="function.control.response",
+                            stream="FUNCTION_CONTROL_RESPONSE",
+                            message={
+                                "processor_id": self.worker_id,
+                                "type": "worker",
+                                "status": "paused",
+                                "timestamp": datetime.now(timezone.utc).isoformat()
+                            }
+                        )
+                    
+                    elif command == "unpause":
+                        logger.info("Received unpause command")
+                        self.state = ProcessorState.RUNNING
+                        self.set_status("idle")
+                        # Send acknowledgment
+                        await self.qm.publish_message(
+                            subject="function.control.response",
+                            stream="FUNCTION_CONTROL_RESPONSE",
+                            message={
+                                "processor_id": self.worker_id,
+                                "type": "worker",
+                                "status": "running",
+                                "timestamp": datetime.now(timezone.utc).isoformat()
+                            }
+                        )
+                    
+                    elif command == 'killjob':
                         if self.running_tasks:
                             # Cancel the first running task
                             execution_id = next(iter(self.running_tasks))
@@ -258,6 +311,12 @@ class Worker:
             raise ValueError(f"Error validating program_name: {str(e)}")
 
     async def message_handler(self, msg):
+        if self.state == ProcessorState.PAUSED:
+            logger.debug("Worker is paused, skipping message")
+            if hasattr(msg, 'ack'):
+                await msg.ack()
+            return
+
         self._last_message_time = datetime.now(timezone.utc)
         logger.debug("Entered message_handler")
         processing_lock_acquired = False

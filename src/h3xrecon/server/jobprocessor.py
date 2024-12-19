@@ -20,6 +20,8 @@ import sys
 
 from uuid import UUID
 from datetime import datetime
+from enum import Enum
+import json
 
 @dataclass
 class FunctionExecution:
@@ -61,6 +63,10 @@ class FunctionExecution:
             logger.error("output must be a list")
             raise TypeError("output must be a list")
 
+class ProcessorState(Enum):
+    RUNNING = "running"
+    PAUSED = "paused"
+
 class JobProcessor:
     def __init__(self, config: Config):
         self.config = config
@@ -82,6 +88,8 @@ class JobProcessor:
             db=1,
             password=config.redis.password
         )
+        self.state = ProcessorState.RUNNING
+        self.control_subscription = None
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
             logger.debug(f"Found plugin package at: {package.__path__}")
@@ -156,6 +164,20 @@ class JobProcessor:
                 except Exception as e:
                     pass
 
+            # Add control message subscription
+            await self.qm.subscribe(
+                subject="function.control",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"JOBPROCESSOR_CONTROL",
+                message_handler=self.control_message_handler,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.ALL,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
+
             # Start health check
             self._health_check_task = asyncio.create_task(self._health_check())
         except Exception as e:
@@ -166,6 +188,10 @@ class JobProcessor:
         logger.info("Shutting down...")
 
     async def message_handler(self, msg):
+        if self.state == ProcessorState.PAUSED:
+            logger.debug("Processor is paused, skipping message")
+            return
+
         try:
             # Validate the message using FunctionExecution dataclass
             function_execution = FunctionExecution(
@@ -277,6 +303,48 @@ class JobProcessor:
             logger.info("Successfully reconnected subscriptions")
         except Exception as e:
             logger.error(f"Error reconnecting subscriptions: {e}")
+
+    async def control_message_handler(self, msg):
+        """Handle control messages for pausing/unpausing the processor"""
+        try:
+            command = msg.get("command")
+            target = msg.get("target", "all")
+            
+            if target not in ["all", "jobprocessor"]:
+                return
+
+            if command == "pause":
+                logger.info("Received pause command")
+                self.state = ProcessorState.PAUSED
+                # Send acknowledgment
+                await self.qm.publish_message(
+                    subject="function.control.response",
+                    stream="FUNCTION_CONTROL_RESPONSE",
+                    message={
+                        "processor_id": self.jobprocessor_id,
+                        "type": "jobprocessor",
+                        "status": "paused",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+            
+            elif command == "unpause":
+                logger.info("Received unpause command")
+                self.state = ProcessorState.RUNNING
+                # Send acknowledgment
+                await self.qm.publish_message(
+                    subject="function.control.response",
+                    stream="FUNCTION_CONTROL_RESPONSE",
+                    message={
+                        "processor_id": self.jobprocessor_id,
+                        "type": "jobprocessor",
+                        "status": "running",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+
+        except Exception as e:
+            logger.error(f"Error handling control message: {e}")
 
 async def main():
     config = Config()
