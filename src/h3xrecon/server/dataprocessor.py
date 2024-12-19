@@ -63,6 +63,25 @@ class DataProcessor:
         self._health_check_task = None
         self.state = ProcessorState.RUNNING
         self.control_subscription = None
+        self.data_subscription = None
+
+    async def _setup_subscription(self, subject: str, stream: str, message_handler: Callable, 
+                                broadcast: bool = False, queue_group: str = None):
+        """Helper method to setup NATS subscriptions with consistent configuration."""
+        subscription = await self.qm.subscribe(
+            subject=subject,
+            stream=stream,
+            message_handler=message_handler,
+            batch_size=1,
+            consumer_config={
+                'ack_policy': AckPolicy.EXPLICIT,
+                'deliver_policy': DeliverPolicy.ALL,
+                'replay_policy': ReplayPolicy.INSTANT
+            },
+            queue_group=queue_group,
+            broadcast=broadcast
+        )
+        return subscription
 
     async def start(self):
         logger.info(f"Starting Data Processor (ID: {self.dataprocessor_id}) version {__version__}...")
@@ -72,47 +91,40 @@ class DataProcessor:
             if not await preflight.run_checks():
                 raise ConnectionError("Preflight checks failed. Cannot start data processor.")
 
-            # Initialize components
-            await self.qm.connect()
-            
-            # Start health check
-            self._health_check_task = asyncio.create_task(self._health_check())
-
-            # Updated subscription configuration
-            await self.qm.subscribe(
-                subject="recon.data",
-                stream="RECON_DATA",
-                durable_name=f"DATAPROCESSOR",
-                message_handler=self.message_handler,
-                batch_size=1,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.ALL,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
-                queue_group="dataprocessor",
-                broadcast=False
-            )
+            # Initialize components with retry logic
+            retry_count = 0
+            max_retries = 3
+            while retry_count < max_retries:
+                try:
+                    await self.qm.connect()
+                    # Store the subscription object
+                    self.data_subscription = await self._setup_subscription(
+                        subject="recon.data",
+                        stream="RECON_DATA",
+                        message_handler=self.message_handler,
+                        queue_group="dataprocessor"
+                    )
+                    logger.info(f"Data Processor started and listening for messages...")
+                    break
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count == max_retries:
+                        raise e
+                    await asyncio.sleep(1)
 
             # Add control message subscription
-            await self.qm.subscribe(
+            self.control_subscription = await self._setup_subscription(
                 subject="function.control",
                 stream="FUNCTION_CONTROL",
-                durable_name=f"DATAPROCESSOR_CONTROL",
                 message_handler=self.control_message_handler,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.ALL,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
                 broadcast=True
             )
 
-            logger.info(f"Data Processor started and listening for messages...")
+            # Start health check
+            self._health_check_task = asyncio.create_task(self._health_check())
         except Exception as e:
             logger.error(f"Failed to start data processor: {str(e)}")
             sys.exit(1)
-
 
     async def stop(self):
         logger.info("Shutting down...")
@@ -382,19 +394,12 @@ class DataProcessor:
         """Reconnect all subscriptions."""
         try:
             logger.info("Reconnecting subscriptions...")
-            await self.qm.subscribe(
+            await self.qm.connect()
+            self.data_subscription = await self._setup_subscription(
                 subject="recon.data",
                 stream="RECON_DATA",
-                durable_name=f"DATAPROCESSOR",
                 message_handler=self.message_handler,
-                batch_size=1,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.ALL,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
-                queue_group="dataprocessor",
-                broadcast=False
+                queue_group="dataprocessor"
             )
             logger.info("Successfully reconnected subscriptions")
         except Exception as e:
@@ -412,11 +417,16 @@ class DataProcessor:
             if command == "pause":
                 logger.info("Received pause command")
                 self.state = ProcessorState.PAUSED
-                await self.qm.unsubscribe(
-                    subject="recon.data",
-                    stream="RECON_DATA",
-                    durable_name="DATAPROCESSOR"
-                )
+                
+                # Properly unsubscribe if we have an active subscription
+                if self.data_subscription:
+                    try:
+                        await self.data_subscription.unsubscribe()
+                        self.data_subscription = None
+                        logger.info("Successfully unsubscribed from recon.data")
+                    except Exception as e:
+                        logger.error(f"Error unsubscribing from recon.data: {e}")
+                
                 # Send acknowledgment
                 await self.qm.publish_message(
                     subject="function.control.response",
@@ -432,7 +442,21 @@ class DataProcessor:
             elif command == "unpause":
                 logger.info("Received unpause command")
                 self.state = ProcessorState.RUNNING
-                await self._reconnect_subscriptions()
+                
+                # Only attempt to resubscribe if we're not already subscribed
+                if not self.data_subscription:
+                    try:
+                        self.data_subscription = await self._setup_subscription(
+                            subject="recon.data",
+                            stream="RECON_DATA",
+                            message_handler=self.message_handler,
+                            queue_group="dataprocessor"
+                        )
+                        logger.info("Successfully resubscribed to recon.data")
+                    except Exception as e:
+                        logger.error(f"Error resubscribing to recon.data: {e}")
+                        return
+                
                 # Send acknowledgment
                 await self.qm.publish_message(
                     subject="function.control.response",

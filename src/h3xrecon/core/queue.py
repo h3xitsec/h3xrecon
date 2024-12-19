@@ -196,7 +196,7 @@ class QueueManager:
         
         # Default consumer configuration
         default_config = ConsumerConfig(
-            durable_name=None if broadcast else durable_name,
+            #durable_name=None if broadcast else durable_name,
             deliver_policy=DeliverPolicy.ALL,
             ack_policy=AckPolicy.NONE if broadcast else AckPolicy.EXPLICIT,
             replay_policy=ReplayPolicy.INSTANT,
