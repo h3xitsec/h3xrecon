@@ -286,6 +286,7 @@ class JobProcessor:
         """Reconnect all subscriptions."""
         try:
             logger.info("Reconnecting subscriptions...")
+            await self.qm.connect()
             await self.qm.subscribe(
                 subject="function.output",
                 stream="FUNCTION_OUTPUT",
@@ -316,6 +317,11 @@ class JobProcessor:
             if command == "pause":
                 logger.info("Received pause command")
                 self.state = ProcessorState.PAUSED
+                await self.qm.unsubscribe(
+                    subject="function.output",
+                    stream="FUNCTION_OUTPUT",
+                    durable_name="JOBPROCESSOR"
+                )
                 # Send acknowledgment
                 await self.qm.publish_message(
                     subject="function.control.response",
@@ -331,6 +337,7 @@ class JobProcessor:
             elif command == "unpause":
                 logger.info("Received unpause command")
                 self.state = ProcessorState.RUNNING
+                await self._reconnect_subscriptions()
                 # Send acknowledgment
                 await self.qm.publish_message(
                     subject="function.control.response",

@@ -412,6 +412,11 @@ class DataProcessor:
             if command == "pause":
                 logger.info("Received pause command")
                 self.state = ProcessorState.PAUSED
+                await self.qm.unsubscribe(
+                    subject="recon.data",
+                    stream="RECON_DATA",
+                    durable_name="DATAPROCESSOR"
+                )
                 # Send acknowledgment
                 await self.qm.publish_message(
                     subject="function.control.response",
@@ -427,6 +432,7 @@ class DataProcessor:
             elif command == "unpause":
                 logger.info("Received unpause command")
                 self.state = ProcessorState.RUNNING
+                await self._reconnect_subscriptions()
                 # Send acknowledgment
                 await self.qm.publish_message(
                     subject="function.control.response",
