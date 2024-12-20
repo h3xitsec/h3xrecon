@@ -56,3 +56,7 @@ dist/
 .coverage*
 .env.compose
 resume.cfg
+/docker_swarm/ansible/collections
+docker_swarm/ansible/galaxy_token
+docker_swarm/ansible/vars/oci_credentials.yml
+docker_swarm/ansible/galaxy_cache/api.json

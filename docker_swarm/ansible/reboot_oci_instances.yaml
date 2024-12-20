@@ -1,0 +1,43 @@
+---
+- name: Reboot OCI Instances
+  hosts: localhost
+  gather_facts: false
+  
+  vars_files:
+    - vars/oci_credentials.yml  # Store credentials securely in separate file
+    
+  tasks:
+    # Account 1
+    - name: Get instance facts from Account 1
+      oracle.oci.oci_compute_instance_facts:
+        config_file_location: "{{ account1_config_path }}"
+        config_profile_name: "{{ account1_profile }}"
+        compartment_id: "{{ account1_compartment_id }}"
+        region: "{{ account1_region }}"
+      register: oci_instances_account1
+
+    - name: Reboot all instances simultaneously
+      oracle.oci.oci_compute_instance_actions:
+        config_file_location: "{{ account1_config_path }}"
+        config_profile_name: "{{ account1_profile }}"
+        instance_id: "{{ item.id }}"
+        action: reset
+      loop: "{{ oci_instances_account1.instances }}"
+      register: reboot_result_account1
+      async: 300  # Maximum runtime of 5 minutes
+      poll: 0  # Don't wait for completion
+    
+    - name: Wait for all reboots to complete
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: reboot_jobs
+      until: reboot_jobs.finished
+      retries: 30
+      delay: 10
+      loop: "{{ reboot_result_account1.results }}"
+
+    # Print results
+    - name: Display reboot results
+      debug:
+        msg: 
+          - "Account 1 reboot results: {{ reboot_jobs }}"

@@ -90,6 +90,7 @@ class JobProcessor:
         )
         self.state = ProcessorState.RUNNING
         self.control_subscription = None
+        self.output_subscription = None
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
             logger.debug(f"Found plugin package at: {package.__path__}")
@@ -131,6 +132,24 @@ class JobProcessor:
         self._last_message_time = None
         self._health_check_task = None
 
+    async def _setup_subscription(self, subject: str, stream: str, message_handler: Callable, 
+                                broadcast: bool = False, queue_group: str = None):
+        """Helper method to setup NATS subscriptions with consistent configuration."""
+        subscription = await self.qm.subscribe(
+            subject=subject,
+            stream=stream,
+            message_handler=message_handler,
+            batch_size=1,
+            consumer_config={
+                'ack_policy': AckPolicy.EXPLICIT,
+                'deliver_policy': DeliverPolicy.ALL,
+                'replay_policy': ReplayPolicy.INSTANT
+            },
+            queue_group=queue_group,
+            broadcast=broadcast
+        )
+        return subscription
+
     async def start(self):
         logger.info(f"Starting Job Processor (ID: {self.jobprocessor_id}) version {__version__}...")
         try:
@@ -145,36 +164,26 @@ class JobProcessor:
             while retry_count < max_retries:
                 try:
                     await self.qm.connect()
-                    await self.qm.subscribe(
+                    # Store the subscription object
+                    self.output_subscription = await self._setup_subscription(
                         subject="function.output",
                         stream="FUNCTION_OUTPUT",
-                        durable_name=f"JOBPROCESSOR",
                         message_handler=self.message_handler,
-                        batch_size=1,
-                        consumer_config={
-                            'ack_policy': AckPolicy.EXPLICIT,  # Correct attribute
-                            'deliver_policy': DeliverPolicy.ALL,
-                            'replay_policy': ReplayPolicy.INSTANT
-                        },
-                        queue_group="jobprocessor",
-                        broadcast=False
+                        queue_group="jobprocessor"
                     )
                     logger.info(f"Job Processor started and listening for messages...")
                     break
                 except Exception as e:
-                    pass
+                    retry_count += 1
+                    if retry_count == max_retries:
+                        raise e
+                    await asyncio.sleep(1)
 
             # Add control message subscription
-            await self.qm.subscribe(
+            await self._setup_subscription(
                 subject="function.control",
                 stream="FUNCTION_CONTROL",
-                durable_name=f"JOBPROCESSOR_CONTROL",
                 message_handler=self.control_message_handler,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.ALL,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
                 broadcast=True
             )
 
@@ -286,19 +295,12 @@ class JobProcessor:
         """Reconnect all subscriptions."""
         try:
             logger.info("Reconnecting subscriptions...")
-            await self.qm.subscribe(
+            await self.qm.connect()
+            self.output_subscription = await self._setup_subscription(
                 subject="function.output",
                 stream="FUNCTION_OUTPUT",
-                durable_name=f"JOBPROCESSOR",
                 message_handler=self.message_handler,
-                batch_size=1,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.ALL,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
-                queue_group="jobprocessor",
-                broadcast=False
+                queue_group="jobprocessor"
             )
             logger.info("Successfully reconnected subscriptions")
         except Exception as e:
@@ -316,6 +318,16 @@ class JobProcessor:
             if command == "pause":
                 logger.info("Received pause command")
                 self.state = ProcessorState.PAUSED
+                
+                # Properly unsubscribe if we have an active subscription
+                if self.output_subscription:
+                    try:
+                        await self.output_subscription.unsubscribe()
+                        self.output_subscription = None
+                        logger.info("Successfully unsubscribed from function.output")
+                    except Exception as e:
+                        logger.error(f"Error unsubscribing from function.output: {e}")
+                
                 # Send acknowledgment
                 await self.qm.publish_message(
                     subject="function.control.response",
@@ -331,6 +343,21 @@ class JobProcessor:
             elif command == "unpause":
                 logger.info("Received unpause command")
                 self.state = ProcessorState.RUNNING
+                
+                # Only attempt to resubscribe if we're not already subscribed
+                if not self.output_subscription:
+                    try:
+                        self.output_subscription = await self._setup_subscription(
+                            subject="function.output",
+                            stream="FUNCTION_OUTPUT",
+                            message_handler=self.message_handler,
+                            queue_group="jobprocessor"
+                        )
+                        logger.info("Successfully resubscribed to function.output")
+                    except Exception as e:
+                        logger.error(f"Error resubscribing to function.output: {e}")
+                        return
+                
                 # Send acknowledgment
                 await self.qm.publish_message(
                     subject="function.control.response",
