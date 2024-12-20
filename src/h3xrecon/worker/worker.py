@@ -16,6 +16,9 @@ from typing import Dict, Any, Optional
 import redis
 import random
 from enum import Enum
+import psutil
+import platform
+import json
 
 class ProcessorState(Enum):
     RUNNING = "running"
@@ -57,6 +60,7 @@ class Worker:
         self._last_message_time = None
         self._execute_subscription = None
         self._execute_sub_key = None  # Add this to track subscription key
+        self._start_time = datetime.now(timezone.utc)
     
     
     
@@ -218,6 +222,23 @@ class Worker:
                                 logger.info(f"Successfully cancelled task {execution_id}")
                         else:
                             logger.warning(f"No running task found with Execution ID: {execution_id}")
+                    elif command == "report":
+                        logger.info("Received report command")
+                        report = await self.generate_report()
+                        
+                        # Send report through control response channel
+                        await self.control_qm.publish_message(
+                            subject="function.control.response",
+                            stream="FUNCTION_CONTROL_RESPONSE",
+                            message={
+                                "processor_id": self.worker_id,
+                                "type": "worker",
+                                "command": "report",
+                                "report": report,
+                                "timestamp": datetime.now(timezone.utc).isoformat()
+                            }
+                        )
+                        logger.debug("Worker report sent")
                     else:
                         logger.warning(f"Received unknown control command or missing execution_id: {message}")
 
@@ -531,6 +552,78 @@ class Worker:
             broadcast=True
         )
         logger.debug("Successfully subscribed to control messages")
+
+    async def generate_report(self) -> Dict[str, Any]:
+        """Generate a comprehensive report of the worker's current state."""
+        try:
+            # Get process info
+            process = psutil.Process()
+            cpu_percent = process.cpu_percent(interval=1)
+            mem_info = process.memory_info()
+            
+            # Get queue subscription info
+            execute_sub_info = {
+                "active": self._execute_subscription is not None,
+                "subscription_key": self._execute_sub_key if self._execute_subscription else None,
+                "queue_group": "workers"
+            }
+            
+            # Get running tasks info
+            tasks_info = []
+            for exec_id, task in self.running_tasks.items():
+                tasks_info.append({
+                    "execution_id": exec_id,
+                    "status": "running" if not task.done() else "completed",
+                    "cancelled": task.cancelled()
+                })
+
+            report = {
+                "worker": {
+                    "id": self.worker_id,
+                    "version": __version__,
+                    "hostname": socket.gethostname(),
+                    "state": self.state.value,
+                    "uptime": (datetime.now(timezone.utc) - self._start_time).total_seconds() if hasattr(self, '_start_time') else None,
+                    "last_message_time": self._last_message_time.isoformat() if self._last_message_time else None
+                },
+                "system": {
+                    "platform": platform.platform(),
+                    "python_version": sys.version,
+                    "cpu_count": psutil.cpu_count(),
+                    "total_memory": psutil.virtual_memory().total
+                },
+                "process": {
+                    "cpu_percent": cpu_percent,
+                    "memory_usage": {
+                        "rss": mem_info.rss,  # Resident Set Size
+                        "vms": mem_info.vms,  # Virtual Memory Size
+                        "percent": process.memory_percent()
+                    },
+                    "threads": process.num_threads()
+                },
+                "queues": {
+                    "nats_connected": self.qm.nc.is_connected if self.qm else False,
+                    "execute_subscription": execute_sub_info,
+                    "control_subscription": {
+                        "active": True if self.control_qm else False,
+                        "durable_name": f"CONTROL_{self.worker_id}"
+                    }
+                },
+                "execution": {
+                    "processing": self._processing,
+                    "running_tasks": len(self.running_tasks),
+                    "tasks": tasks_info
+                },
+                "redis": {
+                    "status_connection": bool(self.redis_status.ping() if self.redis_status else False),
+                    "cache_connection": bool(self.redis_cache.ping() if self.redis_cache else False)
+                }
+            }
+            
+            return report
+        except Exception as e:
+            logger.error(f"Error generating report: {e}")
+            return {"error": str(e)}
 
 async def main():
     try:
