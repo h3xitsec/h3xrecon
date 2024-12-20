@@ -227,21 +227,46 @@ class JobProcessor:
     
     async def log_or_update_function_execution(self, message_data: Dict[str, Any], execution_id: str, timestamp: str):
         try:
+            # Extract function parameters
+            params = message_data.get("source", {}).get("params", {})
+            function_name = message_data.get("source", {}).get("function", "unknown")
+            target = params.get("target", "unknown")
+            
+            logger.debug(f"Original params in jobprocessor: {params}")
+            
+            # Handle extra_params specially if it exists as a list
+            if 'extra_params' in params and isinstance(params['extra_params'], list):
+                extra_params_str = f"extra_params={sorted(params['extra_params'])}"
+                logger.debug(f"Using list extra_params in jobprocessor: {extra_params_str}")
+            else:
+                # Create a sorted, filtered copy of params excluding certain keys
+                extra_params = {k: v for k, v in sorted(params.items()) 
+                               if k not in ['target', 'force'] and not k.startswith('--')}
+                # Convert extra_params to a string representation
+                extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
+                logger.debug(f"Using dict extra_params in jobprocessor: {extra_params_str}")
+            
+            # Construct Redis key with extra parameters
+            redis_key = f"{function_name}:{target}"
+            if extra_params_str:
+                redis_key = f"{redis_key}:{extra_params_str}"
+            
+            logger.debug(f"Setting Redis key in jobprocessor: {redis_key}")
+            
             log_entry = {
                 "execution_id": execution_id,
                 "timestamp": timestamp,
-                "function_name": message_data.get("source", {}).get("params", {}).get("function", "unknown"),
-                "target": message_data.get("source", {}).get("params", {}).get("target", "unknown"),
+                "function_name": function_name,
+                "target": target,
                 "program_id": message_data.get("program_id"),
                 "results": message_data.get("data", [])
             }
+            
             if not message_data.get("nolog", False):
                 await self.db.log_or_update_function_execution(log_entry)
 
             # Update Redis with the last execution timestamp
-            function_name = message_data.get("source", {}).get("function", "unknown")
-            target = message_data.get("source", {}).get("params", {}).get("target", "unknown")
-            redis_key = f"{function_name}:{target}"
+            logger.debug(f"Setting Redis key: {redis_key} with timestamp: {timestamp}")
             self.redis_cache.set(redis_key, timestamp)
         except Exception as e:
             logger.error(f"Error logging or updating function execution: {e}")

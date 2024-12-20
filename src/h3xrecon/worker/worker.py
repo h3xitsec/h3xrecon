@@ -263,17 +263,33 @@ class Worker:
     async def should_execute(self, request: FunctionExecutionRequest) -> bool:
         """
         Determine whether a function should be executed based on the last execution time.
-
-        Args:
-            request: FunctionExecutionRequest object containing execution details
-
-        Returns:
-            bool: True if the function should be executed, False otherwise
         """
         data = request
-        redis_key = f"{data.function_name}:{data.params.get('target')}"
+        # Extract relevant parameters for the Redis key
+        target = data.params.get('target', '')
+        
+        logger.debug(f"Original params: {data.params}")
+        
+        # Handle extra_params specially if it exists as a list
+        if 'extra_params' in data.params and isinstance(data.params['extra_params'], list):
+            extra_params_str = f"extra_params={sorted(data.params['extra_params'])}"
+            logger.debug(f"Using list extra_params: {extra_params_str}")
+        else:
+            # Create a sorted, filtered copy of params excluding certain keys
+            extra_params = {k: v for k, v in sorted(data.params.items()) 
+                           if k not in ['target', 'force'] and not k.startswith('--')}
+            # Convert extra_params to a string representation
+            extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
+            logger.debug(f"Using dict extra_params: {extra_params_str}")
+        
+        # Construct Redis key with extra parameters
+        redis_key = f"{data.function_name}:{target}"
+        if extra_params_str:
+            redis_key = f"{redis_key}:{extra_params_str}"
+        
+        logger.debug(f"Using Redis key: {redis_key}")
         last_execution_bytes = self.redis_cache.get(redis_key)
-        logger.debug(f"Raw last execution from Redis for '{request.function_name}' on target '{request.params.get('target')}': {last_execution_bytes}")
+        logger.debug(f"Raw last execution from Redis for key '{redis_key}': {last_execution_bytes}")
 
         if last_execution_bytes:
             try:
