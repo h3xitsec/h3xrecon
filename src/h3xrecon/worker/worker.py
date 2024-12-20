@@ -62,8 +62,6 @@ class Worker:
         self._execute_sub_key = None  # Add this to track subscription key
         self._start_time = datetime.now(timezone.utc)
     
-    
-    
     async def initialize_components(self):
         """Initialize all worker components after successful preflight checks."""
         self.redis_status = redis.Redis(

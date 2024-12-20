@@ -5,21 +5,25 @@
 
 -----
 
-H3XRecon is a powerful bug bounty reconnaissance automation tool designed to streamline and automate the reconnaissance phase of security assessments. It provides a distributed architecture for efficient scanning and data processing.
+H3XRecon is a powerful bug bounty reconnaissance automation tool designed to streamline and automate the reconnaissance phase of security assessments. It provides a distributed architecture for efficient scanning and data processing, with advanced scope management and real-time monitoring capabilities.
 
 ## 🚀 Features
 
-- Distributed reconnaissance architecture using Docker Swarm
+- Distributed reconnaissance architecture supporting both Docker Swarm and Docker Compose
 - Real-time log aggregation and visualization with Grafana
-- Modular plugin system for custom reconnaissance tools
-- Centralized data processing and storage
-- Built-in scope management and filtering
-- Bug Bounty program management with scope management
+- Advanced modular plugin system with hot-reloading support
+- Centralized data processing with MongoDB and Redis
+- Intelligent scope management with regex and CIDR support
+- Bug Bounty program management with multi-program support
+- REST API for programmatic access and integration
+- Automated asset discovery and classification
+- Real-time notifications via Slack and Discord
+- Export capabilities in multiple formats (JSON, CSV, XML)
 
 ## 📋 Prerequisites
 
-- Docker Engine 20.10+
-- Docker Compose v2 (`docker compose`, not `docker-compose`)
+- Docker Engine 20.10+ or Kubernetes 1.19+
+- Docker Compose v2 (`docker compose`)
 - Python 3.11+
 - Ansible 2.9+ (for remote deployment)
 
@@ -41,9 +45,10 @@ Please refer to the [Docker Compose Deployment](docs/docker_compose_deployment.m
 
 OR
 
-### � Docker Swarm
+### 🚀 Deployment Options
 
-Please refer to the [Docker Swarm Deployment](docs/docker_swarm_deployment.md) for more information on how to setup the project using Docker Swarm.
+1. [Docker Compose Deployment](docs/docker_compose_deployment.md) - For single-node setups
+2. [Docker Swarm Deployment](docs/docker_swarm_deployment.md) - For distributed deployments
 
 ### 📦 Install the h3xrecon client
 
