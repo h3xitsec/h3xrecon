@@ -561,6 +561,17 @@ class Worker:
             cpu_percent = process.cpu_percent(interval=1)
             mem_info = process.memory_info()
             
+            # Get current execution info
+            current_execution = None
+            if self._processing and self.running_tasks:
+                task_id = next(iter(self.running_tasks))
+                current_execution = {
+                    "execution_id": task_id,
+                    "module": self.function_executor.current_module if hasattr(self.function_executor, 'current_module') else None,
+                    "target": self.function_executor.current_target if hasattr(self.function_executor, 'current_target') else None,
+                    "start_time": self.function_executor.current_start_time.isoformat() if hasattr(self.function_executor, 'current_start_time') else None
+                }
+            
             # Get queue subscription info
             execute_sub_info = {
                 "active": self._execute_subscription is not None,
@@ -584,7 +595,8 @@ class Worker:
                     "hostname": socket.gethostname(),
                     "state": self.state.value,
                     "uptime": (datetime.now(timezone.utc) - self._start_time).total_seconds() if hasattr(self, '_start_time') else None,
-                    "last_message_time": self._last_message_time.isoformat() if self._last_message_time else None
+                    "last_message_time": self._last_message_time.isoformat() if self._last_message_time else None,
+                    "current_execution": current_execution
                 },
                 "system": {
                     "platform": platform.platform(),

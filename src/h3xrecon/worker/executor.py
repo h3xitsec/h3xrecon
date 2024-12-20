@@ -21,6 +21,9 @@ class FunctionExecutor():
         self.config.setup_logging()
         self.function_map: Dict[str, Callable] = {}
         self.load_plugins()
+        self.current_module = None
+        self.current_target = None
+        self.current_start_time = None
     
     def load_plugins(self):
         """Dynamically load all recon plugins."""
@@ -62,6 +65,11 @@ class FunctionExecutor():
     
     async def execute_function(self, function_name: str, params: Dict[str, Any], program_id: int, execution_id: str) -> AsyncGenerator[Dict[str, Any], None]:
         try:
+            # Update current execution info
+            self.current_module = function_name
+            self.current_target = params.get('target')
+            self.current_start_time = datetime.now(timezone.utc)
+
             plugin = self.function_map.get(function_name)
             if not plugin:
                 logger.error(f"Function {function_name} not found")
@@ -107,5 +115,11 @@ class FunctionExecutor():
             logger.error(f"Error executing function {function_name}: {str(e)}")
             logger.exception(e)
             raise
+
+        finally:
+            # Clear current execution info when done
+            self.current_module = None
+            self.current_target = None
+            self.current_start_time = None
 
 
