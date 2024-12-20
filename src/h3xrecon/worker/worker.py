@@ -225,7 +225,7 @@ class Worker:
                     elif command == "report":
                         logger.info("Received report command")
                         report = await self.generate_report()
-                        
+                        logger.debug(f"Report: {report}")
                         # Send report through control response channel
                         await self.control_qm.publish_message(
                             subject="function.control.response",
