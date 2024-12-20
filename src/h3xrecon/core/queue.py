@@ -68,6 +68,13 @@ class QueueManager:
         except Exception as e:
             logger.error(f"Failed to connect to NATS: Connection refused at {self.config.url}")
             raise ConnectionError("NATS connection failed: Connection refused") from e
+    
+    async def unsubscribe(self, subject: str, stream: str, durable_name: str = None):
+        if self.js:
+            await self.js.delete_consumer(stream, durable_name)
+            logger.debug(f"Unsubscribed from {subject} on stream {stream} with durable name {durable_name}")
+        else:
+            logger.warning(f"No JetStream context available for unsubscribe")
 
     async def close(self) -> None:
         self.nc.close()
@@ -183,24 +190,15 @@ class QueueManager:
                        consumer_config: Optional[Dict[str, Any]] = None,
                        broadcast: bool = False) -> None:
         """
-        Subscribe to a subject and process messages using the provided handler.
-        
-        Args:
-            subject: The subject to subscribe to
-            stream: The stream name
-            durable_name: Durable name for the consumer
-            message_handler: Async function to handle received messages
-            batch_size: Number of messages to fetch in each batch
-            consumer_config: Optional custom consumer configuration
-            broadcast: If True, configures subscription for broadcast-style delivery
+        Subscribe to a subject using push-based subscription and process messages using the provided handler.
         """
         await self.ensure_jetstream()
         
         # Default consumer configuration
         default_config = ConsumerConfig(
-            durable_name=None if broadcast else durable_name,  # No durable name for broadcast
+            #durable_name=None if broadcast else durable_name,
             deliver_policy=DeliverPolicy.ALL,
-            ack_policy=AckPolicy.NONE if broadcast else AckPolicy.EXPLICIT,  # No acks needed for broadcast
+            ack_policy=AckPolicy.NONE if broadcast else AckPolicy.EXPLICIT,
             replay_policy=ReplayPolicy.INSTANT,
             max_deliver=1,
             ack_wait=30,
@@ -213,12 +211,17 @@ class QueueManager:
             default_config = ConsumerConfig(**{**default_config.__dict__, **consumer_config})
 
         try:
-            # Create pull subscription
-            subscription = await self.js.pull_subscribe(
+            # Create message callback
+            cb = await self._message_callback(message_handler)
+            
+            # Create push subscription
+            subscription = await self.js.subscribe(
                 subject,
-                durable_name if not broadcast else None,
+                queue=queue_group,
+                durable=durable_name if not broadcast else None,
                 stream=stream,
                 config=default_config,
+                cb=cb
             )
             
             # Store subscription and its subject for cleanup and reference
@@ -226,134 +229,111 @@ class QueueManager:
             self._subscriptions[sub_key] = subscription
             self._subscription_subjects[subscription] = subject
             
-            # Start message processing
-            asyncio.create_task(self._process_messages(
-                subscription, 
-                message_handler, 
-                batch_size
-            ))
-            
+            logger.debug(f"{await subscription.consumer_info()}")
             logger.debug(f"Subscribed to '{subject}' on stream '{stream}' with {'broadcast mode' if broadcast else f'durable name {durable_name}'}")
+            return subscription
             
         except Exception as e:
             logger.error(f"Failed to create subscription: {e}")
             raise
 
-    async def _process_messages(self,
-                        subscription,
-                        message_handler: Callable[[Any], Awaitable[None]],
-                        batch_size: int) -> None:
-        """
-        Process messages from a subscription with improved error handling and recovery.
-        """
-        subject = self._subscription_subjects.get(subscription)
-        consecutive_errors = 0
-        MAX_CONSECUTIVE_ERRORS = 5
-        
-        while True:
+    async def _message_callback(self, handler):
+        async def cb(msg):
             try:
-                if not self.nc.is_connected:
-                    logger.error(f"NATS connection lost for {subject}. Attempting reconnection...")
-                    await self.ensure_connected()
-                    await asyncio.sleep(1)
-                    continue
-
-                # Use pull with shorter timeout for control messages
-                timeout = 0.1 if subject and "function.control" in subject else 1
-                #logger.debug(f"Attempting to fetch messages from {subject}")
-                
-                try:
-                    messages = await subscription.fetch(batch=1, timeout=timeout)
-                    consecutive_errors = 0  # Reset error counter on successful fetch
-                    
-                    if messages:
-                        logger.debug(f"Received {len(messages)} messages from {subject}")
-                        
-                        for msg in messages:
-                            if not msg:
-                                continue
-                                
-                            try:
-                                data = json.loads(msg.data.decode())
-                                logger.debug(f"Processing message from {subject}: {data}")
-                                
-                                # Process message with timeout
-                                try:
-                                    async with asyncio.timeout(30):  # 30 second timeout for message processing
-                                        await message_handler(data)
-                                except asyncio.TimeoutError:
-                                    logger.error(f"Message processing timeout on {subject}")
-                                    if hasattr(msg, 'nak'):
-                                        await msg.nak()
-                                    continue
-                                
-                                # Check if this is a control message
-                                is_control_message = subject and "function.control" in subject
-                                
-                                # Acknowledge if needed
-                                if not is_control_message and hasattr(msg, 'ack'):
-                                    await msg.ack()
-                                    logger.debug(f"Message acknowledged on {subject}")
-                                    
-                            except json.JSONDecodeError as je:
-                                logger.error(f"JSON decode error on {subject}: {je}")
-                                if hasattr(msg, 'ack'):
-                                    await msg.ack()  # Ack malformed messages to prevent redelivery
-                            except Exception as e:
-                                logger.error(f"Error processing message on {subject}: {e}")
-                                logger.exception(e)
-                                if not is_control_message and hasattr(msg, 'nak'):
-                                    await msg.nak()
-                                    
-                except NatsTimeoutError:
-                    # This is expected behavior for pull subscriptions
-                    await asyncio.sleep(0.1)
-                    continue
-                    
-                except asyncio.CancelledError:
-                    logger.warning(f"Message processing cancelled for {subject}")
-                    return
-                    
-                except Exception as e:
-                    consecutive_errors += 1
-                    logger.error(f"Error in message processing loop for {subject}: {e}")
-                    logger.exception(e)
-                    
-                    if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-                        logger.critical(f"Too many consecutive errors ({consecutive_errors}) for {subject}. Attempting subscription recovery...")
-                        try:
-                            # Attempt to recreate subscription
-                            await self.ensure_connected()
-                            new_subscription = await self.js.pull_subscribe(
-                                subject,
-                                subscription.durable_name,
-                                stream=subscription.stream_name
-                            )
-                            self._subscriptions[f"{subscription.stream_name}:{subject}:{subscription.durable_name}"] = new_subscription
-                            subscription = new_subscription
-                            consecutive_errors = 0
-                            logger.info(f"Successfully recovered subscription for {subject}")
-                        except Exception as recovery_error:
-                            logger.error(f"Failed to recover subscription: {recovery_error}")
-                            await asyncio.sleep(5)  # Wait before next attempt
-                    else:
-                        await asyncio.sleep(1)  # Short delay before retry
-                    continue
-                    
-            except asyncio.CancelledError:
-                logger.warning(f"Message processing task cancelled for {subject}")
-                return
-                
+                data = json.loads(msg.data.decode())
+                logger.debug(f"Received message: {data}")
+                await handler(data)
+                await msg.ack()
             except Exception as e:
-                consecutive_errors += 1
-                logger.error(f"Critical error in message processing loop for {subject}: {e}")
+                logger.error(f"Error processing message: {e}")
                 logger.exception(e)
-                await asyncio.sleep(1)
+                if hasattr(msg, 'nak'):
+                    await msg.nak()
+        return cb
+
+    # async def _process_messages(self,
+    #                     subscription,
+    #                     message_handler: Callable[[Any], Awaitable[None]],
+    #                     batch_size: int) -> None:
+    #     """
+    #     Process messages from a subscription with improved error handling and recovery.
+    #     """
+    #     subject = self._subscription_subjects.get(subscription)
+    #     consecutive_errors = 0
+    #     MAX_CONSECUTIVE_ERRORS = 5
+        
+    #     while True:
+    #         try:
+    #             if not self.nc.is_connected:
+    #                 logger.error(f"NATS connection lost for {subject}. Attempting reconnection...")
+    #                 await self.ensure_connected()
+    #                 await asyncio.sleep(1)
+    #                 continue
+
+    #             try:
+    #                 # Fetch messages with longer timeout and explicit batch size
+    #                 messages = await subscription.fetch(batch=batch_size, timeout=5)  # Increase timeout to 5 seconds
+    #                 consecutive_errors = 0
+                    
+    #                 if messages:
+    #                     logger.debug(f"Received {len(messages)} messages from {subject}")
+                        
+    #                     for msg in messages:
+    #                         if not msg:
+    #                             continue
+                                
+    #                         try:
+    #                             data = json.loads(msg.data.decode())
+    #                             logger.debug(f"Processing message from {subject}: {data}")
+                                
+    #                             # Process message with timeout
+    #                             try:
+    #                                 async with asyncio.timeout(30):
+    #                                     await message_handler(data)
+    #                                     # Acknowledge after successful processing
+    #                                     await msg.ack()
+    #                                     logger.debug(f"Message processed and acknowledged on {subject}")
+    #                             except asyncio.TimeoutError:
+    #                                 logger.error(f"Message processing timeout on {subject}")
+    #                                 if hasattr(msg, 'nak'):
+    #                                     await msg.nak()
+    #                                 continue
+                                
+    #                         except json.JSONDecodeError as je:
+    #                             logger.error(f"JSON decode error on {subject}: {je}")
+    #                             if hasattr(msg, 'ack'):
+    #                                 await msg.ack()  # Ack malformed messages
+    #                         except Exception as e:
+    #                             logger.error(f"Error processing message on {subject}: {e}")
+    #                             logger.exception(e)
+    #                             if hasattr(msg, 'nak'):
+    #                                 await msg.nak()
+                                    
+    #             except NatsTimeoutError:
+    #                 # This is expected for pull subscriptions
+    #                 continue
+                    
+    #             except asyncio.CancelledError:
+    #                 logger.warning(f"Message processing cancelled for {subject}")
+    #                 return
+                    
+    #             except Exception as e:
+    #                 consecutive_errors += 1
+    #                 logger.error(f"Error in message processing loop for {subject}: {e}")
+    #                 logger.exception(e)
+    #                 await asyncio.sleep(1)
+    #                 continue
+                    
+    #         except Exception as e:
+    #             consecutive_errors += 1
+    #             logger.error(f"Critical error in message processing loop for {subject}: {e}")
+    #             logger.exception(e)
+    #             await asyncio.sleep(1)
                 
-                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-                    logger.critical(f"Too many consecutive errors ({consecutive_errors}) for {subject}. Restarting message processing...")
-                    await asyncio.sleep(5)
-                    consecutive_errors = 0
+    #             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+    #                 logger.critical(f"Too many consecutive errors ({consecutive_errors}). Restarting message processing...")
+    #                 await asyncio.sleep(5)
+    #                 consecutive_errors = 0
 
     async def close(self) -> None:
         """Close the NATS connection and clean up resources."""
