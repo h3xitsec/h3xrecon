@@ -20,6 +20,7 @@ from enum import Enum
 class ProcessorState(Enum):
     RUNNING = "running"
     PAUSED = "paused"
+    BUSY = "busy"
 
 @dataclass
 class FunctionExecutionRequest:
@@ -353,7 +354,7 @@ class Worker:
                     self.run_function_execution(function_execution_request)
                 )
                 self.running_tasks[function_execution_request.execution_id] = task
-
+                self.set_status(f"busy:{function_execution_request.function_name}:{function_execution_request.params.get('target')}")
                 # Add callback to handle task completion
                 task.add_done_callback(
                     lambda t, eid=function_execution_request.execution_id: self.task_done_callback(t, eid)
@@ -399,6 +400,7 @@ class Worker:
         finally:
             # Remove the task from running_tasks regardless of outcome
             self.running_tasks.pop(execution_id, None)
+            self.set_status(f"idle")
 
     async def run_function_execution(self, msg_data: FunctionExecutionRequest):
         logger.info(f"Starting execution of function '{msg_data.function_name}' with Execution ID: {msg_data.execution_id}")

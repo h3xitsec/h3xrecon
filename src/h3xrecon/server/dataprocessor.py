@@ -155,6 +155,11 @@ class DataProcessor:
             logger.exception(e)
     
     async def trigger_new_jobs(self, program_id: int, data_type: str, result: Any):
+        # Check if processor is paused before triggering new jobs
+        if self.state == ProcessorState.PAUSED:
+            logger.info("Processor is paused, skipping triggering new jobs")
+            return
+
         if os.getenv("H3XRECON_NO_NEW_JOBS", "false").lower() == "true":
             logger.info("H3XRECON_NO_NEW_JOBS is set. Skipping triggering new jobs.")
             return
@@ -201,6 +206,11 @@ class DataProcessor:
 
     async def _delay_next_job(self, program_id: int, data_type: str, result: Any, next_job_index: int):
         """Helper method to handle delayed job triggering"""
+        # Check state before proceeding with delayed job
+        if self.state == ProcessorState.PAUSED:
+            logger.info("Processor is paused, skipping delayed job trigger")
+            return
+
         await asyncio.sleep(5)
         job = JOB_MAPPING[data_type][next_job_index]
         new_job = {
