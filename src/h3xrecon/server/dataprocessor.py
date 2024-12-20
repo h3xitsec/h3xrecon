@@ -18,6 +18,8 @@ import socket
 import sys
 from datetime import datetime, timezone, timedelta
 from enum import Enum
+import psutil
+import platform
 
 
 @dataclass
@@ -479,8 +481,78 @@ class DataProcessor:
                     }
                 )
 
+            elif command == "report":
+                logger.info("Received report command")
+                report = await self.generate_report()
+                logger.debug(f"Report: {report}")
+                # Send report through control response channel
+                await self.qm.publish_message(
+                    subject="function.control.response",
+                    stream="FUNCTION_CONTROL_RESPONSE",
+                    message={
+                        "processor_id": self.dataprocessor_id,
+                        "type": "dataprocessor",
+                        "command": "report",
+                        "report": report,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+                logger.debug("Data processor report sent")
+
         except Exception as e:
             logger.error(f"Error handling control message: {e}")
+
+    async def generate_report(self) -> Dict[str, Any]:
+        """Generate a comprehensive report of the data processor's current state."""
+        try:
+            # Get process info
+            process = psutil.Process()
+            cpu_percent = process.cpu_percent(interval=1)
+            mem_info = process.memory_info()
+            
+            report = {
+                "processor": {
+                    "id": self.dataprocessor_id,
+                    "version": __version__,
+                    "hostname": socket.gethostname(),
+                    "state": self.state.value,
+                    "uptime": (datetime.now(timezone.utc) - self._start_time).total_seconds() if hasattr(self, '_start_time') else None,
+                    "last_message_time": self._last_message_time.isoformat() if self._last_message_time else None
+                },
+                "system": {
+                    "platform": platform.platform(),
+                    "python_version": sys.version,
+                    "cpu_count": psutil.cpu_count(),
+                    "total_memory": psutil.virtual_memory().total
+                },
+                "process": {
+                    "cpu_percent": cpu_percent,
+                    "memory_usage": {
+                        "rss": mem_info.rss,  # Resident Set Size
+                        "vms": mem_info.vms,  # Virtual Memory Size
+                        "percent": process.memory_percent()
+                    },
+                    "threads": process.num_threads()
+                },
+                "queues": {
+                    "nats_connected": self.qm.nc.is_connected if self.qm else False,
+                    "data_subscription": {
+                        "active": self.data_subscription is not None,
+                        "queue_group": "dataprocessor"
+                    },
+                    "control_subscription": {
+                        "active": self.control_subscription is not None
+                    }
+                },
+                "processors": {
+                    "registered_types": list(self.data_type_processors.keys())
+                }
+            }
+            
+            return report
+        except Exception as e:
+            logger.error(f"Error generating report: {e}")
+            return {"error": str(e)}
 
 async def main():
     config = Config()

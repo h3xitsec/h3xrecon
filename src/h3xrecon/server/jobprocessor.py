@@ -22,6 +22,8 @@ from uuid import UUID
 from datetime import datetime
 from enum import Enum
 import json
+import psutil
+import platform
 
 @dataclass
 class FunctionExecution:
@@ -370,8 +372,82 @@ class JobProcessor:
                     }
                 )
 
+            elif command == "report":
+                logger.info("Received report command")
+                report = await self.generate_report()
+                logger.debug(f"Report: {report}")
+                # Send report through control response channel
+                await self.qm.publish_message(
+                    subject="function.control.response",
+                    stream="FUNCTION_CONTROL_RESPONSE",
+                    message={
+                        "processor_id": self.jobprocessor_id,
+                        "type": "jobprocessor",
+                        "command": "report",
+                        "report": report,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+                logger.debug("Job processor report sent")
+
         except Exception as e:
             logger.error(f"Error handling control message: {e}")
+
+    async def generate_report(self) -> Dict[str, Any]:
+        """Generate a comprehensive report of the job processor's current state."""
+        try:
+            # Get process info
+            process = psutil.Process()
+            cpu_percent = process.cpu_percent(interval=1)
+            mem_info = process.memory_info()
+            
+            report = {
+                "processor": {
+                    "id": self.jobprocessor_id,
+                    "version": __version__,
+                    "hostname": socket.gethostname(),
+                    "state": self.state.value,
+                    "uptime": (datetime.now(timezone.utc) - self._start_time).total_seconds() if hasattr(self, '_start_time') else None,
+                    "last_message_time": self._last_message_time.isoformat() if self._last_message_time else None
+                },
+                "system": {
+                    "platform": platform.platform(),
+                    "python_version": sys.version,
+                    "cpu_count": psutil.cpu_count(),
+                    "total_memory": psutil.virtual_memory().total
+                },
+                "process": {
+                    "cpu_percent": cpu_percent,
+                    "memory_usage": {
+                        "rss": mem_info.rss,
+                        "vms": mem_info.vms,
+                        "percent": process.memory_percent()
+                    },
+                    "threads": process.num_threads()
+                },
+                "queues": {
+                    "nats_connected": self.qm.nc.is_connected if self.qm else False,
+                    "output_subscription": {
+                        "active": self.output_subscription is not None,
+                        "queue_group": "jobprocessor"
+                    },
+                    "control_subscription": {
+                        "active": self.control_subscription is not None
+                    }
+                },
+                "plugins": {
+                    "registered_processors": list(self.processor_map.keys())
+                },
+                "redis": {
+                    "cache_connection": bool(self.redis_cache.ping() if self.redis_cache else False),
+                    "status_connection": bool(self.redis_status.ping() if self.redis_status else False)
+                }
+            }
+            
+            return report
+        except Exception as e:
+            logger.error(f"Error generating report: {e}")
+            return {"error": str(e)}
 
 async def main():
     config = Config()
