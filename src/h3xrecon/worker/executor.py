@@ -21,11 +21,6 @@ class FunctionExecutor():
         self.config.setup_logging()
         self.function_map: Dict[str, Callable] = {}
         self.load_plugins()
-        self.redis_status = redis_status
-        self.set_status("idle")
-
-    def set_status(self, status: str):
-        self.redis_status.set(self.worker_id, status)
     
     def load_plugins(self):
         """Dynamically load all recon plugins."""
@@ -73,7 +68,6 @@ class FunctionExecutor():
                 raise ValueError(f"Function {function_name} not found")
 
             logger.info(f"Running function {function_name} on {params.get('target')} ({execution_id})")
-            self.set_status(f"running {function_name}")
             
             try:
                 async for result in plugin(params, program_id, execution_id, self.db):
@@ -107,7 +101,6 @@ class FunctionExecutor():
                 logger.exception(e)
                 raise
             finally:
-                self.set_status("idle")
                 logger.info(f"Finished running {function_name} on {params.get('target')} ({execution_id})")
 
         except Exception as e:
