@@ -350,3 +350,55 @@ class QueueManager:
 
     async def _closed_callback(self):
         logger.warning("NATS connection closed")
+
+    async def subscribe_pull(self,
+                        subject: str,
+                        stream: str,
+                        message_handler: Callable[[Any], Awaitable[None]],
+                        durable_name: str = None,
+                        batch_size: int = 1,
+                        queue_group: str = None,
+                        consumer_config: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Create a pull-based subscription to a subject.
+        """
+        await self.ensure_jetstream()
+        
+        # Default consumer configuration for pull subscription
+        default_config = ConsumerConfig(
+            durable_name=durable_name,
+            deliver_policy=DeliverPolicy.ALL,
+            ack_policy=AckPolicy.EXPLICIT,
+            replay_policy=ReplayPolicy.INSTANT,
+            max_deliver=1,
+            ack_wait=30,
+            filter_subject=subject,
+            deliver_group=queue_group,
+            max_waiting=1,  # Limit number of waiting pull requests
+            max_ack_pending=batch_size,  # Maximum number of pending acks
+        )
+
+        # Update with custom config if provided
+        if consumer_config:
+            default_config = ConsumerConfig(**{**default_config.__dict__, **consumer_config})
+
+        try:
+            # Create pull subscription
+            subscription = await self.js.pull_subscribe(
+                subject,
+                durable=durable_name,
+                stream=stream,
+                config=default_config,
+            )
+            
+            # Store subscription and its subject for cleanup and reference
+            sub_key = f"{stream}:{subject}:{durable_name}"
+            self._subscriptions[sub_key] = subscription
+            self._subscription_subjects[subscription] = subject
+            
+            logger.debug(f"Created pull subscription to '{subject}' on stream '{stream}' with durable name {durable_name}")
+            return subscription
+            
+        except Exception as e:
+            logger.error(f"Failed to create pull subscription: {e}")
+            raise
