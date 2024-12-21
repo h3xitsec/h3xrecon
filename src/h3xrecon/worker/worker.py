@@ -85,7 +85,7 @@ class Worker:
         self.db = DatabaseManager()
         self.function_executor = FunctionExecutor(
             worker_id=self.worker_id,
-            qm=self.qm,  # Use the main queue manager for function execution
+            qm=self.qm,
             db=self.db,
             config=self.config,
             redis_status=self.redis_status
@@ -97,15 +97,15 @@ class Worker:
     async def start(self):
         logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
         try:
+            # Initialize components
+            await self.initialize_components()
+            await self.qm.ensure_connected()
             # Run preflight checks
             preflight = PreflightCheck(self.config, f"worker-{self.worker_id}")
             if not await preflight.run_checks():
                 logger.error("Preflight checks failed. Exiting.")
                 sys.exit(1)
             
-            # Initialize components
-            await self.initialize_components()
-
             # Start health check
             self._health_check_task = asyncio.create_task(self._health_check())
 
@@ -209,7 +209,7 @@ class Worker:
                 )
                 logger.debug("Worker report sent")
             else:
-                logger.warning(f"Received unknown control command or missing execution_id: {message}")
+                logger.warning(f"Received unknown control command or missing execution_id: {msg}")
 
             # Acknowledge the message after successful processing
             await raw_msg.ack()
@@ -316,6 +316,12 @@ class Worker:
 
         self._last_message_time = datetime.now(timezone.utc)
         logger.debug("Processing message in message_handler")
+        
+        if self.state == ProcessorState.PAUSED:
+            logger.debug(f"Worker is paused (state: {self.state}), skipping message")
+            await raw_msg.ack()
+            return
+
         processing_lock_acquired = False
         
         try:
@@ -323,7 +329,6 @@ class Worker:
             async with self._processing_lock:
                 if self._processing:
                     logger.info("Already processing a job, skipping new message")
-                    #if hasattr(msg, 'ack'):
                     await raw_msg.nack()
                     return
                 self._processing = True
@@ -461,7 +466,7 @@ class Worker:
                 current_time = datetime.now(timezone.utc)
                 
                 # Check NATS connection
-                if not self.qm.nc.is_connected:
+                if self.qm and not self.qm.nc.is_connected:
                     logger.error("NATS connection lost. Attempting to reconnect...")
                     await self.qm.ensure_connected()
                 
@@ -528,6 +533,11 @@ class Worker:
             try:
                 # Wait for running event to be set
                 await self.running.wait()
+                
+                if self.state == ProcessorState.PAUSED:
+                    logger.debug("Worker is paused, skipping message fetch")
+                    await asyncio.sleep(1)
+                    continue
                 
                 if not self._execute_subscription:
                     logger.warning("No active execute subscription")
