@@ -119,8 +119,9 @@ class Worker:
             logger.exception(e)
             sys.exit(1)
 
-    async def control_message_handler(self, msg):
+    async def control_message_handler(self, raw_msg):
         logger.debug("Entered control_message_handler")
+        msg = json.loads(raw_msg.data.decode())
         try:
             messages = [msg] if isinstance(msg, dict) else msg
 
@@ -140,8 +141,7 @@ class Worker:
                     # Skip messages not meant for workers
                     if target not in ["all", "worker"]:
                         logger.debug(f"Control message targeted to {target}, skipping.")
-                        if hasattr(msg, 'ack'):
-                            await msg.ack()
+                        await raw_msg.ack()
                         continue
 
                     # Handle pause/unpause commands
@@ -241,15 +241,13 @@ class Worker:
                         logger.warning(f"Received unknown control command or missing execution_id: {message}")
 
                     # Acknowledge the message after successful processing
-                    if hasattr(msg, 'ack'):
-                        await msg.ack()
+                    await raw_msg.ack()
 
                 except Exception as processing_error:
                     logger.error(f"Error processing individual control message: {processing_error}")
                     logger.exception(processing_error)
                     # Decide whether to acknowledge based on error type
-                    if hasattr(msg, 'ack'):
-                        await msg.ack()
+                    await raw_msg.ack()
                     continue
 
         except Exception as batch_error:
@@ -342,13 +340,14 @@ class Worker:
 
     async def message_handler(self, msg):
         logger.debug(f"Message handler called with message type: {type(msg)}")
-        logger.debug(f"Message content: {msg}")
+        data = json.loads(msg.data.decode())
+        logger.debug(f"Message content: {data}")
         
-        if self.state == ProcessorState.PAUSED or not self._execute_subscription:
-            logger.debug(f"Worker is paused (state: {self.state}) or no subscription (subscription: {self._execute_subscription}), skipping message")
-            if hasattr(msg, 'ack'):
-                await msg.ack()
-            return
+        # if self.state == ProcessorState.PAUSED or not self._execute_subscription:
+        #     logger.debug(f"Worker is paused (state: {self.state}) or no subscription (subscription: {self._execute_subscription}), skipping message")
+        #     #if hasattr(msg, 'ack'): # TODO: Test if this is ok
+        #     #    await msg.ack()
+        #     return
 
         self._last_message_time = datetime.now(timezone.utc)
         logger.debug("Processing message in message_handler")
@@ -359,8 +358,8 @@ class Worker:
             async with self._processing_lock:
                 if self._processing:
                     logger.info("Already processing a job, skipping new message")
-                    if hasattr(msg, 'ack'):
-                        await msg.ack()
+                    #if hasattr(msg, 'ack'):
+                    await msg.nack()
                     return
                 self._processing = True
                 processing_lock_acquired = True
@@ -370,10 +369,10 @@ class Worker:
                 # Parse message
                 logger.debug("Attempting to parse message")
                 function_execution_request = FunctionExecutionRequest(
-                    program_id=msg.get('program_id'),
-                    function_name=msg.get('function'),
-                    params=msg.get('params'),
-                    force=msg.get("force", False)
+                    program_id=data.get('program_id'),
+                    function_name=data.get('function'),
+                    params=data.get('params'),
+                    force=data.get("force", False)
                 )
                 logger.debug(f"Created function execution request: {function_execution_request}")
                 
@@ -382,6 +381,7 @@ class Worker:
                 if not function_execution_request.force:
                     if not await self.should_execute(function_execution_request):
                         logger.info(f"Skipping execution: {function_execution_request.function_name} on {function_execution_request.params.get('target')} executed recently.")
+                        await msg.ack()
                         return
 
                 # Create and track the task
@@ -398,6 +398,10 @@ class Worker:
                 try:
                     # Changed from asyncio.shield to direct await
                     await task
+                    #if hasattr(msg, 'ack'):
+                    logger.debug("Acknowledging message")
+                    await msg.ack()
+                    return
                 except asyncio.CancelledError:
                     logger.info(f"Task execution cancelled for {function_execution_request.execution_id}")
                     # Don't re-raise the cancellation
@@ -406,10 +410,10 @@ class Worker:
             except Exception as processing_error:
                 logger.error(f"Error processing execute message: {processing_error}")
                 logger.exception(processing_error)
-            finally:
-                # Always acknowledge the message
-                if hasattr(msg, 'ack'):
-                    await msg.ack()
+            # finally:
+            #     # Always acknowledge the message
+            #     if hasattr(msg, 'ack'):
+            #         await msg.ack()
 
         finally:
             # Always release the processing lock
@@ -533,7 +537,7 @@ class Worker:
         self._execute_subscription = await self.qm.subscribe(
             subject="function.execute",
             stream="FUNCTION_EXECUTE",
-            durable_name=None,  # Remove durable name
+            durable_name=None,
             message_handler=self.message_handler,
             batch_size=1,
             consumer_config={
@@ -541,7 +545,7 @@ class Worker:
                 'deliver_policy': DeliverPolicy.NEW,
                 'replay_policy': ReplayPolicy.INSTANT,
                 'deliver_group': "workers",
-                'max_deliver': 1
+                'max_deliver': -1
             },
             queue_group="workers",
             broadcast=False

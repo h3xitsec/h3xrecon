@@ -201,23 +201,29 @@ class JobProcessor:
     async def message_handler(self, msg):
         if self.state == ProcessorState.PAUSED:
             logger.debug("Processor is paused, skipping message")
+            await msg.nack()
             return
 
         try:
             # Validate the message using FunctionExecution dataclass
+            data = json.loads(msg.data.decode())
             function_execution = FunctionExecution(
-                execution_id=msg['execution_id'],
-                timestamp=msg['timestamp'],
-                program_id=msg['program_id'],
-                source=msg['source'],
-                output=msg.get('data', [])
+                execution_id=data['execution_id'],
+                timestamp=data['timestamp'],
+                program_id=data['program_id'],
+                source=data['source'],
+                output=data.get('data', [])
             )
             
             # Log or update function execution in database
-            await self.log_or_update_function_execution(msg, function_execution.execution_id, function_execution.timestamp)
+            await self.log_or_update_function_execution(data, function_execution.execution_id, function_execution.timestamp)
             function_name = function_execution.source.get("function")
             if function_name:
-                await self.process_function_output(msg)
+                await self.process_function_output(data)
+                msg.ack()
+            else:
+                logger.error(f"No function name found in message: {data}")
+                await msg.nack()
             
         except (KeyError, ValueError, TypeError) as e:
             error_location = traceback.extract_tb(e.__traceback__)[-1]
@@ -333,9 +339,10 @@ class JobProcessor:
         except Exception as e:
             logger.error(f"Error reconnecting subscriptions: {e}")
 
-    async def control_message_handler(self, msg):
+    async def control_message_handler(self, raw_msg):
         """Handle control messages for pausing/unpausing the processor"""
         try:
+            msg = json.loads(raw_msg.data.decode())
             command = msg.get("command")
             target = msg.get("target", "all")
             
@@ -414,9 +421,10 @@ class JobProcessor:
                     }
                 )
                 logger.debug("Job processor report sent")
-
+            await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error handling control message: {e}")
+            await raw_msg.nack()
 
     async def generate_report(self) -> Dict[str, Any]:
         """Generate a comprehensive report of the job processor's current state."""

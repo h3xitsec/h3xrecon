@@ -240,15 +240,11 @@ class QueueManager:
     async def _message_callback(self, handler):
         async def cb(msg):
             try:
-                data = json.loads(msg.data.decode())
-                logger.debug(f"Received message: {data}")
-                await handler(data)
-                await msg.ack()
+                logger.debug(f"Received message: {msg.data}")
+                await handler(msg)
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
                 logger.exception(e)
-                if hasattr(msg, 'nak'):
-                    await msg.nak()
         return cb
 
     # async def _process_messages(self,

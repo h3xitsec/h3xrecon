@@ -134,20 +134,26 @@ class DataProcessor:
     async def message_handler(self, msg):
         if self.state == ProcessorState.PAUSED:
             logger.debug("Processor is paused, skipping message")
+            await msg.nack()
             return
-
+        data = json.loads(msg.data.decode())
         self._last_message_time = datetime.now(timezone.utc)
-        logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
+        logger.debug(f"Incoming message:\nObject Type: {type(data)} : {json.dumps(data)}")
         try:
-            if isinstance(msg.get("data"), list):
-                data_item = msg.get("data")[0]
+            if isinstance(data.get("data"), list):
+                data_item = data.get("data")[0]
             else:
-                data_item = msg.get("data")
+                data_item = data.get("data")
             if isinstance(data_item, dict) and data_item.get("data_type") == "url":
                 data_item = data_item.get("data").get("url")
             processor = self.data_type_processors.get(msg.get("data_type"))
             if processor:
-                await processor(msg)
+                await processor(data)
+                msg.ack()
+            else:
+                logger.error(f"No processor found for data type: {msg.get('data_type')}")
+                await msg.nack()
+                return
 
         except Exception as e:
             error_location = traceback.extract_tb(e.__traceback__)[-1]
@@ -417,9 +423,10 @@ class DataProcessor:
         except Exception as e:
             logger.error(f"Error reconnecting subscriptions: {e}")
 
-    async def control_message_handler(self, msg):
+    async def control_message_handler(self, raw_msg):
         """Handle control messages for pausing/unpausing the processor"""
         try:
+            msg = json.loads(raw_msg.data.decode())
             command = msg.get("command")
             target = msg.get("target", "all")
             
@@ -467,6 +474,7 @@ class DataProcessor:
                         logger.info("Successfully resubscribed to recon.data")
                     except Exception as e:
                         logger.error(f"Error resubscribing to recon.data: {e}")
+                        await raw_msg.nack()
                         return
                 
                 # Send acknowledgment
@@ -498,10 +506,10 @@ class DataProcessor:
                     }
                 )
                 logger.debug("Data processor report sent")
-
+            await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error handling control message: {e}")
-
+            await raw_msg.nack()
     async def generate_report(self) -> Dict[str, Any]:
         """Generate a comprehensive report of the data processor's current state."""
         try:
