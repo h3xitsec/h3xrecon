@@ -532,26 +532,65 @@ class Worker:
             logger.error(f"Error reconnecting subscriptions: {e}")
 
     async def _setup_execute_subscription(self):
-        """Helper method to set up the function.execute subscription."""
-        logger.debug("Setting up execute subscription...")
-        self._execute_subscription = await self.qm.subscribe(
+        """Helper method to set up the pull-based function.execute subscription."""
+        logger.debug("Setting up pull-based execute subscription...")
+        self._execute_subscription = await self.qm.subscribe_pull(
             subject="function.execute",
             stream="FUNCTION_EXECUTE",
-            durable_name=None,
+            durable_name=f"EXECUTE_{self.worker_id}",  # Make durable name unique per worker
             message_handler=self.message_handler,
             batch_size=1,
             consumer_config={
                 'ack_policy': AckPolicy.EXPLICIT,
-                'deliver_policy': DeliverPolicy.NEW,
+                'deliver_policy': DeliverPolicy.ALL,
                 'replay_policy': ReplayPolicy.INSTANT,
+                'max_deliver': -1,
                 'deliver_group': "workers",
-                'max_deliver': -1
             },
-            queue_group="workers",
-            broadcast=False
+            queue_group="workers"
         )
-        self._execute_sub_key = f"FUNCTION_EXECUTE:function.execute:workers"
+        self._execute_sub_key = f"FUNCTION_EXECUTE:function.execute:EXECUTE_{self.worker_id}"
         logger.debug(f"Execute subscription created: {self._execute_subscription}")
+        
+        # Start the message pulling loop
+        asyncio.create_task(self._pull_messages_loop())
+
+    async def _pull_messages_loop(self):
+        """Continuously pull messages from the subscription."""
+        while True:
+            try:
+                if self.state == ProcessorState.PAUSED:
+                    await asyncio.sleep(1)
+                    continue
+                
+                if not self._execute_subscription:
+                    logger.warning("No active execute subscription")
+                    await asyncio.sleep(1)
+                    continue
+
+                try:
+                    # Fetch messages with timeout
+                    messages = await self._execute_subscription.fetch(batch=1, timeout=1)
+                    
+                    for msg in messages:
+                        if msg:
+                            await self.message_handler(msg)
+                        
+                except TimeoutError:
+                    # Expected when no messages are available
+                    await asyncio.sleep(0.1)
+                    continue
+                    
+                except Exception as e:
+                    logger.error(f"Error pulling messages: {e}")
+                    await asyncio.sleep(1)
+                    
+            except asyncio.CancelledError:
+                logger.info("Message pulling loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in message pulling loop: {e}")
+                await asyncio.sleep(1)
 
     async def _setup_control_subscription(self):
         """Helper method to set up the function.control subscription."""
