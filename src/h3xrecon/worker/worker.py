@@ -168,18 +168,59 @@ class Worker:
                 )
             
             elif command == 'killjob':
-                if self.running_tasks:
-                    # Cancel the first running task
-                    execution_id = next(iter(self.running_tasks))
-                    task = self.running_tasks.get(execution_id)
-                    if task:
-                        logger.debug(f"Killing job with Execution ID: {execution_id}")
-                        task.cancel()
-                        try:
-                            await task
-                        except asyncio.CancelledError:
-                            logger.info(f"Successfully cancelled task {execution_id}")
+                logger.info("Received kill job command")
+                success = False
+                error_msg = None
                 
+                try:
+                    if self.running_tasks:
+                        # Cancel the first running task
+                        execution_id = next(iter(self.running_tasks))
+                        task = self.running_tasks.get(execution_id)
+                        if task:
+                            logger.debug(f"Killing job with Execution ID: {execution_id}")
+                            task.cancel()
+                            try:
+                                await task
+                            except asyncio.CancelledError:
+                                logger.info(f"Successfully cancelled task {execution_id}")
+                                success = True
+                            except Exception as e:
+                                error_msg = str(e)
+                                logger.error(f"Error cancelling task: {error_msg}")
+                    else:
+                        success = True  # No tasks running is still a success
+                        logger.info("No running tasks to kill")
+                        
+                    # Send acknowledgment with success status
+                    await self.control_qm.publish_message(
+                        subject="function.control.response",
+                        stream="FUNCTION_CONTROL_RESPONSE",
+                        message={
+                            "processor_id": self.worker_id,
+                            "type": "worker",
+                            "command": "killjob",
+                            "success": success,
+                            "error": error_msg,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Error processing kill command: {e}")
+                    # Send error response
+                    await self.control_qm.publish_message(
+                        subject="function.control.response",
+                        stream="FUNCTION_CONTROL_RESPONSE",
+                        message={
+                            "processor_id": self.worker_id,
+                            "type": "worker",
+                            "command": "killjob",
+                            "success": False,
+                            "error": str(e),
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                    )
             elif command == 'stop' and execution_id:
                 task = self.running_tasks.get(execution_id)
                 if task:
@@ -502,71 +543,24 @@ class Worker:
             logger.error(f"Error reconnecting subscriptions: {e}")
 
     async def _setup_execute_subscription(self):
-        """Helper method to set up the pull-based function.execute subscription."""
-        logger.debug("Setting up pull-based execute subscription...")
-        self._execute_subscription = await self.qm.subscribe_pull(
+        """Helper method to set up the function.execute subscription."""
+        logger.debug("Setting up execute subscription...")
+        self._execute_subscription = await self.qm.subscribe(
             subject="function.execute",
             stream="FUNCTION_EXECUTE",
-            durable_name="WORKER",  # Make durable name unique per worker
             message_handler=self.message_handler,
+            durable_name=None,
             batch_size=1,
+            queue_group="workers",
             consumer_config={
                 'ack_policy': AckPolicy.EXPLICIT,
                 'deliver_policy': DeliverPolicy.ALL,
                 'replay_policy': ReplayPolicy.INSTANT,
-                'max_deliver': -1,
-                'deliver_group': "workers",
-            },
-            queue_group="workers"
+                'max_deliver': -1
+            }
         )
         self._execute_sub_key = f"FUNCTION_EXECUTE:function.execute:EXECUTE_{self.worker_id}"
         logger.debug(f"Execute subscription created: {self._execute_subscription}")
-        
-        # Start the message pulling loop
-        self._pull_messages_task = asyncio.create_task(self._pull_messages_loop())
-        logger.debug(f"Pull messages task created: {self._pull_messages_task}")
-        logger.debug(dir(self._pull_messages_task))
-
-    async def _pull_messages_loop(self):
-        """Continuously pull messages from the subscription."""
-        while True:
-            try:
-                # Wait for running event to be set
-                await self.running.wait()
-                
-                if self.state == ProcessorState.PAUSED:
-                    logger.debug("Worker is paused, skipping message fetch")
-                    await asyncio.sleep(1)
-                    continue
-                
-                if not self._execute_subscription:
-                    logger.warning("No active execute subscription")
-                    await asyncio.sleep(1)
-                    continue
-
-                try:
-                    # Fetch messages with timeout
-                    messages = await self._execute_subscription.fetch(batch=1, timeout=1)
-                    
-                    for msg in messages:
-                        if msg:
-                            await self.message_handler(msg)
-                        
-                except TimeoutError:
-                    # Expected when no messages are available
-                    await asyncio.sleep(0.1)
-                    continue
-                    
-                except Exception as e:
-                    logger.error(f"Error pulling messages: {e}")
-                    await asyncio.sleep(1)
-                    
-            except asyncio.CancelledError:
-                logger.info("Message pulling loop cancelled")
-                break
-            except Exception as e:
-                logger.error(f"Error in message pulling loop: {e}")
-                await asyncio.sleep(1)
 
     async def _setup_control_subscription(self):
         """Helper method to set up the function.control subscription."""

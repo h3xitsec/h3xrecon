@@ -139,28 +139,12 @@ class JobProcessor:
     async def _setup_subscription(self, subject: str, stream: str, message_handler: Callable, 
                                 broadcast: bool = False, queue_group: str = None):
         """Helper method to setup NATS subscriptions with consistent configuration."""
-        if broadcast:
-            # Keep push-based subscription for broadcast messages (control messages)
+        try:
             subscription = await self.qm.subscribe(
                 subject=subject,
                 stream=stream,
                 message_handler=message_handler,
-                durable_name="JOBPROCESSOR",
-                batch_size=1,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.ALL,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
-                broadcast=True
-            )
-        else:
-            # Use pull-based subscription for function.output
-            subscription = await self.qm.subscribe_pull(
-                subject=subject,
-                stream=stream,
-                message_handler=message_handler,
-                durable_name=f"{subject.replace('.', '_')}_{self.jobprocessor_id}",
+                durable_name=None,
                 batch_size=1,
                 queue_group=queue_group,
                 consumer_config={
@@ -168,47 +152,13 @@ class JobProcessor:
                     'deliver_policy': DeliverPolicy.ALL,
                     'replay_policy': ReplayPolicy.INSTANT,
                     'max_deliver': 1
-                }
+                },
+                broadcast=broadcast
             )
-            # Start message pulling loop for pull subscription
-            asyncio.create_task(self._pull_messages_loop(subscription, message_handler))
-        return subscription
-
-    async def _pull_messages_loop(self, subscription, message_handler):
-        """Continuously pull messages from the subscription."""
-        while True:
-            try:
-                # Wait for running event to be set
-                await self.running.wait()
-                
-                if not subscription:
-                    logger.warning("No active subscription")
-                    await asyncio.sleep(1)
-                    continue
-
-                try:
-                    # Fetch messages with timeout
-                    messages = await subscription.fetch(batch=1, timeout=1)
-                    
-                    for msg in messages:
-                        if msg:
-                            await message_handler(msg)
-                            
-                except TimeoutError:
-                    # Expected when no messages are available
-                    await asyncio.sleep(0.1)
-                    continue
-                    
-                except Exception as e:
-                    logger.error(f"Error pulling messages: {e}")
-                    await asyncio.sleep(1)
-                    
-            except asyncio.CancelledError:
-                logger.info("Message pulling loop cancelled")
-                break
-            except Exception as e:
-                logger.error(f"Error in message pulling loop: {e}")
-                await asyncio.sleep(1)
+            return subscription
+        except Exception as e:
+            logger.error(f"Failed to setup subscription: {e}")
+            raise
 
     async def start(self):
         logger.info(f"Starting Job Processor (ID: {self.jobprocessor_id}) version {__version__}...")

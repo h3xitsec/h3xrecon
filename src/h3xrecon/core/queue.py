@@ -196,7 +196,6 @@ class QueueManager:
         
         # Default consumer configuration
         default_config = ConsumerConfig(
-            #durable_name=None if broadcast else durable_name,
             deliver_policy=DeliverPolicy.ALL,
             ack_policy=AckPolicy.NONE if broadcast else AckPolicy.EXPLICIT,
             replay_policy=ReplayPolicy.INSTANT,
@@ -247,90 +246,6 @@ class QueueManager:
                 logger.exception(e)
         return cb
 
-    # async def _process_messages(self,
-    #                     subscription,
-    #                     message_handler: Callable[[Any], Awaitable[None]],
-    #                     batch_size: int) -> None:
-    #     """
-    #     Process messages from a subscription with improved error handling and recovery.
-    #     """
-    #     subject = self._subscription_subjects.get(subscription)
-    #     consecutive_errors = 0
-    #     MAX_CONSECUTIVE_ERRORS = 5
-        
-    #     while True:
-    #         try:
-    #             if not self.nc.is_connected:
-    #                 logger.error(f"NATS connection lost for {subject}. Attempting reconnection...")
-    #                 await self.ensure_connected()
-    #                 await asyncio.sleep(1)
-    #                 continue
-
-    #             try:
-    #                 # Fetch messages with longer timeout and explicit batch size
-    #                 messages = await subscription.fetch(batch=batch_size, timeout=5)  # Increase timeout to 5 seconds
-    #                 consecutive_errors = 0
-                    
-    #                 if messages:
-    #                     logger.debug(f"Received {len(messages)} messages from {subject}")
-                        
-    #                     for msg in messages:
-    #                         if not msg:
-    #                             continue
-                                
-    #                         try:
-    #                             data = json.loads(msg.data.decode())
-    #                             logger.debug(f"Processing message from {subject}: {data}")
-                                
-    #                             # Process message with timeout
-    #                             try:
-    #                                 async with asyncio.timeout(30):
-    #                                     await message_handler(data)
-    #                                     # Acknowledge after successful processing
-    #                                     await msg.ack()
-    #                                     logger.debug(f"Message processed and acknowledged on {subject}")
-    #                             except asyncio.TimeoutError:
-    #                                 logger.error(f"Message processing timeout on {subject}")
-    #                                 if hasattr(msg, 'nak'):
-    #                                     await msg.nak()
-    #                                 continue
-                                
-    #                         except json.JSONDecodeError as je:
-    #                             logger.error(f"JSON decode error on {subject}: {je}")
-    #                             if hasattr(msg, 'ack'):
-    #                                 await msg.ack()  # Ack malformed messages
-    #                         except Exception as e:
-    #                             logger.error(f"Error processing message on {subject}: {e}")
-    #                             logger.exception(e)
-    #                             if hasattr(msg, 'nak'):
-    #                                 await msg.nak()
-                                    
-    #             except NatsTimeoutError:
-    #                 # This is expected for pull subscriptions
-    #                 continue
-                    
-    #             except asyncio.CancelledError:
-    #                 logger.warning(f"Message processing cancelled for {subject}")
-    #                 return
-                    
-    #             except Exception as e:
-    #                 consecutive_errors += 1
-    #                 logger.error(f"Error in message processing loop for {subject}: {e}")
-    #                 logger.exception(e)
-    #                 await asyncio.sleep(1)
-    #                 continue
-                    
-    #         except Exception as e:
-    #             consecutive_errors += 1
-    #             logger.error(f"Critical error in message processing loop for {subject}: {e}")
-    #             logger.exception(e)
-    #             await asyncio.sleep(1)
-                
-    #             if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-    #                 logger.critical(f"Too many consecutive errors ({consecutive_errors}). Restarting message processing...")
-    #                 await asyncio.sleep(5)
-    #                 consecutive_errors = 0
-
     async def close(self) -> None:
         """Close the NATS connection and clean up resources."""
         if self.nc and self.nc.is_connected:
@@ -350,55 +265,3 @@ class QueueManager:
 
     async def _closed_callback(self):
         logger.warning("NATS connection closed")
-
-    async def subscribe_pull(self,
-                        subject: str,
-                        stream: str,
-                        message_handler: Callable[[Any], Awaitable[None]],
-                        durable_name: str = None,
-                        batch_size: int = 1,
-                        queue_group: str = None,
-                        consumer_config: Optional[Dict[str, Any]] = None) -> None:
-        """
-        Create a pull-based subscription to a subject.
-        """
-        await self.ensure_jetstream()
-        
-        # Default consumer configuration for pull subscription
-        default_config = ConsumerConfig(
-            durable_name=durable_name,
-            deliver_policy=DeliverPolicy.ALL,
-            ack_policy=AckPolicy.EXPLICIT,
-            replay_policy=ReplayPolicy.INSTANT,
-            max_deliver=1,
-            ack_wait=30,
-            filter_subject=subject,
-            deliver_group=queue_group,
-            max_waiting=1,  # Limit number of waiting pull requests
-            max_ack_pending=batch_size,  # Maximum number of pending acks
-        )
-
-        # Update with custom config if provided
-        if consumer_config:
-            default_config = ConsumerConfig(**{**default_config.__dict__, **consumer_config})
-
-        try:
-            # Create pull subscription
-            subscription = await self.js.pull_subscribe(
-                subject,
-                durable=durable_name,
-                stream=stream,
-                config=default_config,
-            )
-            
-            # Store subscription and its subject for cleanup and reference
-            sub_key = f"{stream}:{subject}:{durable_name}"
-            self._subscriptions[sub_key] = subscription
-            self._subscription_subjects[subscription] = subject
-            
-            logger.debug(f"Created pull subscription to '{subject}' on stream '{stream}' with durable name {durable_name}")
-            return subscription
-            
-        except Exception as e:
-            logger.error(f"Failed to create pull subscription: {e}")
-            raise
