@@ -9,7 +9,14 @@
         chdir: "{{ h3xrecon_target_directory }}"
         cmd: |
           export $(cat .env) > /dev/null 2>&1; docker stack rm h3xrecon
+
     - name: Wait for stack removal
       ansible.builtin.shell:
         cmd: |
           while docker stack ls | grep h3xrecon; do sleep 1; done
+    
+    - name: Remove volumes
+      ansible.builtin.shell:
+        cmd: |
+          docker volume rm h3xrecon_redis_data
+          docker volume rm h3xrecon_nats_data
