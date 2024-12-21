@@ -93,6 +93,8 @@ class JobProcessor:
         self.state = ProcessorState.RUNNING
         self.control_subscription = None
         self.output_subscription = None
+        self.running = asyncio.Event()
+        self.running.set()  # Start in running state
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
             logger.debug(f"Found plugin package at: {package.__path__}")
@@ -143,6 +145,7 @@ class JobProcessor:
                 subject=subject,
                 stream=stream,
                 message_handler=message_handler,
+                durable_name="JOBPROCESSOR",
                 batch_size=1,
                 consumer_config={
                     'ack_policy': AckPolicy.EXPLICIT,
@@ -175,10 +178,9 @@ class JobProcessor:
         """Continuously pull messages from the subscription."""
         while True:
             try:
-                if self.state == ProcessorState.PAUSED:
-                    await asyncio.sleep(1)
-                    continue
-                    
+                # Wait for running event to be set
+                await self.running.wait()
+                
                 if not subscription:
                     logger.warning("No active subscription")
                     await asyncio.sleep(1)
@@ -254,32 +256,32 @@ class JobProcessor:
     async def stop(self):
         logger.info("Shutting down...")
 
-    async def message_handler(self, msg):
+    async def message_handler(self, raw_msg):
+        msg = json.loads(raw_msg.data.decode())
         if self.state == ProcessorState.PAUSED:
             logger.debug("Processor is paused, skipping message")
-            await msg.nack()
+            await raw_msg.nack()
             return
 
         try:
             # Validate the message using FunctionExecution dataclass
-            data = json.loads(msg.data.decode())
             function_execution = FunctionExecution(
-                execution_id=data['execution_id'],
-                timestamp=data['timestamp'],
-                program_id=data['program_id'],
-                source=data['source'],
-                output=data.get('data', [])
+                execution_id=msg['execution_id'],
+                timestamp=msg['timestamp'],
+                program_id=msg['program_id'],
+                source=msg['source'],
+                output=msg.get('data', [])
             )
             
             # Log or update function execution in database
-            await self.log_or_update_function_execution(data, function_execution.execution_id, function_execution.timestamp)
+            await self.log_or_update_function_execution(msg, function_execution.execution_id, function_execution.timestamp)
             function_name = function_execution.source.get("function")
             if function_name:
-                await self.process_function_output(data)
-                msg.ack()
+                await self.process_function_output(msg)
+                await raw_msg.ack()
             else:
-                logger.error(f"No function name found in message: {data}")
-                await msg.nack()
+                logger.error(f"No function name found in message: {msg}")
+                await raw_msg.nack()
             
         except (KeyError, ValueError, TypeError) as e:
             error_location = traceback.extract_tb(e.__traceback__)[-1]
@@ -408,15 +410,7 @@ class JobProcessor:
             if command == "pause":
                 logger.info("Received pause command")
                 self.state = ProcessorState.PAUSED
-                
-                # Properly unsubscribe if we have an active subscription
-                if self.output_subscription:
-                    try:
-                        await self.output_subscription.unsubscribe()
-                        self.output_subscription = None
-                        logger.info("Successfully unsubscribed from function.output")
-                    except Exception as e:
-                        logger.error(f"Error unsubscribing from function.output: {e}")
+                self.running.clear()  # Pause message processing
                 
                 # Send acknowledgment
                 await self.qm.publish_message(
@@ -433,20 +427,7 @@ class JobProcessor:
             elif command == "unpause":
                 logger.info("Received unpause command")
                 self.state = ProcessorState.RUNNING
-                
-                # Only attempt to resubscribe if we're not already subscribed
-                if not self.output_subscription:
-                    try:
-                        self.output_subscription = await self._setup_subscription(
-                            subject="function.output",
-                            stream="FUNCTION_OUTPUT",
-                            message_handler=self.message_handler,
-                            queue_group="jobprocessor"
-                        )
-                        logger.info("Successfully resubscribed to function.output")
-                    except Exception as e:
-                        logger.error(f"Error resubscribing to function.output: {e}")
-                        return
+                self.running.set()  # Resume message processing
                 
                 # Send acknowledgment
                 await self.qm.publish_message(

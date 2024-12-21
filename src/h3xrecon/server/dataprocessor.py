@@ -63,6 +63,8 @@ class DataProcessor:
         }
         self._last_message_time = None
         self._health_check_task = None
+        self.running = asyncio.Event()
+        self.running.set()  # Start in running state
         self.state = ProcessorState.RUNNING
         self.control_subscription = None
         self.data_subscription = None
@@ -77,6 +79,7 @@ class DataProcessor:
                 stream=stream,
                 message_handler=message_handler,
                 batch_size=1,
+                durable_name="DATAPROCESSOR",
                 consumer_config={
                     'ack_policy': AckPolicy.EXPLICIT,
                     'deliver_policy': DeliverPolicy.ALL,
@@ -108,10 +111,9 @@ class DataProcessor:
         """Continuously pull messages from the subscription."""
         while True:
             try:
-                if self.state == ProcessorState.PAUSED:
-                    await asyncio.sleep(1)
-                    continue
-                    
+                # Wait for running event to be set
+                await self.running.wait()
+                
                 if not subscription:
                     logger.warning("No active subscription")
                     await asyncio.sleep(1)
@@ -187,28 +189,28 @@ class DataProcessor:
     async def stop(self):
         logger.info("Shutting down...")
 
-    async def message_handler(self, msg):
+    async def message_handler(self, raw_msg):
+        msg = json.loads(raw_msg.data.decode())
         if self.state == ProcessorState.PAUSED:
             logger.debug("Processor is paused, skipping message")
-            await msg.nack()
+            await raw_msg.nack()
             return
-        data = json.loads(msg.data.decode())
         self._last_message_time = datetime.now(timezone.utc)
-        logger.debug(f"Incoming message:\nObject Type: {type(data)} : {json.dumps(data)}")
+        logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
         try:
-            if isinstance(data.get("data"), list):
-                data_item = data.get("data")[0]
+            if isinstance(msg.get("data"), list):
+                data_item = msg.get("data")[0]
             else:
-                data_item = data.get("data")
+                data_item = msg.get("data")
             if isinstance(data_item, dict) and data_item.get("data_type") == "url":
                 data_item = data_item.get("data").get("url")
             processor = self.data_type_processors.get(msg.get("data_type"))
             if processor:
-                await processor(data)
-                msg.ack()
+                await processor(msg)
+                await raw_msg.ack()
             else:
                 logger.error(f"No processor found for data type: {msg.get('data_type')}")
-                await msg.nack()
+                await raw_msg.nack()
                 return
 
         except Exception as e:
@@ -492,15 +494,7 @@ class DataProcessor:
             if command == "pause":
                 logger.info("Received pause command")
                 self.state = ProcessorState.PAUSED
-                
-                # Properly unsubscribe if we have an active subscription
-                if self.data_subscription:
-                    try:
-                        await self.data_subscription.unsubscribe()
-                        self.data_subscription = None
-                        logger.info("Successfully unsubscribed from recon.data")
-                    except Exception as e:
-                        logger.error(f"Error unsubscribing from recon.data: {e}")
+                self.running.clear()  # Pause message processing
                 
                 # Send acknowledgment
                 await self.qm.publish_message(
@@ -517,21 +511,7 @@ class DataProcessor:
             elif command == "unpause":
                 logger.info("Received unpause command")
                 self.state = ProcessorState.RUNNING
-                
-                # Only attempt to resubscribe if we're not already subscribed
-                if not self.data_subscription:
-                    try:
-                        self.data_subscription = await self._setup_subscription(
-                            subject="recon.data",
-                            stream="RECON_DATA",
-                            message_handler=self.message_handler,
-                            queue_group="dataprocessor"
-                        )
-                        logger.info("Successfully resubscribed to recon.data")
-                    except Exception as e:
-                        logger.error(f"Error resubscribing to recon.data: {e}")
-                        await raw_msg.nack()
-                        return
+                self.running.set()  # Resume message processing
                 
                 # Send acknowledgment
                 await self.qm.publish_message(
