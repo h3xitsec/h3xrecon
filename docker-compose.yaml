@@ -146,7 +146,7 @@ services:
     restart: unless-stopped
 
   msgbroker:
-    image: nats:2.10.21-alpine
+    image: nats:2.10.24-alpine
     env_file:
       - .env.compose
     volumes:
