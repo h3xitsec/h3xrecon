@@ -20,3 +20,7 @@
         cmd: |
           docker volume rm h3xrecon_redis_data
           docker volume rm h3xrecon_nats_data
+      register: volume_removal
+      retries: 3
+      delay: 5
+      until: volume_removal is not failed
