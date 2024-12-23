@@ -46,6 +46,18 @@ H3xRecon is a bug bounty reconnaissance automation system that provides a custom
 - Message-driven communication
 - Containerized components
 
+## Detailed component workflow and intended behavior
+
+### Worker
+
+- Worker receives a message from the FUNCTION_EXECUTE stream
+- Worker validates the message and executes the function
+- Worker sends the result to the FUNCTION_OUTPUT stream
+- The worker should only run one function at a time
+- The worker should not receive any other messages while processing a function
+- The worker should not hold any messages while processing a function
+- If a new message is sent to the queue while a worker is processing a function, it should be processed by another idle worker
+
 ## Future Scope
 - Enhanced plugin system
 - Advanced reporting capabilities
