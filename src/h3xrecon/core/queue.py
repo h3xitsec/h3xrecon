@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional, Callable, Awaitable
 from nats.aio.client import Client as NATS
 from nats.js.api import ConsumerConfig, DeliverPolicy, AckPolicy, ReplayPolicy
-from nats.errors import TimeoutError as NatsTimeoutError, ConnectionClosedError
+from nats.errors import TimeoutError as NatsTimeoutError, ConnectionClosedError, NoRespondersError
 import random
 from loguru import logger
 import json
@@ -9,8 +9,7 @@ import asyncio
 from .config import Config
 from h3xrecon.__about__ import __version__
 from nats.js.client import JetStreamContext
-from nats.errors import ConnectionClosedError, TimeoutError, NoRespondersError
-from nats.js.errors import NoStreamResponseError
+from .utils import debug_trace
 
 class StreamUnavailableError(Exception):
     """Raised when a stream is unavailable or locked"""
@@ -37,7 +36,9 @@ class QueueManager:
         self._reconnect_delay = 1  # Start with 1 second delay
         self._stream_retry_attempts = 3
         self._stream_retry_delay = 1
+        self._paused_subscriptions = set()  # Track paused subscriptions
 
+    @debug_trace
     async def connect(self) -> None:
         """Connect to NATS server using environment variables for configuration."""
         async def disconnected_cb():
@@ -68,17 +69,130 @@ class QueueManager:
         except Exception as e:
             logger.error(f"Failed to connect to NATS: Connection refused at {self.config.url}")
             raise ConnectionError("NATS connection failed: Connection refused") from e
-    
-    async def unsubscribe(self, subject: str, stream: str, durable_name: str = None):
-        if self.js:
-            await self.js.delete_consumer(stream, durable_name)
-            logger.debug(f"Unsubscribed from {subject} on stream {stream} with durable name {durable_name}")
-        else:
-            logger.warning(f"No JetStream context available for unsubscribe")
 
+    @debug_trace
+    async def subscribe(self, 
+                       subject: str,
+                       stream: str,
+                       message_handler: Callable[[Any], Awaitable[None]],
+                       durable_name: str = None,
+                       batch_size: int = 1,
+                       queue_group: str = None,
+                       consumer_config: Optional[Dict[str, Any]] = None,
+                       broadcast: bool = False,
+                       pull_based: bool = False) -> Any:
+        """
+        Subscribe to a subject using either push or pull-based subscription and process messages using the provided handler.
+        """
+        await self.ensure_jetstream()
+        
+        # Try to delete existing consumer if it exists
+        if durable_name:
+            try:
+                await self.js.delete_consumer(stream, durable_name)
+                logger.debug(f"Deleted existing consumer {durable_name} from stream {stream}")
+            except Exception as e:
+                logger.debug(f"No existing consumer to delete or error deleting: {e}")
+        
+        # Default consumer configuration
+        default_config = {
+            'deliver_policy': DeliverPolicy.ALL,
+            'ack_policy': AckPolicy.NONE if broadcast else AckPolicy.EXPLICIT,
+            'replay_policy': ReplayPolicy.INSTANT,
+            'max_deliver': 5,
+            'ack_wait': 30,
+            'filter_subject': subject,
+            'deliver_group': queue_group,
+            'max_ack_pending': -1,
+            'flow_control': False if pull_based else True,
+            'name': durable_name,
+            'durable_name': durable_name
+        }
+
+        # Update with custom config if provided
+        if consumer_config:
+            consumer_config_copy = consumer_config.copy()
+            consumer_config_copy['filter_subject'] = subject
+            consumer_config_copy['deliver_group'] = consumer_config.get('deliver_group', queue_group)
+            consumer_config_copy['name'] = durable_name
+            consumer_config_copy['durable_name'] = durable_name
+            default_config.update(consumer_config_copy)
+
+        # Create final consumer config
+        final_config = ConsumerConfig(**default_config)
+        logger.debug(f"Final consumer config: {final_config}")
+
+        try:
+            # Ensure stream exists before proceeding
+            try:
+                await self.js.stream_info(stream)
+            except Exception as e:
+                logger.error(f"Stream {stream} not found or error accessing it: {e}")
+                raise StreamUnavailableError(f"Stream {stream} not available")
+
+            if pull_based:
+                # For pull-based, create consumer first then subscription
+                try:
+                    await self.js.add_consumer(stream, final_config)
+                except Exception as e:
+                    logger.debug(f"Consumer might already exist or error creating: {e}")
+
+                # Create pull subscription
+                subscription = await self.js.pull_subscribe(
+                    subject,
+                    durable=durable_name,
+                    stream=stream,
+                    config=final_config
+                )
+            else:
+                # Create push subscription with callback
+                cb = await self._message_callback(message_handler)
+                subscription = await self.js.subscribe(
+                    subject,
+                    queue=queue_group,
+                    durable=durable_name,
+                    stream=stream,
+                    config=final_config,
+                    cb=cb,
+                    manual_ack=True
+                )
+            
+            # Store subscription and its subject for cleanup and reference
+            sub_key = f"{stream}:{subject}:{durable_name if durable_name else 'broadcast'}"
+            self._subscriptions[sub_key] = subscription
+            self._subscription_subjects[subscription] = subject
+            
+            # Verify the consumer exists (don't raise an error if verification fails)
+            try:
+                consumer_info = await subscription.consumer_info()
+                logger.debug(f"Consumer info: {consumer_info}")
+                if consumer_info.config.max_ack_pending != final_config.max_ack_pending:
+                    logger.warning(f"Consumer max_ack_pending mismatch: wanted {final_config.max_ack_pending}, got {consumer_info.config.max_ack_pending}")
+            except Exception as e:
+                logger.warning(f"Could not verify consumer info: {e}")
+            
+            logger.debug(f"Subscribed to '{subject}' on stream '{stream}' with {'broadcast mode' if broadcast else f'durable name {durable_name}'} ({pull_based=})")
+            return subscription
+            
+        except Exception as e:
+            logger.error(f"Failed to create subscription: {e}")
+            raise
+
+    @debug_trace
+    async def _message_callback(self, handler):
+        async def cb(msg):
+            try:
+                await handler(msg)
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
+                logger.exception(e)
+        return cb
+
+    @debug_trace
     async def close(self) -> None:
         self.nc.close()
 
+    @debug_trace
     async def ensure_connected(self) -> None:
         """Ensure NATS connection is established."""
         logger.debug("Ensuring NATS connection is established")
@@ -88,13 +202,15 @@ class QueueManager:
             except Exception as e:
                 logger.error(f"Failed to connect to NATS: {str(e)}")
                 raise
-    
+
+    @debug_trace
     async def ensure_jetstream(self) -> None:
         """Initialize JetStream if not already initialized."""
         await self.ensure_connected()
         if self.js is None:
             self.js = self.nc.jetstream()
 
+    @debug_trace
     async def publish_message(self, subject: str, stream: str, message: Dict[str, Any], retry_count: int = 0):
         """
         Publish message with retry logic for both connection and stream issues.
@@ -110,24 +226,17 @@ class QueueManager:
             
             try:
                 await self.js.publish(subject, json.dumps(message).encode())
-            except NoStreamResponseError:
-                logger.debug(f"No stream response for {stream}, dropping message")
-                pass
-                #if retry_count < self._stream_retry_attempts:
-                #    logger.warning(f"Stream {stream} unavailable, attempt {retry_count + 1}/{self._stream_retry_attempts}")
-                #    await asyncio.sleep(self._stream_retry_delay)
-                #    return await self.publish_message(subject, stream, message, retry_count + 1)
-                #else:
-                #    logger.error(f"Stream {stream} unavailable after {self._stream_retry_attempts} attempts")
-                #    raise StreamUnavailableError(f"Stream {stream} is unavailable or locked")
-            except NoRespondersError:
-                if retry_count < self._stream_retry_attempts:
-                    logger.warning(f"No responders for {stream}, attempt {retry_count + 1}/{self._stream_retry_attempts}")
-                    await asyncio.sleep(self._stream_retry_delay)
-                    return await self.publish_message(subject, stream, message, retry_count + 1)
+            except Exception as e:
+                if isinstance(e, NoRespondersError):
+                    if retry_count < self._stream_retry_attempts:
+                        logger.warning(f"No responders for {stream}, attempt {retry_count + 1}/{self._stream_retry_attempts}")
+                        await asyncio.sleep(self._stream_retry_delay)
+                        return await self.publish_message(subject, stream, message, retry_count + 1)
+                    else:
+                        logger.error(f"No responders available for {stream} after {self._stream_retry_attempts} attempts")
+                        raise StreamUnavailableError(f"No responders available for stream {stream}")
                 else:
-                    logger.error(f"No responders available for {stream} after {self._stream_retry_attempts} attempts")
-                    raise StreamUnavailableError(f"No responders available for stream {stream}")
+                    raise  # Re-raise other exceptions
                     
         except ConnectionClosedError:
             logger.warning("NATS connection closed, attempting to reconnect...")
@@ -142,6 +251,7 @@ class QueueManager:
             logger.error(f"Error publishing message: {str(e)}")
             raise
 
+    @debug_trace
     async def ensure_stream_exists(self, stream: str) -> bool:
         """
         Verify that a stream exists and is available.
@@ -156,12 +266,13 @@ class QueueManager:
             await self.ensure_connected()
             stream_info = await self.js.stream_info(stream)
             return True
-        except NoStreamResponseError:
+        except StreamUnavailableError:
             return False
         except Exception as e:
             logger.error(f"Error checking stream {stream}: {str(e)}")
             return False
 
+    @debug_trace
     async def wait_for_stream(self, stream: str, timeout: int = 30) -> bool:
         """
         Wait for a stream to become available.
@@ -180,88 +291,36 @@ class QueueManager:
             await asyncio.sleep(1)
         return False
 
-    async def subscribe(self, 
-                       subject: str,
-                       stream: str,
-                       message_handler: Callable[[Any], Awaitable[None]],
-                       durable_name: str = None,
-                       batch_size: int = 1,
-                       queue_group: str = None,
-                       consumer_config: Optional[Dict[str, Any]] = None,
-                       broadcast: bool = False) -> None:
-        """
-        Subscribe to a subject using push-based subscription and process messages using the provided handler.
-        """
-        await self.ensure_jetstream()
-        
-        # Default consumer configuration
-        default_config = ConsumerConfig(
-            deliver_policy=DeliverPolicy.ALL,
-            ack_policy=AckPolicy.NONE if broadcast else AckPolicy.EXPLICIT,
-            replay_policy=ReplayPolicy.INSTANT,
-            max_deliver=1,
-            ack_wait=30,
-            filter_subject=subject,
-            deliver_group=queue_group
-        )
-
-        # Update with custom config if provided
-        if consumer_config:
-            default_config = ConsumerConfig(**{**default_config.__dict__, **consumer_config})
-
-        try:
-            # Create message callback
-            cb = await self._message_callback(message_handler)
-            
-            # Create push subscription
-            subscription = await self.js.subscribe(
-                subject,
-                queue=queue_group,
-                durable=durable_name if not broadcast else None,
-                stream=stream,
-                config=default_config,
-                cb=cb
-            )
-            
-            # Store subscription and its subject for cleanup and reference
-            sub_key = f"{stream}:{subject}:{durable_name if not broadcast else 'broadcast'}"
-            self._subscriptions[sub_key] = subscription
-            self._subscription_subjects[subscription] = subject
-            
-            logger.debug(f"{await subscription.consumer_info()}")
-            logger.debug(f"Subscribed to '{subject}' on stream '{stream}' with {'broadcast mode' if broadcast else f'durable name {durable_name}'}")
-            return subscription
-            
-        except Exception as e:
-            logger.error(f"Failed to create subscription: {e}")
-            raise
-
-    async def _message_callback(self, handler):
-        async def cb(msg):
-            try:
-                logger.debug(f"Received message: {msg.data}")
-                await handler(msg)
-            except Exception as e:
-                logger.error(f"Error processing message: {e}")
-                logger.exception(e)
-        return cb
-
-    async def close(self) -> None:
+    @debug_trace
+    async def disconnect(self) -> None:
         """Close the NATS connection and clean up resources."""
         if self.nc and self.nc.is_connected:
             await self.nc.drain()
             await self.nc.close()
             logger.debug("NATS connection closed")
 
-    async def _error_callback(self, e):
-        logger.error(f"NATS error: {str(e)}")
+    @debug_trace
+    def is_subscription_paused(self, subscription_key: str) -> bool:
+        """Check if a subscription is paused."""
+        return subscription_key in self._paused_subscriptions
 
-    async def _reconnected_callback(self):
-        logger.info("Reconnected to NATS")
-        self.js = self.nc.jetstream()
-
-    async def _disconnected_callback(self):
-        logger.warning("Disconnected from NATS")
-
-    async def _closed_callback(self):
-        logger.warning("NATS connection closed")
+    #@debug_trace
+    async def fetch_messages(self, subscription, batch_size: int = 1, timeout: float = 1.0) -> list:
+        """
+        Fetch messages from a pull-based subscription.
+        
+        Args:
+            subscription: The pull subscription to fetch messages from
+            batch_size: Number of messages to fetch (default: 1)
+            timeout: Timeout in seconds for the fetch operation (default: 1.0)
+            
+        Returns:
+            list: List of fetched messages
+        """
+        try:
+            messages = await subscription.fetch(batch=batch_size, timeout=timeout)
+            return messages
+        except Exception as e:
+            if not isinstance(e, TimeoutError):
+                logger.error(f"Error fetching messages: {e}")
+            return []

@@ -136,25 +136,27 @@ class JobProcessor:
         self._last_message_time = None
         self._health_check_task = None
 
-    async def _setup_subscription(self, subject: str, stream: str, message_handler: Callable, 
-                                broadcast: bool = False, queue_group: str = None):
+    async def _setup_subscription(self):
         """Helper method to setup NATS subscriptions with consistent configuration."""
         try:
             subscription = await self.qm.subscribe(
-                subject=subject,
-                stream=stream,
-                message_handler=message_handler,
-                durable_name=None,
+                subject="function.output",
+                stream="FUNCTION_OUTPUT",
+                message_handler=self.message_handler,
+                durable_name=None,  # No durable name for better scalability
                 batch_size=1,
-                queue_group=queue_group,
+                queue_group="jobprocessors",
                 consumer_config={
                     'ack_policy': AckPolicy.EXPLICIT,
                     'deliver_policy': DeliverPolicy.ALL,
                     'replay_policy': ReplayPolicy.INSTANT,
-                    'max_deliver': 1
-                },
-                broadcast=broadcast
+                    'max_deliver': -1,
+                    'max_ack_pending': 1,
+                }
             )
+            self._output_subscription = subscription
+            self._output_sub_key = f"FUNCTION_OUTPUT:function.output:OUTPUT_{self.jobprocessor_id}"
+            logger.info("Successfully subscribed to output channel")
             return subscription
         except Exception as e:
             logger.error(f"Failed to setup subscription: {e}")
@@ -175,12 +177,7 @@ class JobProcessor:
                 try:
                     await self.qm.connect()
                     # Store the subscription object
-                    self.output_subscription = await self._setup_subscription(
-                        subject="function.output",
-                        stream="FUNCTION_OUTPUT",
-                        message_handler=self.message_handler,
-                        queue_group="jobprocessor"
-                    )
+                    self.output_subscription = await self._setup_subscription()
                     logger.info(f"Job Processor started and listening for messages...")
                     break
                 except Exception as e:
@@ -189,11 +186,48 @@ class JobProcessor:
                         raise e
                     await asyncio.sleep(1)
 
-            # Add control message subscription
-            await self._setup_subscription(
-                subject="function.control",
+            # Subscribe to broadcast messages (all components)
+            await self.qm.subscribe(
+                subject="function.control.all",
                 stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_ALL_{self.jobprocessor_id}",
                 message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
+
+            # Subscribe to broadcast messages (all workers)
+            await self.qm.subscribe(
+                subject="function.control.all_jobprocessor",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_ALL_JOBPROCESSOR_{self.jobprocessor_id}",
+                message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
+            
+            # Subscribe to worker-specific messages
+            await self.qm.subscribe(
+                subject=f"function.control.{self.jobprocessor_id}",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_{self.jobprocessor_id}",
+                message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
                 broadcast=True
             )
 
@@ -209,8 +243,7 @@ class JobProcessor:
     async def message_handler(self, raw_msg):
         msg = json.loads(raw_msg.data.decode())
         if self.state == ProcessorState.PAUSED:
-            logger.debug("Processor is paused, skipping message")
-            await raw_msg.nack()
+            await raw_msg.nak()
             return
 
         try:
@@ -231,7 +264,7 @@ class JobProcessor:
                 await raw_msg.ack()
             else:
                 logger.error(f"No function name found in message: {msg}")
-                await raw_msg.nack()
+                await raw_msg.nak()
             
         except (KeyError, ValueError, TypeError) as e:
             error_location = traceback.extract_tb(e.__traceback__)[-1]
@@ -337,12 +370,7 @@ class JobProcessor:
         try:
             logger.info("Reconnecting subscriptions...")
             await self.qm.connect()
-            self.output_subscription = await self._setup_subscription(
-                subject="function.output",
-                stream="FUNCTION_OUTPUT",
-                message_handler=self.message_handler,
-                queue_group="jobprocessor"
-            )
+            self.output_subscription = await self._setup_subscription()
             logger.info("Successfully reconnected subscriptions")
         except Exception as e:
             logger.error(f"Error reconnecting subscriptions: {e}")
@@ -353,14 +381,36 @@ class JobProcessor:
             msg = json.loads(raw_msg.data.decode())
             command = msg.get("command")
             target = msg.get("target", "all")
+            target_id = msg.get("target_id")
+
+            # Check if message is targeted for this processor
+            if target not in ["all", "jobprocessor"] and target != self.jobprocessor_id:
+                logger.debug(f"Ignoring control message - not for this processor (target: {target})")
+                return
             
-            if target not in ["all", "jobprocessor"]:
+            # For processor-specific targeting, check if this is the intended processor
+            if target == "jobprocessor" and target_id and target_id != self.jobprocessor_id:
+                logger.debug(f"Ignoring processor-specific message - not for this processor ID (target_id: {target_id})")
                 return
 
             if command == "pause":
-                logger.info("Received pause command")
+                logger.debug(f"Received pause command for {target} {target_id or ''}")
+                if self.state == ProcessorState.PAUSED:
+                    logger.debug("Job processor is already paused, skipping pause command")
+                
                 self.state = ProcessorState.PAUSED
                 self.running.clear()  # Pause message processing
+                
+                # Unsubscribe from output subscription
+                if self.output_subscription:
+                    try:
+                        await self.output_subscription.unsubscribe()
+                        logger.debug(f"Unsubscribed from output subscription: {self.output_subscription}")
+                        self.output_subscription = None
+                    except Exception as e:
+                        logger.error(f"Error unsubscribing: {e}")
+                
+                logger.info(f"Job processor {self.jobprocessor_id} paused")
                 
                 # Send acknowledgment
                 await self.qm.publish_message(
@@ -375,9 +425,15 @@ class JobProcessor:
                 )
             
             elif command == "unpause":
-                logger.info("Received unpause command")
+                logger.debug("Received unpause command")
                 self.state = ProcessorState.RUNNING
                 self.running.set()  # Resume message processing
+                
+                # Resubscribe to the output stream
+                await self._setup_subscription()
+                logger.debug(f"Resubscribed to output subscription: {self.output_subscription}")
+                
+                logger.info(f"Job processor {self.jobprocessor_id} resumed")
                 
                 # Send acknowledgment
                 await self.qm.publish_message(
@@ -411,7 +467,7 @@ class JobProcessor:
             await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error handling control message: {e}")
-            await raw_msg.nack()
+            await raw_msg.nak()
 
     async def generate_report(self) -> Dict[str, Any]:
         """Generate a comprehensive report of the job processor's current state."""

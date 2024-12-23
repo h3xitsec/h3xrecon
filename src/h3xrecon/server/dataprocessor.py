@@ -122,11 +122,48 @@ class DataProcessor:
                         raise e
                     await asyncio.sleep(1)
 
-            # Add control message subscription
-            self.control_subscription = await self._setup_subscription(
-                subject="function.control",
+            # Subscribe to broadcast messages (all components)
+            await self.qm.subscribe(
+                subject="function.control.all",
                 stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_ALL_{self.dataprocessor_id}2",
                 message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
+
+            # Subscribe to broadcast messages (all dataprocessors)
+            await self.qm.subscribe(
+                subject="function.control.all_dataprocessor",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_ALL_DATAPROCESSOR_{self.dataprocessor_id}",
+                message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
+            
+            # Subscribe to dataprocessor-specific messages
+            await self.qm.subscribe(
+                subject=f"function.control.{self.dataprocessor_id}",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_{self.dataprocessor_id}",
+                message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
                 broadcast=True
             )
 
@@ -142,8 +179,7 @@ class DataProcessor:
     async def message_handler(self, raw_msg):
         msg = json.loads(raw_msg.data.decode())
         if self.state == ProcessorState.PAUSED:
-            logger.debug("Processor is paused, skipping message")
-            await raw_msg.nack()
+            await raw_msg.nak()
             return
         self._last_message_time = datetime.now(timezone.utc)
         logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
@@ -160,7 +196,7 @@ class DataProcessor:
                 await raw_msg.ack()
             else:
                 logger.error(f"No processor found for data type: {msg.get('data_type')}")
-                await raw_msg.nack()
+                await raw_msg.nak()
                 return
 
         except Exception as e:
@@ -258,8 +294,10 @@ class DataProcessor:
             elif ptr == '':
                 ptr = None  # Set empty string to None
             cloud_provider = attributes.get('cloud_provider', None)
-            inserted = await self.db_manager.insert_ip(ip=ip, ptr=ptr, cloud_provider=cloud_provider, program_id=msg_data.get('program_id'))
-            if inserted:
+            result = await self.db_manager.insert_ip(ip=ip, ptr=ptr, cloud_provider=cloud_provider, program_id=msg_data.get('program_id'))
+            logger.debug(result)
+            # Check if operation was successful, regardless of inserted/updated status
+            if result.success:
                 await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
     
     async def process_domain(self, msg_data: Dict[str, Any]):
@@ -437,14 +475,36 @@ class DataProcessor:
             msg = json.loads(raw_msg.data.decode())
             command = msg.get("command")
             target = msg.get("target", "all")
+            target_id = msg.get("target_id")
+
+            # Check if message is targeted for this processor
+            if target not in ["all", "dataprocessor"] and target != self.dataprocessor_id:
+                logger.debug(f"Ignoring control message - not for this processor (target: {target})")
+                return
             
-            if target not in ["all", "dataprocessor"]:
+            # For processor-specific targeting, check if this is the intended processor
+            if target == "dataprocessor" and target_id and target_id != self.dataprocessor_id:
+                logger.debug(f"Ignoring processor-specific message - not for this processor ID (target_id: {target_id})")
                 return
 
             if command == "pause":
-                logger.info("Received pause command")
+                logger.debug(f"Received pause command for {target} {target_id or ''}")
+                if self.state == ProcessorState.PAUSED:
+                    logger.debug("Data processor is already paused, skipping pause command")
+                
                 self.state = ProcessorState.PAUSED
                 self.running.clear()  # Pause message processing
+                
+                # Unsubscribe from data subscription
+                if self.data_subscription:
+                    try:
+                        await self.data_subscription.unsubscribe()
+                        logger.debug(f"Unsubscribed from data subscription: {self.data_subscription}")
+                        self.data_subscription = None
+                    except Exception as e:
+                        logger.error(f"Error unsubscribing: {e}")
+                
+                logger.info(f"Data processor {self.dataprocessor_id} paused")
                 
                 # Send acknowledgment
                 await self.qm.publish_message(
@@ -459,9 +519,20 @@ class DataProcessor:
                 )
             
             elif command == "unpause":
-                logger.info("Received unpause command")
+                logger.debug("Received unpause command")
                 self.state = ProcessorState.RUNNING
                 self.running.set()  # Resume message processing
+                
+                # Resubscribe to the data stream
+                self.data_subscription = await self._setup_subscription(
+                    subject="recon.data",
+                    stream="RECON_DATA",
+                    message_handler=self.message_handler,
+                    queue_group="dataprocessor"
+                )
+                logger.debug(f"Resubscribed to data subscription: {self.data_subscription}")
+                
+                logger.info(f"Data processor {self.dataprocessor_id} resumed")
                 
                 # Send acknowledgment
                 await self.qm.publish_message(
@@ -495,7 +566,7 @@ class DataProcessor:
             await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error handling control message: {e}")
-            await raw_msg.nack()
+            await raw_msg.nak()
     async def generate_report(self) -> Dict[str, Any]:
         """Generate a comprehensive report of the data processor's current state."""
         try:
