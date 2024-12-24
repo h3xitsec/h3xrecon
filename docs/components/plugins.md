@@ -1,265 +1,172 @@
-# H3XRecon Plugin Documentation
+# 🔌 H3XRecon Plugin System
 
-## Table of Contents
+## Overview
 
-- [Introduction](#introduction)
-- [Plugin Overview](#plugin-overview)
-  - [Core Plugins](#core-plugins)
-    - [FindSubdomainsPlugin](#findsubdomainsplugin)
-    - [SubdomainPermutation](#subdomainpermutation)
-    - [FindSubdomainsSubfinder](#findsubdomainssubfinder)
-    - [FindSubdomainsCTFR](#findsubdomainsctfr)
-  - [Network Reconnaissance Plugins](#network-reconnaissance-plugins)
-    - [PortScan](#portscan)
-    - [TestHTTP](#testhttp)
-    - [CIDRIntel](#cidrintel)
-    - [ExpandCIDR](#expandcidr)
-  - [DNS and Resolution Plugins](#dns-and-resolution-plugins)
-    - [ResolveDomain](#resolvedomain)
-    - [TestDomainCatchall](#testdomaincatchall)
-    - [ReverseResolveIP](#reverseresolveip)
-- [Components Utilizing Plugins](#components-utilizing-plugins)
-  - [Worker](#worker)
-  - [JobProcessor](#jobprocessor)
-- [Additional Sections](#additional-sections)
-  - [Conclusion](#conclusion)
-  - [Quick Reference](#quick-reference)
-  - [Troubleshooting](#troubleshooting)
-  - [Contribution Guidelines](#contribution-guidelines)
-- [Supplementary Information](#supplementary-information)
-  - [Acknowledgements](#acknowledgements)
-  - [License](#license)
-  - [Contact](#contact)
+H3XRecon's plugin system provides a flexible and extensible framework for implementing various reconnaissance tasks. Each plugin is a self-contained module that inherits from the `ReconPlugin` base class and implements specific reconnaissance functionality.
 
-## Introduction
+## Plugin Architecture
 
-H3XRecon is a reconnaissance framework designed to automate various reconnaissance tasks through a modular plugin system. Each plugin encapsulates specific reconnaissance functionalities, enabling extensibility and ease of maintenance. This documentation provides an overview of the available plugins, their roles, functionalities, and how they integrate with the core components of H3XRecon: the Worker and JobProcessor.
+### Base Class
 
-## Plugin Overview
+All plugins inherit from the `ReconPlugin` abstract base class:
 
-H3XRecon's plugin system is built around the `ReconPlugin` abstract base class, ensuring consistency across all plugins. Each plugin inherits from this base class and implements the required methods to perform specific reconnaissance tasks.
-
-## Components Utilizing Plugins
-
-### Worker
-
-The `Worker` component is responsible for executing reconnaissance functions dispatched as jobs. It interacts closely with the plugins to perform specific tasks based on incoming job messages.
-
-**Key Responsibilities:**
-- Fetches job messages from the `FUNCTION_EXECUTE` stream.
-- Executes the corresponding plugin functions based on the `function` field in the job message.
-- Publishes the results of the execution to the `FUNCTION_OUTPUT` stream.
-
-**Integration with Plugins:**
-- Initializes a `FunctionExecutor` which maps function names to their corresponding plugin execute methods.
-- Ensures that each plugin is loaded and its execute method is available for job execution.
-
-**Relevant Code:**
-
-## Example Usage
-
-Below is an example of how to integrate a new plugin into the H3XRecon system.
-
-```python:src/h3xrecon/plugins/plugins/example_plugin.py
+```python
 from typing import AsyncGenerator, Dict, Any
+from abc import ABC, abstractmethod
+
+class ReconPlugin(ABC):
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Return the plugin name"""
+        pass
+
+    @abstractmethod
+    async def execute(self, target: str, program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+        """Execute the reconnaissance task"""
+        pass
+
+    @abstractmethod
+    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
+        """Process and store the task output"""
+        pass
+```
+
+### Plugin Categories
+
+#### 1. Subdomain Discovery
+- [FindSubdomainsPlugin](#findsubdomainsplugin): Meta-plugin for subdomain discovery
+- [SubdomainPermutation](#subdomainpermutation): Generates and tests subdomain variations
+- [FindSubdomainsSubfinder](#findsubdomainssubfinder): Uses Subfinder tool
+- [FindSubdomainsCTFR](#findsubdomainsctfr): Uses Certificate Transparency logs
+
+#### 2. Network Reconnaissance
+- [PortScan](#portscan): Port scanning and service detection
+- [TestHTTP](#testhttp): HTTP endpoint testing
+- [CIDRIntel](#cidrintel): CIDR range intelligence gathering
+- [ExpandCIDR](#expandcidr): CIDR expansion to individual IPs
+
+#### 3. DNS Operations
+- [ResolveDomain](#resolvedomain): Domain to IP resolution
+- [TestDomainCatchall](#testdomaincatchall): DNS catchall detection
+- [ReverseResolveIP](#reverseresolveip): IP to domain resolution
+
+## Plugin Development Guide
+
+### 1. Creating a New Plugin
+
+1. Create a new file in `src/h3xrecon/plugins/plugins/`
+2. Inherit from `ReconPlugin`
+3. Implement required methods
+
+Example:
+```python
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import QueueManager
 from loguru import logger
-import asyncio
-import json
 
-class ExamplePlugin(ReconPlugin):
+class CustomPlugin(ReconPlugin):
     @property
     def name(self) -> str:
-        return "example_plugin"
+        return "custom_plugin"
 
-    async def execute(self, target: str, program_id: int = None, execution_id: str = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, target: str, program_id: int = None, execution_id: str = None):
         logger.info(f"Running {self.name} on {target}")
-        # Example command execution
-        command = f"echo 'Example execution on {target}'"
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            shell=True
-        )
-        async for output in self.read_subprocess_output(process):
-            yield {"message": output}
-        await process.wait()
+        # Implement reconnaissance logic here
+        yield {"status": "success", "data": "example output"}
 
-    async def process_output(self, output_msg: Dict[str, Any], db = None) -> Dict[str, Any]:
-        self.config = Config()
-        self.qm = QueueManager(self.config.nats)
+    async def process_output(self, output_msg: Dict[str, Any], db = None):
+        # Process and store results
         message = {
             "program_id": output_msg.get('program_id'),
-            "data_type": "message", 
-            "data": [output_msg.get('output', {}).get('message')]
+            "data_type": "custom_data",
+            "data": output_msg.get('output', {})
         }
-        await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=message)
+        await self.qm.publish_message("recon.data", "RECON_DATA", message)
 ```
 
-### FindSubdomainsPlugin
+### 2. Best Practices
 
-**Description:**  
-The `FindSubdomainsPlugin` is a meta-plugin that triggers multiple subdomain discovery tools. It orchestrates the execution of various subdomain enumeration techniques to gather comprehensive subdomain information for a given target.
+1. **Error Handling**
+   - Use try-except blocks for external tool execution
+   - Log errors with appropriate severity
+   - Return meaningful error messages
 
-**Functionality:**
-- Dispatches jobs to multiple subdomain discovery tools such as `find_subdomains_subfinder` and `find_subdomains_ctfr`.
-- Yields dispatched job information to initiate subdomain discovery processes.
+2. **Resource Management**
+   - Clean up temporary files
+   - Use async context managers
+   - Implement timeouts for long-running operations
 
-**Key Methods:**
-- `execute`: Dispatches subdomain discovery jobs.
-- `send_job`: Sends a job to the worker using `QueueManager`.
-- `process_output`: Processes the output from subdomain discovery tools and dispatches further tasks based on the results.
+3. **Output Format**
+   - Use consistent data structures
+   - Include metadata (timestamps, tool versions)
+   - Follow the schema expected by the data processor
 
-### SubdomainPermutation
+### 3. Testing
 
-**Description:**  
-The `SubdomainPermutation` plugin generates permutations of subdomains based on the target's domain to discover potential hidden subdomains.
+1. Create unit tests in `tests/plugins/`
+2. Test error conditions
+3. Mock external dependencies
+4. Verify output format
 
-**Functionality:**
-- Generates permutations using predefined rules and dispatches them for reverse DNS resolution.
-- Filters results based on DNS catchall detection to avoid unnecessary processing.
+Example test:
+```python
+import pytest
+from h3xrecon.plugins.plugins.custom_plugin import CustomPlugin
 
-**Key Methods:**
-- `execute`: Generates subdomain permutations and yields them as jobs.
-- `process_output`: Determines if the target domain is a DNS catchall and processes the generated permutations accordingly.
+@pytest.mark.asyncio
+async def test_custom_plugin():
+    plugin = CustomPlugin()
+    results = []
+    async for result in plugin.execute("example.com"):
+        results.append(result)
+    assert len(results) > 0
+    assert results[0]["status"] == "success"
+```
 
-### FindSubdomainsSubfinder
+## Integration with Core Components
 
-**Description:**  
-The `FindSubdomainsSubfinder` plugin leverages the `subfinder` tool to discover subdomains of a target domain.
+### Worker Integration
 
-**Functionality:**
-- Executes the `subfinder` command to enumerate subdomains.
-- Parses the output and yields discovered subdomains.
+The Worker component:
+1. Loads plugins dynamically
+2. Maps function names to plugins
+3. Executes plugin functions based on job messages
+4. Handles plugin execution errors
 
-**Key Methods:**
-- `execute`: Runs the `subfinder` command and yields discovered subdomains.
-- `process_output`: Publishes the discovered subdomains to the recon data queue for further processing.
+### JobProcessor Integration
 
+The JobProcessor:
+1. Validates plugin output
+2. Triggers dependent jobs
+3. Updates job status
+4. Manages plugin execution flow
 
-### PortScan
+## Troubleshooting
 
-**Description:**  
-The `PortScan` plugin performs a comprehensive port scan on the target IP to identify open ports and services.
+Common issues and solutions:
 
-**Functionality:**
-- Utilizes `nmap` to scan the top 1000 ports on the target.
-- Parses the XML output to extract port information and service details.
+1. **Plugin Not Loading**
+   - Check file naming
+   - Verify class inheritance
+   - Check for syntax errors
 
-**Key Methods:**
-- `execute`: Executes the `nmap` port scan and yields the scan results.
-- `process_output`: Publishes the scan results to the recon data queue for further analysis.
+2. **Execution Errors**
+   - Check external tool dependencies
+   - Verify input parameters
+   - Check log files
 
+3. **Output Processing Issues**
+   - Verify message format
+   - Check queue connectivity
+   - Validate data types
 
-### TestHTTP
+## Contributing
 
-**Description:**  
-The `TestHTTP` plugin uses the `httpx` tool to perform HTTP testing on discovered URLs.
+1. Fork the repository
+2. Create a feature branch
+3. Add your plugin
+4. Add tests
+5. Submit a pull request
 
-**Functionality:**
-- Executes `httpx` with various parameters to gather detailed HTTP information.
-- Parses the JSON output and yields the results.
-
-**Key Methods:**
-- `execute`: Runs the `httpx` command and yields the HTTP test results.
-- `process_output`: Publishes the HTTP test results and any discovered domains to the recon data queue.
-
-
-### CIDRIntel
-
-**Description:**  
-The `CIDRIntel` plugin gathers intelligence on a given CIDR range by employing the `amass` tool.
-
-**Functionality:**
-- Executes `amass intel` to fetch domain and IP information within the specified CIDR range.
-- Parses and yields the collected data.
-
-**Key Methods:**
-- `execute`: Runs the `amass intel` command and yields the intelligence data.
-- `process_output`: Publishes the collected domain and IP information to the recon data queue.
-
-
-### ResolveDomain
-
-**Description:**  
-The `ResolveDomain` plugin resolves domain names to their respective IP addresses using `dnsx`.
-
-**Functionality:**
-- Executes a DNS resolution command to obtain A and CNAME records.
-- Parses the JSON output and yields the resolved data.
-
-**Key Methods:**
-- `execute`: Runs the DNS resolution command and yields the resolved data.
-- `process_output`: Publishes the resolved IPs and domains to the recon data queue.
-
-
-### FindSubdomainsCTFR
-
-**Description:**  
-The `FindSubdomainsCTFR` plugin utilizes the CTFR tool to perform subdomain enumeration through Certificate Transparency logs.
-
-**Functionality:**
-- Executes the CTFR script to discover subdomains and yields the results.
-- Cleans up temporary log files post-execution.
-
-**Key Methods:**
-- `execute`: Runs the CTFR tool and yields discovered subdomains.
-- `process_output`: Publishes the discovered subdomains to the recon data queue.
-
-
-### TestDomainCatchall
-
-**Description:**  
-The `TestDomainCatchall` plugin checks whether a domain is a DNS catchall, which automatically resolves any subdomain.
-
-**Functionality:**
-- Generates a random subdomain and attempts to resolve it.
-- Determines if the domain is a catchall based on the resolution results.
-
-**Key Methods:**
-- `execute`: Checks for DNS catchall by resolving a random subdomain.
-- `process_output`: Publishes the catchall status of the domain to the recon data queue.
-
-
-### ReverseResolveIP
-
-**Description:**  
-The `ReverseResolveIP` plugin performs reverse DNS lookups to identify domains associated with a given IP address.
-
-**Functionality:**
-- Executes a reverse DNS resolution command to obtain PTR records.
-- Parses and yields the resolved domains.
-
-**Key Methods:**
-- `execute`: Runs the reverse DNS resolution command and yields the resolved domain.
-- `process_output`: Publishes the resolved domain and associated IP information to the recon data queue.
-
-### ExpandCIDR
-
-**Description:**  
-The `ExpandCIDR` plugin expands a CIDR notation into individual IP addresses and dispatches reverse DNS resolution tasks for each IP.
-
-**Functionality:**
-- Uses the `prips` tool to list all IPs within the specified CIDR range.
-- Dispatches `reverse_resolve_ip` tasks for each IP found.
-
-**Key Methods:**
-- `execute`: Expands the CIDR to individual IPs and yields reverse resolution jobs.
-- `process_output`: Publishes reverse DNS resolution tasks to the function execution queue.
-
-
-### ReverseResolveIP
-
-**Description:**  
-The `ReverseResolveIP` plugin performs reverse DNS lookups to identify domains associated with a given IP address.
-
-**Functionality:**
-- Executes a reverse DNS resolution command to obtain PTR records.
-- Parses and yields the resolved domains.
-
-**Key Methods:**
-- `execute`: Runs the reverse DNS resolution command and yields the resolved domain.
-- `process_output`: Publishes the resolved domain and associated IP information to the recon data queue.
-
+For detailed contribution guidelines, see [CONTRIBUTING.md](../../CONTRIBUTING.md).

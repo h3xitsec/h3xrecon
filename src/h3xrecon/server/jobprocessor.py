@@ -4,6 +4,7 @@ from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
+from h3xrecon.core.utils import debug_trace
 from h3xrecon.core.preflight import PreflightCheck
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from datetime import datetime, timezone, timedelta
@@ -83,18 +84,31 @@ class JobProcessor:
             db=redis_config.db,
             password=redis_config.password
         )
-        # Connect to the status redis db to flush all worker statuses
-        self.redis_status = redis.Redis(
-            host=config.redis.host,
-            port=config.redis.port,
-            db=1,
-            password=config.redis.password
-        )
-        self.state = ProcessorState.RUNNING
-        self.control_subscription = None
-        self.output_subscription = None
-        self.running = asyncio.Event()
-        self.running.set()  # Start in running state
+        try:
+            logger.debug(f"Connecting to Redis status db at {config.redis.host}:{config.redis.port} db=1")
+            self.redis_status = redis.Redis(
+                host=config.redis.host,
+                port=config.redis.port,
+                db=1,
+                password=config.redis.password
+            )
+            # Test connection
+            self.redis_status.ping()
+            logger.debug("Successfully connected to Redis status db")
+            self.state = ProcessorState.RUNNING
+            self.control_subscription = None
+            self.output_subscription = None
+            self.running = asyncio.Event()
+            self.running.set()  # Start in running state
+        except redis.exceptions.ConnectionError as e:
+            logger.error(f"Failed to connect to Redis status db: {e}")
+            self.redis_status = None
+        except redis.exceptions.AuthenticationError:
+            logger.error("Redis authentication failed")
+            self.redis_status = None
+        except Exception as e:
+            logger.error(f"Unexpected error connecting to Redis: {e}")
+            self.redis_status = None
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
             logger.debug(f"Found plugin package at: {package.__path__}")
@@ -230,7 +244,7 @@ class JobProcessor:
                 },
                 broadcast=True
             )
-
+            self.set_status("running")  # Set initial status
             # Start health check
             self._health_check_task = asyncio.create_task(self._health_check())
         except Exception as e:
@@ -239,6 +253,9 @@ class JobProcessor:
 
     async def stop(self):
         logger.info("Shutting down...")
+        # Clean up Redis status
+        if hasattr(self, 'redis_status'):
+            self.redis_status.delete(self.jobprocessor_id)
 
     async def message_handler(self, raw_msg):
         msg = json.loads(raw_msg.data.decode())
@@ -400,6 +417,7 @@ class JobProcessor:
                 
                 self.state = ProcessorState.PAUSED
                 self.running.clear()  # Pause message processing
+                self.set_status("paused")  # Update Redis status
                 
                 # Unsubscribe from output subscription
                 if self.output_subscription:
@@ -412,14 +430,15 @@ class JobProcessor:
                 
                 logger.info(f"Job processor {self.jobprocessor_id} paused")
                 
-                # Send acknowledgment
+                # Send acknowledgment to dedicated stream
                 await self.qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
+                    subject="control.response.pause",
+                    stream="CONTROL_RESPONSE_PAUSE",
                     message={
-                        "processor_id": self.jobprocessor_id,
+                        "component_id": self.jobprocessor_id,
                         "type": "jobprocessor",
                         "status": "paused",
+                        "success": True,
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
@@ -428,6 +447,7 @@ class JobProcessor:
                 logger.debug("Received unpause command")
                 self.state = ProcessorState.RUNNING
                 self.running.set()  # Resume message processing
+                self.set_status("running")  # Update Redis status
                 
                 # Resubscribe to the output stream
                 await self._setup_subscription()
@@ -435,14 +455,15 @@ class JobProcessor:
                 
                 logger.info(f"Job processor {self.jobprocessor_id} resumed")
                 
-                # Send acknowledgment
+                # Send acknowledgment to dedicated stream
                 await self.qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
+                    subject="control.response.unpause",
+                    stream="CONTROL_RESPONSE_UNPAUSE",
                     message={
-                        "processor_id": self.jobprocessor_id,
+                        "component_id": self.jobprocessor_id,
                         "type": "jobprocessor",
                         "status": "running",
+                        "success": True,
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
@@ -464,6 +485,19 @@ class JobProcessor:
                     }
                 )
                 logger.debug("Job processor report sent")
+            elif command == 'ping':
+                logger.info(f"Received ping from {msg.get('target')}")
+                # Send pong response
+                await self.qm.publish_message(
+                    subject="control.response.ping",
+                    stream="CONTROL_RESPONSE_PING",
+                    message={
+                        "component_id": self.jobprocessor_id,
+                        "type": "jobprocessor",
+                        "command": "pong",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
             await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error handling control message: {e}")
@@ -524,6 +558,10 @@ class JobProcessor:
         except Exception as e:
             logger.error(f"Error generating report: {e}")
             return {"error": str(e)}
+
+    @debug_trace
+    def set_status(self, status: str):
+        self.redis_status.set(self.jobprocessor_id, status)
 
 async def main():
     config = Config()

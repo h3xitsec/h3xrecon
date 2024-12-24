@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional, Callable, Awaitable
 from nats.aio.client import Client as NATS
 from nats.js.api import ConsumerConfig, DeliverPolicy, AckPolicy, ReplayPolicy
 from nats.errors import TimeoutError as NatsTimeoutError, ConnectionClosedError, NoRespondersError
+from nats.js.errors import NotFoundError
 import random
 from loguru import logger
 import json
@@ -89,8 +90,11 @@ class QueueManager:
         # Try to delete existing consumer if it exists
         if durable_name:
             try:
-                await self.js.delete_consumer(stream, durable_name)
-                logger.debug(f"Deleted existing consumer {durable_name} from stream {stream}")
+                if self.js.consumer_info(stream, durable_name):
+                    await self.js.delete_consumer(stream, durable_name)
+                    logger.debug(f"Deleted existing consumer {durable_name} from stream {stream}")
+            except NotFoundError:
+                pass
             except Exception as e:
                 logger.debug(f"No existing consumer to delete or error deleting: {e}")
         

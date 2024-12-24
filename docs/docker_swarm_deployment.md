@@ -1,23 +1,33 @@
 # 🌐 Docker Swarm Deployment
 
-⚠️ **WARNING**: The documentation for the remote deployment is currently incomplete and under active development. Details may change.
+This guide explains how to deploy H3XRecon on a Docker Swarm cluster using Ansible for automation.
 
-Ansible is used to deploy the H3XRecon stack to a remote Docker Swarm cluster.
+## Overview
 
-It setup the whole docker swarm cluster and deploys the stack
-
-It has the option to use Tailscale as a communication layer between the nodes so there is no need to setup a VPN or forward ports.
+H3XRecon's Docker Swarm deployment:
+- Uses Ansible for automated cluster setup and deployment
+- Supports Tailscale for secure node communication (optional)
+- Provides scalable worker deployment
+- Includes monitoring and logging setup
 
 ## Suggested Infrastructure
 
-- 1 Processor
-- 4 Workers
+- **Processor Node**: 1 instance (4 vCPUs, 8GB RAM minimum)
+  - Runs core services (database, message broker, processors)
+  - Can be hosted on your local network
+  
+- **Worker Nodes**: 4+ instances (2 vCPUs, 4GB RAM each minimum)
+  - Runs reconnaissance tasks
+  - Should have public IP addresses
+  - Can be scaled horizontally
 
-You can run the processor node on any machine on your home network as those components won't do any reconnaissance on targets.
+### Cloud Provider Recommendations
 
-For the worker nodes, you can use the [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/) which includes 4 vCPUs and 24GB of RAM which you can split on 4 instances.
-
-You can get 4 of those instance, each with a public IP address
+You can use [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/) which provides:
+- 4 ARM-based instances
+- Each with 24GB RAM and 4 OCPUs
+- Always Free service
+- Public IP addresses included
 
 ![Oracle Cloud Free Tier](../docs/assets/oci_free_tier.png)
 

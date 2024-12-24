@@ -4,6 +4,7 @@ from h3xrecon.core import QueueManager
 from h3xrecon.core import PreflightCheck
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.__about__ import __version__
+from h3xrecon.core.utils import debug_trace
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 import asyncio
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from datetime import datetime, timezone, timedelta
 from enum import Enum
 import psutil
 import platform
+import redis
 
 
 @dataclass
@@ -68,6 +70,11 @@ class DataProcessor:
         self.state = ProcessorState.RUNNING
         self.control_subscription = None
         self.data_subscription = None
+        # Add Redis status connection
+        
+    @debug_trace
+    def set_status(self, status: str):
+        self.redis_status.set(self.dataprocessor_id, status)
 
     async def _setup_subscription(self, subject: str, stream: str, message_handler: Callable, 
                                 broadcast: bool = False, queue_group: str = None):
@@ -166,7 +173,13 @@ class DataProcessor:
                 },
                 broadcast=True
             )
-
+            self.redis_status = redis.Redis(
+                host=self.config.redis.host,
+                port=self.config.redis.port,
+                db=1,
+                password=self.config.redis.password
+            )
+            self.set_status("running")
             # Start health check
             self._health_check_task = asyncio.create_task(self._health_check())
         except Exception as e:
@@ -175,6 +188,9 @@ class DataProcessor:
 
     async def stop(self):
         logger.info("Shutting down...")
+        # Clean up Redis status
+        if hasattr(self, 'redis_status'):
+            self.redis_status.delete(self.dataprocessor_id)
 
     async def message_handler(self, raw_msg):
         msg = json.loads(raw_msg.data.decode())
@@ -494,6 +510,7 @@ class DataProcessor:
                 
                 self.state = ProcessorState.PAUSED
                 self.running.clear()  # Pause message processing
+                self.set_status("paused")  # Update Redis status
                 
                 # Unsubscribe from data subscription
                 if self.data_subscription:
@@ -506,14 +523,15 @@ class DataProcessor:
                 
                 logger.info(f"Data processor {self.dataprocessor_id} paused")
                 
-                # Send acknowledgment
+                # Send acknowledgment to dedicated stream
                 await self.qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
+                    subject="control.response.pause",
+                    stream="CONTROL_RESPONSE_PAUSE",
                     message={
-                        "processor_id": self.dataprocessor_id,
+                        "component_id": self.dataprocessor_id,
                         "type": "dataprocessor",
                         "status": "paused",
+                        "success": True,
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
@@ -522,6 +540,7 @@ class DataProcessor:
                 logger.debug("Received unpause command")
                 self.state = ProcessorState.RUNNING
                 self.running.set()  # Resume message processing
+                self.set_status("running")  # Update Redis status
                 
                 # Resubscribe to the data stream
                 self.data_subscription = await self._setup_subscription(
@@ -534,14 +553,15 @@ class DataProcessor:
                 
                 logger.info(f"Data processor {self.dataprocessor_id} resumed")
                 
-                # Send acknowledgment
+                # Send acknowledgment to dedicated stream
                 await self.qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
+                    subject="control.response.unpause",
+                    stream="CONTROL_RESPONSE_UNPAUSE",
                     message={
-                        "processor_id": self.dataprocessor_id,
+                        "component_id": self.dataprocessor_id,
                         "type": "dataprocessor",
                         "status": "running",
+                        "success": True,
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
@@ -563,6 +583,19 @@ class DataProcessor:
                     }
                 )
                 logger.debug("Data processor report sent")
+            elif command == 'ping':
+                logger.info(f"Received ping from {msg.get('target')}")
+                # Send pong response
+                await self.qm.publish_message(
+                    subject="control.response.ping",
+                    stream="CONTROL_RESPONSE_PING",
+                    message={
+                        "component_id": self.dataprocessor_id,
+                        "type": "dataprocessor",
+                        "command": "pong",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
             await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error handling control message: {e}")

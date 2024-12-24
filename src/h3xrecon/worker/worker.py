@@ -7,6 +7,7 @@ from h3xrecon.core import QueueManager, DatabaseManager, Config, PreflightCheck
 from h3xrecon.core.utils import debug_trace
 from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
+from nats.js.errors import NotFoundError
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import uuid
@@ -180,31 +181,46 @@ class Worker:
     async def _setup_execute_subscription(self):
         """Helper method to set up the function.execute subscription."""
         logger.debug("Setting up execute subscription...")
-        subscription = await self.qm.subscribe(
-            subject="function.execute",
-            stream="FUNCTION_EXECUTE",
-            message_handler=self.message_handler,
-            durable_name="WORKERS",
-            batch_size=1,
-            queue_group="workers",
-            consumer_config={
-                'ack_policy': AckPolicy.EXPLICIT,
-                'deliver_policy': DeliverPolicy.NEW,
-                'replay_policy': ReplayPolicy.INSTANT,
-                'max_deliver': 1,
-                'max_ack_pending': 1000,
-                'flow_control': False,  # Disable flow control for pull-based
-                'deliver_group': 'workers'  # Ensure queue group is set in config
-            },
-            pull_based=True  # Enable pull-based subscription
-        )
-        self._execute_subscription = subscription
-        logger.debug(dir(self._execute_subscription))
-        self._execute_sub_key = f"FUNCTION_EXECUTE:function.execute:EXECUTE_{self.worker_id}"
-        logger.info("Successfully subscribed to execute channel")
-        
-        # Start the pull message processing loop
-        asyncio.create_task(self._process_pull_messages())
+        try:
+            # Clean up existing subscription if it exists
+            if self._execute_subscription:
+                try:
+                    await self._execute_subscription.unsubscribe()
+                    logger.debug("Successfully unsubscribed from execute subscription")
+                except NotFoundError:
+                    logger.debug("Execute subscription already deleted.")
+                except Exception as e:
+                    logger.warning(f"Error unsubscribing from execute subscription: {e}")
+                finally:
+                    self._execute_subscription = None
+
+            subscription = await self.qm.subscribe(
+                subject="function.execute",
+                stream="FUNCTION_EXECUTE",
+                message_handler=self.message_handler,
+                durable_name="WORKERS",
+                batch_size=1,
+                queue_group="workers",
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT,
+                    'max_deliver': 1,
+                    'max_ack_pending': 1000,
+                    'flow_control': False,  # Disable flow control for pull-based
+                    'deliver_group': 'workers'  # Ensure queue group is set in config
+                },
+                pull_based=True  # Enable pull-based subscription
+            )
+            self._execute_subscription = subscription
+            self._execute_sub_key = f"FUNCTION_EXECUTE:function.execute:EXECUTE_{self.worker_id}"
+            logger.info("Successfully subscribed to execute channel")
+            
+            # Start the pull message processing loop
+            asyncio.create_task(self._process_pull_messages())
+        except Exception as e:
+            logger.error(f"Error setting up execute subscription: {e}")
+            raise
 
     @debug_trace
     async def _process_pull_messages(self):
@@ -257,8 +273,9 @@ class Worker:
                 self._processing = True
                 self.state = ProcessorState.BUSY
                 self.set_status(f"busy")
-                await self._execute_subscription.unsubscribe()
-                self._execute_subscription = None
+                if self.execution_subscription:
+                    await self.execution_subscription.unsubscribe()
+                    self.execution_subscription = None
 
             try:
                 msg = json.loads(raw_msg.data.decode())
@@ -340,17 +357,21 @@ class Worker:
             # Check if message is targeted for this worker
             if target not in ["all", "worker"] and target != self.worker_id:
                 logger.debug(f"Ignoring control message - not for this worker (target: {target})")
+                await raw_msg.ack()
                 return
             
             # For worker-specific targeting, check if this is the intended worker
             if target == "worker" and target_id and target_id != self.worker_id:
                 logger.debug(f"Ignoring worker-specific message - not for this worker ID (target_id: {target_id})")
+                await raw_msg.ack()
                 return
 
             if command == "pause":
                 logger.debug(f"Received pause command for {target} {target_id or ''}")
                 if self.state == ProcessorState.PAUSED:
                     logger.debug("Worker is already paused, skipping pause command")
+                    await raw_msg.ack()
+                    return
                 
                 self.state = ProcessorState.PAUSED
                 # Unsubscribe from execute subscriptions
@@ -358,9 +379,11 @@ class Worker:
                     try:
                         await self._execute_subscription.unsubscribe()
                         logger.debug(f"Unsubscribed from execute subscription: {self._execute_subscription}")
-                        self._execute_subscription = None
                     except Exception as e:
-                        pass
+                        logger.warning(f"Error unsubscribing from execute subscription: {e}")
+                    finally:
+                        self._execute_subscription = None
+                        
                 self.set_status("paused")
                 logger.info(f"Worker {self.worker_id} paused")
                 
@@ -391,9 +414,11 @@ class Worker:
                             await self._execute_subscription.unsubscribe()
                         except Exception as e:
                             logger.warning(f"Error unsubscribing existing subscription: {e}")
-                        self._execute_subscription = None
+                        finally:
+                            self._execute_subscription = None
 
-                    # Resubscribe to the execute stream
+                    # Resubscribe to the execute stream with a small delay
+                    await asyncio.sleep(0.5)  # Add a small delay before resubscribing
                     await self._setup_execute_subscription()
                     
                     # Verify subscription was successful
@@ -666,6 +691,15 @@ class Worker:
         for execution_id, task in list(self.running_tasks.items()):
             task.cancel()
             logger.info(f"Cancelled task with Execution ID: {execution_id}")
+        
+        # Clean up execute subscription
+        if self._execute_subscription:
+            try:
+                await self._execute_subscription.unsubscribe()
+                logger.debug("Successfully unsubscribed from execute subscription during shutdown")
+            except Exception as e:
+                logger.warning(f"Error unsubscribing from execute subscription during shutdown: {e}")
+            self._execute_subscription = None
         
         # Disconnect both queue managers
         if self.qm:
