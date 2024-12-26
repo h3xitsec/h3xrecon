@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import asyncio
 import json
 import os
-from pydantic import BaseModel, Field, IPvAnyAddress, AnyHttpUrl, constr
+from pydantic import BaseModel, Field, IPvAnyAddress, AnyHttpUrl
 from typing import Union, Optional
 
 @dataclass

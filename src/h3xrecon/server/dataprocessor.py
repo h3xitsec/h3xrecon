@@ -2,7 +2,6 @@ from h3xrecon.core.component import ReconComponent, ProcessorState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.__about__ import __version__
-from h3xrecon.core.utils import debug_trace
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable

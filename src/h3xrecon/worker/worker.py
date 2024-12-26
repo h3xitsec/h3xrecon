@@ -1,23 +1,16 @@
 import asyncio
-import socket
 import sys
 from loguru import logger
 from h3xrecon.core.component import ReconComponent, ProcessorState
 from h3xrecon.worker.executor import FunctionExecutor
 from h3xrecon.core import Config
-from h3xrecon.core.utils import debug_trace
 from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
-from nats.js.errors import NotFoundError
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
-import redis
-import random
 from enum import Enum
-import psutil
-import platform
 import json
 
 class ProcessorState(Enum):

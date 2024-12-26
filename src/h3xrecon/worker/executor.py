@@ -6,9 +6,7 @@ from h3xrecon.core import Config
 from loguru import logger
 import importlib
 import pkgutil
-import json
 import redis
-import asyncio
 from datetime import datetime, timezone
 from h3xrecon.core.queue import StreamUnavailableError
 

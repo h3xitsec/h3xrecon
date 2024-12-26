@@ -3,7 +3,6 @@ from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import *
 from loguru import logger
 import asyncio
-import json
 import os
 
 class Sleep(ReconPlugin):

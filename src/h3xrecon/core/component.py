@@ -10,9 +10,7 @@ from datetime import datetime, timezone, timedelta
 from h3xrecon.core.config import Config
 from enum import Enum
 from loguru import logger
-from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
-from nats.js.errors import NotFoundError
-from typing import Dict, Any, Callable, Optional
+from typing import Dict, Any
 from h3xrecon.core import QueueManager, DatabaseManager, PreflightCheck
 from h3xrecon.__about__ import __version__
 

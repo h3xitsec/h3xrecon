@@ -1,17 +1,15 @@
 from h3xrecon.core.component import ReconComponent, ProcessorState
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
-from h3xrecon.core.utils import debug_trace
 from h3xrecon.core import Config
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, Any, Callable, List
 from loguru import logger
 from dataclasses import dataclass
 import importlib
 import pkgutil
 import json
-import uuid
 import traceback
 import asyncio
 import sys
