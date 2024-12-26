@@ -4,8 +4,10 @@ from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
+from h3xrecon.core.utils import debug_trace
 from h3xrecon.core.preflight import PreflightCheck
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
+from nats.js.errors import NotFoundError
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Callable, List
 from loguru import logger
@@ -74,7 +76,9 @@ class JobProcessor:
         self.config = config
         self.db = DatabaseManager()
         self.qm = QueueManager(client_name="jobprocessor", config=config.nats)
-        self.jobprocessor_id = f"jobprocessor-{socket.gethostname()}"
+        self.role = "jobprocessor"
+        self.component_id = f"{self.role}-{socket.gethostname()}"
+        self.jobprocessor_id = self.component_id
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
         redis_config = config.redis
         self.redis_cache = redis.Redis(
@@ -83,18 +87,31 @@ class JobProcessor:
             db=redis_config.db,
             password=redis_config.password
         )
-        # Connect to the status redis db to flush all worker statuses
-        self.redis_status = redis.Redis(
-            host=config.redis.host,
-            port=config.redis.port,
-            db=1,
-            password=config.redis.password
-        )
-        self.state = ProcessorState.RUNNING
-        self.control_subscription = None
-        self.output_subscription = None
-        self.running = asyncio.Event()
-        self.running.set()  # Start in running state
+        try:
+            logger.debug(f"Connecting to Redis status db at {config.redis.host}:{config.redis.port} db=1")
+            self.redis_status = redis.Redis(
+                host=config.redis.host,
+                port=config.redis.port,
+                db=1,
+                password=config.redis.password
+            )
+            # Test connection
+            self.redis_status.ping()
+            logger.debug("Successfully connected to Redis status db")
+            self.state = ProcessorState.RUNNING
+            self.control_subscription = None
+            self.output_subscription = None
+            self.running = asyncio.Event()
+            self.running.set()  # Start in running state
+        except redis.exceptions.ConnectionError as e:
+            logger.error(f"Failed to connect to Redis status db: {e}")
+            self.redis_status = None
+        except redis.exceptions.AuthenticationError:
+            logger.error("Redis authentication failed")
+            self.redis_status = None
+        except Exception as e:
+            logger.error(f"Unexpected error connecting to Redis: {e}")
+            self.redis_status = None
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
             logger.debug(f"Found plugin package at: {package.__path__}")
@@ -135,26 +152,43 @@ class JobProcessor:
 
         self._last_message_time = None
         self._health_check_task = None
+        self._output_subscription = None
 
-    async def _setup_subscription(self, subject: str, stream: str, message_handler: Callable, 
-                                broadcast: bool = False, queue_group: str = None):
+    async def _setup_subscription(self):
         """Helper method to setup NATS subscriptions with consistent configuration."""
         try:
+            if self._output_subscription:
+                try:
+                    await self._output_subscription.unsubscribe()
+                    logger.debug("Successfully unsubscribed from output subscription")
+                except NotFoundError:
+                    logger.debug("Output subscription already deleted.")
+                except Exception as e:
+                    logger.warning(f"Error unsubscribing from output subscription: {e}")
+                finally:
+                    self._output_subscription = None
+
             subscription = await self.qm.subscribe(
-                subject=subject,
-                stream=stream,
-                message_handler=message_handler,
-                durable_name=None,
+                subject="function.output",
+                stream="FUNCTION_OUTPUT",
+                durable_name=f"JOBPROCESSORS",
+                message_handler=self.message_handler,
                 batch_size=1,
-                queue_group=queue_group,
+                queue_group="jobprocessors",
                 consumer_config={
                     'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.ALL,
+                    'deliver_policy': DeliverPolicy.NEW,
                     'replay_policy': ReplayPolicy.INSTANT,
-                    'max_deliver': 1
+                    'max_deliver': 1,
+                    'max_ack_pending': 1000,
+                    'flow_control': False,
+                    'deliver_group': 'jobprocessors'
                 },
-                broadcast=broadcast
+                pull_based=True
             )
+            self._output_subscription = subscription
+            self._output_sub_key = f"FUNCTION_OUTPUT:function.output:OUTPUT_{self.jobprocessor_id}"
+            logger.info("Successfully subscribed to output channel")
             return subscription
         except Exception as e:
             logger.error(f"Failed to setup subscription: {e}")
@@ -175,12 +209,9 @@ class JobProcessor:
                 try:
                     await self.qm.connect()
                     # Store the subscription object
-                    self.output_subscription = await self._setup_subscription(
-                        subject="function.output",
-                        stream="FUNCTION_OUTPUT",
-                        message_handler=self.message_handler,
-                        queue_group="jobprocessor"
-                    )
+                    logger.debug("Attempting to subscribe to function.output stream")
+                    self.output_subscription = await self._setup_subscription()
+                    logger.debug("Successfully subscribed to function.output stream")
                     logger.info(f"Job Processor started and listening for messages...")
                     break
                 except Exception as e:
@@ -189,28 +220,104 @@ class JobProcessor:
                         raise e
                     await asyncio.sleep(1)
 
-            # Add control message subscription
-            await self._setup_subscription(
-                subject="function.control",
+            # Subscribe to broadcast messages (all components)
+            await self.qm.subscribe(
+                subject="function.control.all",
                 stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_ALL_{self.jobprocessor_id}",
                 message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
                 broadcast=True
             )
 
+            # Subscribe to broadcast messages (all workers)
+            await self.qm.subscribe(
+                subject="function.control.all_jobprocessor",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_ALL_JOBPROCESSOR_{self.jobprocessor_id}",
+                message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
+            
+            # Subscribe to worker-specific messages
+            await self.qm.subscribe(
+                subject=f"function.control.{self.jobprocessor_id}",
+                stream="FUNCTION_CONTROL",
+                durable_name=f"CONTROL_{self.jobprocessor_id}",
+                message_handler=self.control_message_handler,
+                batch_size=1,
+                consumer_config={
+                    'ack_policy': AckPolicy.EXPLICIT,
+                    'deliver_policy': DeliverPolicy.NEW,
+                    'replay_policy': ReplayPolicy.INSTANT
+                },
+                broadcast=True
+            )
+            await self.set_status("running")  # Set initial status
             # Start health check
             self._health_check_task = asyncio.create_task(self._health_check())
+            # Start message processing loop
+            asyncio.create_task(self._process_pull_messages())
         except Exception as e:
             logger.error(f"Failed to start job processor: {str(e)}")
             sys.exit(1)
 
+    async def _process_pull_messages(self):
+        """Process messages from the pull-based subscription."""
+        while True:
+            if self.state == ProcessorState.PAUSED:
+                await asyncio.sleep(1)
+                continue
+
+            try:
+                # Check if we have a valid subscription
+                if not self._output_subscription:
+                    logger.debug("No output subscription found, setting up...")
+                    await self._setup_subscription()
+                    continue
+
+                # Fetch messages
+                #logger.debug("Attempting to fetch messages...")
+                messages = await self.qm.fetch_messages(self._output_subscription, batch_size=1)
+                
+                if messages:
+                    logger.debug(f"Received {len(messages)} messages")
+                    for msg in messages:
+                        # Process each message
+                        await self.message_handler(msg)
+                else:
+                    #logger.debug("No messages received, waiting...")
+                    await asyncio.sleep(0.1)
+
+            except asyncio.CancelledError:
+                logger.info("Pull message processing loop cancelled")
+                break
+            except Exception as e:
+                if not isinstance(e, TimeoutError):
+                    logger.error(f"Error in pull message processing loop: {e}")
+                await asyncio.sleep(0.1)
+
     async def stop(self):
         logger.info("Shutting down...")
+        # Clean up Redis status
+        if hasattr(self, 'redis_status'):
+            self.redis_status.delete(self.jobprocessor_id)
 
     async def message_handler(self, raw_msg):
         msg = json.loads(raw_msg.data.decode())
         if self.state == ProcessorState.PAUSED:
-            logger.debug("Processor is paused, skipping message")
-            await raw_msg.nack()
+            await raw_msg.nak()
             return
 
         try:
@@ -231,13 +338,17 @@ class JobProcessor:
                 await raw_msg.ack()
             else:
                 logger.error(f"No function name found in message: {msg}")
-                await raw_msg.nack()
+                await raw_msg.nak()
             
         except (KeyError, ValueError, TypeError) as e:
             error_location = traceback.extract_tb(e.__traceback__)[-1]
             file_name = error_location.filename.split('/')[-1]
             line_number = error_location.lineno
             logger.error(f"Error in {file_name}:{line_number} - {type(e).__name__}: {str(e)}")
+        finally:
+            if not raw_msg._ackd:
+                await raw_msg.ack()
+            await self.set_status("running")
     
     async def log_or_update_function_execution(self, message_data: Dict[str, Any], execution_id: str, timestamp: str):
         try:
@@ -337,12 +448,7 @@ class JobProcessor:
         try:
             logger.info("Reconnecting subscriptions...")
             await self.qm.connect()
-            self.output_subscription = await self._setup_subscription(
-                subject="function.output",
-                stream="FUNCTION_OUTPUT",
-                message_handler=self.message_handler,
-                queue_group="jobprocessor"
-            )
+            self.output_subscription = await self._setup_subscription()
             logger.info("Successfully reconnected subscriptions")
         except Exception as e:
             logger.error(f"Error reconnecting subscriptions: {e}")
@@ -353,40 +459,88 @@ class JobProcessor:
             msg = json.loads(raw_msg.data.decode())
             command = msg.get("command")
             target = msg.get("target", "all")
+            target_id = msg.get("target_id")
+
+            # Check if message is targeted for this processor
+            if target not in ["all", "jobprocessor"] and target != self.jobprocessor_id:
+                logger.debug(f"Ignoring control message - not for this processor (target: {target})")
+                await raw_msg.ack()
+                return
             
-            if target not in ["all", "jobprocessor"]:
+            # For processor-specific targeting, check if this is the intended processor
+            if target == "jobprocessor" and target_id and target_id != self.jobprocessor_id:
+                logger.debug(f"Ignoring processor-specific message - not for this processor ID (target_id: {target_id})")
+                await raw_msg.ack()
                 return
 
             if command == "pause":
-                logger.info("Received pause command")
+                logger.debug(f"Received pause command for {target} {target_id or ''}")
+                if self.state == ProcessorState.PAUSED:
+                    logger.debug("Job processor is already paused, sending response")
+                    # Send acknowledgment even when already paused
+                    await self.qm.publish_message(
+                        subject="control.response.pause",
+                        stream="CONTROL_RESPONSE_PAUSE",
+                        message={
+                            "component_id": self.jobprocessor_id,
+                            "type": "jobprocessor",
+                            "status": "paused",
+                            "success": True,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                    )
+                    await raw_msg.ack()
+                    return
+                
                 self.state = ProcessorState.PAUSED
                 self.running.clear()  # Pause message processing
+                await self.set_status("paused")  # Update Redis status
                 
-                # Send acknowledgment
+                # Unsubscribe from output subscription
+                if self.output_subscription:
+                    try:
+                        await self.output_subscription.unsubscribe()
+                        logger.debug(f"Unsubscribed from output subscription: {self.output_subscription}")
+                        self.output_subscription = None
+                    except Exception as e:
+                        logger.error(f"Error unsubscribing: {e}")
+                
+                logger.info(f"Job processor {self.jobprocessor_id} paused")
+                
+                # Send acknowledgment to dedicated stream
                 await self.qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
+                    subject="control.response.pause",
+                    stream="CONTROL_RESPONSE_PAUSE",
                     message={
-                        "processor_id": self.jobprocessor_id,
+                        "component_id": self.jobprocessor_id,
                         "type": "jobprocessor",
                         "status": "paused",
+                        "success": True,
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
             
             elif command == "unpause":
-                logger.info("Received unpause command")
+                logger.debug("Received unpause command")
                 self.state = ProcessorState.RUNNING
                 self.running.set()  # Resume message processing
                 
-                # Send acknowledgment
+                # Resubscribe to the output stream
+                await self._setup_subscription()
+                logger.debug(f"Resubscribed to output subscription: {self.output_subscription}")
+                
+                logger.info(f"Job processor {self.jobprocessor_id} resumed")
+                await self.set_status("running")  # Update Redis status
+                # Send acknowledgment to dedicated stream
                 await self.qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
+                    subject="control.response.unpause",
+                    stream="CONTROL_RESPONSE_UNPAUSE",
                     message={
-                        "processor_id": self.jobprocessor_id,
+                        "component_id": self.jobprocessor_id,
                         "type": "jobprocessor",
                         "status": "running",
+                        "success": True,
+                        "command": "unpause",
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
@@ -408,10 +562,23 @@ class JobProcessor:
                     }
                 )
                 logger.debug("Job processor report sent")
+            elif command == 'ping':
+                logger.info(f"Received ping from {msg.get('target')}")
+                # Send pong response
+                await self.qm.publish_message(
+                    subject="control.response.ping",
+                    stream="CONTROL_RESPONSE_PING",
+                    message={
+                        "component_id": self.jobprocessor_id,
+                        "type": "jobprocessor",
+                        "command": "pong",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
             await raw_msg.ack()
         except Exception as e:
-            logger.error(f"Error handling control message: {e}")
-            await raw_msg.nack()
+            logger.error(f"Error in control_message_handler: {e}")
+            await raw_msg.nak()
 
     async def generate_report(self) -> Dict[str, Any]:
         """Generate a comprehensive report of the job processor's current state."""
@@ -468,6 +635,20 @@ class JobProcessor:
         except Exception as e:
             logger.error(f"Error generating report: {e}")
             return {"error": str(e)}
+    
+    @debug_trace
+    async def set_status(self, status: str):
+        self.redis_status.set(self.component_id, status)
+        for attempt in range(5):
+            current_status = self.redis_status.get(self.component_id).decode()
+            logger.debug(f"Current status: {current_status}, Target status: {status}")
+            if current_status != status:
+                logger.error(f"Failed to set status for {self.component_id} to {status} (attempt {attempt + 1}/5)")
+                if attempt < 4:  # Don't sleep on last attempt
+                    await asyncio.sleep(1)
+            else:
+                logger.debug(f"Successfully set status for {self.component_id} to {status}")
+                break
 
 async def main():
     config = Config()

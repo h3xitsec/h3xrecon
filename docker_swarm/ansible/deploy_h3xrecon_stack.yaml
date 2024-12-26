@@ -5,7 +5,7 @@
       ansible.builtin.shell: docker pull {{ item }}
       loop:
         - ghcr.io/h3xitsec/h3xrecon/worker:nightly
-  #- {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
+    - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
 
 #- ansible.builtin.import_playbook: remove_h3xrecon_stack.yaml
 

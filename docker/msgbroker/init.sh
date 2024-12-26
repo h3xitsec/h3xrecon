@@ -39,7 +39,7 @@ fi
 
 if ! stream_exists "FUNCTION_CONTROL"; then
     nats stream add FUNCTION_CONTROL \
-        --subjects "function.control" \
+        --subjects "function.control.>" \
         --retention interest \
         --max-age 1h \
         --storage file \
@@ -61,7 +61,7 @@ if ! stream_exists "FUNCTION_CONTROL_RESPONSE"; then
     nats stream add FUNCTION_CONTROL_RESPONSE \
         --subjects "function.control.response" \
         --retention limits \
-        --max-age 24h \
+        --max-age 1h \
         --storage file \
         --replicas 1 \
         --discard old \
@@ -69,7 +69,7 @@ if ! stream_exists "FUNCTION_CONTROL_RESPONSE"; then
         --max-msgs-per-subject=-1 \
         --max-bytes=-1 \
         --max-msg-size=-1 \
-        --dupe-window 2m \
+        --dupe-window 1m \
         --no-allow-rollup \
         --no-deny-delete \
         --no-deny-purge \
@@ -80,30 +80,6 @@ else
     nats stream purge FUNCTION_CONTROL_RESPONSE --server=nats://localhost:4222 --force
     echo "Purged existing FUNCTION_CONTROL_RESPONSE stream"
 fi
-
-
-# Create FUNCTION_OUTPUT stream if it doesn't exist
-# if ! stream_exists "FUNCTION_OUTPUT"; then
-#     nats stream add FUNCTION_OUTPUT \
-#         --subjects "function.output" \
-#         --retention limits \
-#         --max-age 24h \
-#         --storage file \
-#         --replicas 1 \
-#         --discard old \
-#         --max-msgs=-1 \
-#         --max-msgs-per-subject=-1 \
-#         --max-bytes=-1 \
-#         --max-msg-size=-1 \
-#         --dupe-window 2m \
-#         --no-allow-rollup \
-#         --no-deny-delete \
-#         --no-deny-purge \
-#         --server=nats://localhost:4222
-#     echo "Created FUNCTION_OUTPUT stream"
-# else
-#     echo "FUNCTION_OUTPUT stream already exists"
-# fi
 
 if ! stream_exists "FUNCTION_OUTPUT"; then
     nats stream add FUNCTION_OUTPUT \
@@ -124,7 +100,9 @@ if ! stream_exists "FUNCTION_OUTPUT"; then
         --server=nats://localhost:4222
     echo "Created FUNCTION_OUTPUT stream"
 else
-    echo "FUNCTION_OUTPUT stream already exists"
+    # Optionally purge existing messages from the stream
+    nats stream purge FUNCTION_OUTPUT --server=nats://localhost:4222 --force
+    echo "Purged existing FUNCTION_OUTPUT stream"
 fi
 
 # # Create RECON_DATA stream if it doesn't exist

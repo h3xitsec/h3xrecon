@@ -10,7 +10,7 @@ if [ -z $(which nats) ]; then
     success=false
 
     while [ $attempts -lt $max_attempts ] && [ "$success" = false ]; do
-        if wget https://github.com/nats-io/natscli/releases/download/v0.1.5/nats-0.1.5-linux-amd64.zip && \
+        if /usr/bin/wget https://github.com/nats-io/natscli/releases/download/v0.1.5/nats-0.1.5-linux-amd64.zip && \
            unzip nats-0.1.5-linux-amd64.zip && \
            mv nats-0.1.5-linux-amd64/nats /usr/local/bin/ && \
            rm -rf nats-0.1.5-linux-amd64*; then

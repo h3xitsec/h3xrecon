@@ -4,15 +4,14 @@ import sys
 from loguru import logger
 from h3xrecon.worker.executor import FunctionExecutor
 from h3xrecon.core import QueueManager, DatabaseManager, Config, PreflightCheck
+from h3xrecon.core.utils import debug_trace
 from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
+from nats.js.errors import NotFoundError
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import uuid
-import asyncio
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional
-
 import redis
 import random
 from enum import Enum
@@ -40,6 +39,9 @@ class FunctionExecutionRequest:
 class Worker:
     def __init__(self, config: Config):
         self.worker_id = f"worker-{socket.gethostname()}-{random.randint(1000, 9999)}"
+        self.role = "worker"
+        self.component_id = f"{self.role}-{socket.gethostname()}-{random.randint(1000, 9999)}"
+        self.worker_id = self.component_id
         self.config = config
         self.config.setup_logging()
         self.state = ProcessorState.RUNNING
@@ -60,10 +62,56 @@ class Worker:
         self._last_message_time = None
         self._execute_subscription = None
         self._execute_sub_key = None  # Add this to track subscription key
+        self._pull_processor_task = None  # Add task tracking for pull processor
+        self._subscription_lock = asyncio.Lock()  # Add lock for subscription operations
         self._start_time = datetime.now(timezone.utc)
         self.running = asyncio.Event()
         self.running.set()  # Start in running state
-    
+
+    @debug_trace
+    async def set_status(self, status: str):
+        self.redis_status.set(self.component_id, status)
+        for attempt in range(5):
+            current_status = self.redis_status.get(self.component_id).decode()
+            logger.debug(f"Current status: {current_status}, Target status: {status}")
+            if current_status != status:
+                logger.error(f"Failed to set status for {self.component_id} to {status} (attempt {attempt + 1}/5)")
+                if attempt < 4:  # Don't sleep on last attempt
+                    await asyncio.sleep(1)
+            else:
+                logger.debug(f"Successfully set status for {self.component_id} to {status}")
+                break
+
+    @debug_trace
+    async def start(self):
+        logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
+        try:
+            # Initialize components
+            await self.initialize_components()
+            await self.qm.ensure_connected()
+            await self.control_qm.ensure_connected()
+            # Run preflight checks
+            preflight = PreflightCheck(self.config, f"worker-{self.worker_id}")
+            if not await preflight.run_checks():
+                logger.error("Preflight checks failed. Exiting.")
+                sys.exit(1)
+            
+            # Setup subscriptions
+            await self._setup_control_subscription()
+            await self._setup_execute_subscription()
+            # Start health check
+            #self._health_check_task = asyncio.create_task(self._health_check())
+            # Subscribe to control and execute messages
+
+            logger.info(f"Worker {self.worker_id} started and listening for messages...")
+            await self.set_status("idle")
+
+        except Exception as e:
+            logger.error(f"Failed to start worker: {e}")
+            logger.exception(e)
+            sys.exit(1)
+
+    @debug_trace
     async def initialize_components(self):
         """Initialize all worker components after successful preflight checks."""
         self.redis_status = redis.Redis(
@@ -90,82 +138,479 @@ class Worker:
             config=self.config,
             redis_status=self.redis_status
         )
-    
-    def set_status(self, status: str):
-        self.redis_status.set(self.worker_id, status)
-    
-    async def start(self):
-        logger.info(f"Starting Worker (Worker ID: {self.worker_id}) version {__version__}...")
+
+
+    @debug_trace
+    async def _setup_control_subscription(self):
+        """Helper method to set up the function.control subscription."""
+        logger.debug("Setting up control subscription...")
+        
+        # Subscribe to broadcast messages (all components)
+        await self.control_qm.subscribe(
+            subject="function.control.all",
+            stream="FUNCTION_CONTROL",
+            durable_name=f"CONTROL_ALL_{self.worker_id}",
+            message_handler=self.control_message_handler,
+            batch_size=1,
+            consumer_config={
+                'ack_policy': AckPolicy.EXPLICIT,
+                'deliver_policy': DeliverPolicy.NEW,
+                'replay_policy': ReplayPolicy.INSTANT
+            },
+            broadcast=True
+        )
+
+        # Subscribe to broadcast messages (all workers)
+        await self.control_qm.subscribe(
+            subject="function.control.all_worker",
+            stream="FUNCTION_CONTROL",
+            durable_name=f"CONTROL_ALL_WORKER_{self.worker_id}",
+            message_handler=self.control_message_handler,
+            batch_size=1,
+            consumer_config={
+                'ack_policy': AckPolicy.EXPLICIT,
+                'deliver_policy': DeliverPolicy.NEW,
+                'replay_policy': ReplayPolicy.INSTANT
+            },
+            broadcast=True
+        )
+        
+        # Subscribe to worker-specific messages
+        await self.control_qm.subscribe(
+            subject=f"function.control.{self.worker_id}",
+            stream="FUNCTION_CONTROL",
+            durable_name=f"CONTROL_{self.worker_id}",
+            message_handler=self.control_message_handler,
+            batch_size=1,
+            consumer_config={
+                'ack_policy': AckPolicy.EXPLICIT,
+                'deliver_policy': DeliverPolicy.NEW,
+                'replay_policy': ReplayPolicy.INSTANT
+            },
+            broadcast=True
+        )
+        
+        logger.info("Successfully subscribed to control channels")
+
+    @debug_trace
+    async def _setup_execute_subscription(self):
+        """Helper method to set up the function.execute subscription."""
+        logger.debug("Setting up execute subscription...")
         try:
-            # Initialize components
-            await self.initialize_components()
-            await self.qm.ensure_connected()
-            # Run preflight checks
-            preflight = PreflightCheck(self.config, f"worker-{self.worker_id}")
-            if not await preflight.run_checks():
-                logger.error("Preflight checks failed. Exiting.")
-                sys.exit(1)
-            
-            # Start health check
-            self._health_check_task = asyncio.create_task(self._health_check())
+            async with self._subscription_lock:  # Use lock to prevent concurrent setup
+                if self.state == ProcessorState.PAUSED:
+                    logger.debug("Worker is paused, skipping execute subscription setup")
+                    return
 
-            # Subscribe to control and execute messages
-            await self._setup_control_subscription()
-            await self._setup_execute_subscription()
+                # Clean up existing subscription and task
+                if self._execute_subscription:
+                    try:
+                        await self._execute_subscription.unsubscribe()
+                        logger.debug("Successfully unsubscribed from execute subscription")
+                    except NotFoundError:
+                        logger.debug("Execute subscription already deleted.")
+                    except Exception as e:
+                        logger.warning(f"Error unsubscribing from execute subscription: {e}")
+                    finally:
+                        self._execute_subscription = None
 
-            logger.info(f"Worker {self.worker_id} started and listening for messages...")
-            self.set_status("idle")
+                # Cancel existing pull processor task
+                if self._pull_processor_task and not self._pull_processor_task.done():
+                    self._pull_processor_task.cancel()
+                    try:
+                        await self._pull_processor_task
+                    except asyncio.CancelledError:
+                        pass
+                    self._pull_processor_task = None
+
+                subscription = await self.qm.subscribe(
+                    subject="function.execute",
+                    stream="FUNCTION_EXECUTE",
+                    durable_name=f"WORKERS_EXECUTE",
+                    message_handler=self.message_handler,
+                    batch_size=1,
+                    queue_group="workers",
+                    consumer_config={
+                        'ack_policy': AckPolicy.EXPLICIT,
+                        'deliver_policy': DeliverPolicy.ALL,
+                        'replay_policy': ReplayPolicy.INSTANT,
+                        'max_deliver': 1,
+                        'max_ack_pending': 1000,
+                        'flow_control': False,  # Disable flow control for pull-based
+                        #'deliver_group': 'workers'  # Ensure queue group is set in config
+                    },
+                    pull_based=True  # Enable pull-based subscription
+                )
+                self._execute_subscription = subscription
+                self._execute_sub_key = f"FUNCTION_EXECUTE:function.execute:WORKERS_EXECUTE"
+                logger.info("Successfully subscribed to execute channel")
+                
+                # Start the pull message processing loop with proper task tracking
+                await self.start_pull_processor()
 
         except Exception as e:
-            logger.error(f"Failed to start worker: {e}")
-            logger.exception(e)
-            sys.exit(1)
+            logger.error(f"Error setting up execute subscription: {e}")
+            raise
+    
+    @debug_trace
+    async def start_pull_processor(self):
+        if not self._pull_processor_task or self._pull_processor_task.done():
+            self._pull_processor_task = asyncio.create_task(self._process_pull_messages())
+    
+    @debug_trace
+    async def _process_pull_messages(self):
+        """Process messages from the pull-based subscription."""
+        logger.debug(f"{self.worker_id}: Starting pull message processing loop")
+        while True:
+            try:
+                if self.state == ProcessorState.PAUSED:
+                    await asyncio.sleep(1)
+                    continue
 
+                if not self._execute_subscription:
+                    logger.debug("No execute subscription found")
+                    await self._setup_execute_subscription()
+                    continue
+
+                # Fetch one message
+                messages = await self.qm.fetch_messages(self._execute_subscription, batch_size=1)
+                if not messages:
+                    await asyncio.sleep(0.1)
+                    continue
+
+                message = messages[0]
+                # Process the message
+                await self.message_handler(message)
+
+            except asyncio.CancelledError:
+                logger.info("Pull message processing loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in pull message processing loop: {e}", exc_info=True)
+                await asyncio.sleep(1)
+    
+    # @debug_trace
+    # async def _process_pull_messages(self):
+    #     """Process messages from the pull-based subscription."""
+    #     while True:
+    #         logger.debug(f"{self.worker_id} state: {self.state}")
+    #         if self.state == ProcessorState.PAUSED or self.state == ProcessorState.BUSY:
+    #             await asyncio.sleep(1)
+    #             continue
+
+    #         try:
+    #             # Check if we're already processing
+    #             async with self._processing_lock:
+    #                 if self._processing:
+    #                     logger.debug("Already processing a message, waiting...")
+    #                     await asyncio.sleep(1)
+    #                     continue
+
+    #             # Check if we have a valid subscription
+    #             if not self._execute_subscription:
+    #                 logger.debug("No execute subscription found")
+    #                 await self._setup_execute_subscription()
+    #                 continue
+
+    #             # Fetch messages
+    #             #logger.debug("Attempting to fetch messages...")
+    #             messages = await self.qm.fetch_messages(self._execute_subscription, batch_size=1)
+                
+    #             if messages:
+    #                 logger.debug(f"Received {len(messages)} messages")
+    #                 for msg in messages:
+    #                     # Process each message
+    #                     await self.message_handler(msg)
+    #             else:
+    #                 #logger.debug("No messages received, waiting...")
+    #                 await asyncio.sleep(0.1)
+
+    #         except asyncio.CancelledError:
+    #             logger.info("Pull message processing loop cancelled")
+    #             break
+    #         except Exception as e:
+    #             if not isinstance(e, TimeoutError):
+    #                 logger.error(f"Error in pull message processing loop: {e}")
+    #             await asyncio.sleep(0.1)
+    @debug_trace
+    async def unsubscribe_execute_subscription(self):
+        logger.debug("Unsubscribing from execute subscription")
+        if self._execute_subscription:
+            await self._execute_subscription.unsubscribe()
+            self._execute_subscription = None
+
+    @debug_trace
+    async def message_handler(self, raw_msg):
+        logger.debug(f"Worker {self.worker_id} received message: {raw_msg.data}")
+        """Handle incoming messages with proper synchronization."""
+        if self.state == ProcessorState.PAUSED:
+            await raw_msg.nak()
+            return
+        try:
+            self.state = ProcessorState.BUSY
+            msg = json.loads(raw_msg.data.decode())
+            self._last_message_time = datetime.now(timezone.utc)
+            logger.debug(f"Processing message: {msg}")
+
+            # Parse message
+            function_execution_request = FunctionExecutionRequest(
+                program_id=msg.get('program_id'),
+                function_name=msg.get('function'),
+                params=msg.get('params'),
+                force=msg.get("force", False)
+            )
+            logger.debug(f"Created function execution request: {function_execution_request}")
+            
+            # Validation
+            function_valid = await self.validate_function_execution_request(function_execution_request)
+            if not function_valid:
+                logger.info(f"Skipping execution: {function_execution_request.function_name}")
+                await raw_msg.ack()
+                return
+            await self.set_status(f"busy:{function_execution_request.function_name}:{function_execution_request.params.get('target')}")
+            # Execution
+            task = asyncio.create_task(
+                self.run_function_execution(function_execution_request)
+            )
+            self.running_tasks[function_execution_request.execution_id] = task
+            await task
+        # try:
+        #     # Use processing lock for the entire message handling to prevent race conditions
+        #     async with self._processing_lock:
+        #         if self._processing:
+        #             logger.warning("Already processing a message, rejecting new message")
+        #             # First unsubscribe to prevent more messages
+        #             #await self.unsubscribe_execute_subscription()
+        #             # Then NAK the message so it can be processed by other workers
+        #             await raw_msg.nak()
+        #             logger.debug(f"{self.worker_id} nak'd message: {raw_msg.data}")
+        #             return
+
+        #         # Set state to busy and unsubscribe atomically
+        #         self._processing = True
+        #         self.state = ProcessorState.BUSY
+        #         await self.set_status(f"busy")
+        #         #await self.unsubscribe_execute_subscription()
+
+        #         try:
+        #             msg = json.loads(raw_msg.data.decode())
+        #             self._last_message_time = datetime.now(timezone.utc)
+        #             logger.debug(f"Processing message: {msg}")
+
+        #             # Parse message
+        #             logger.debug("Attempting to parse message")
+        #             function_execution_request = FunctionExecutionRequest(
+        #                 program_id=msg.get('program_id'),
+        #                 function_name=msg.get('function'),
+        #                 params=msg.get('params'),
+        #                 force=msg.get("force", False)
+        #             )
+        #             logger.debug(f"Created function execution request: {function_execution_request}")
+                    
+        #             # Validation
+        #             function_valid = await self.validate_function_execution_request(function_execution_request)
+        #             logger.debug(f"Function valid: {function_valid}")
+        #             await self.set_status(f"busy:{function_execution_request.function_name}:{function_execution_request.params.get('target')}")
+        #             if not function_valid:
+        #                 logger.info(f"Skipping execution: {function_execution_request.function_name}")
+        #                 await raw_msg.ack()  # ACK invalid messages to prevent redelivery
+        #                 return
+                            
+        #             if not function_execution_request.force:
+        #                 if not await self.should_execute(function_execution_request):
+        #                     logger.info(f"Skipping execution: {function_execution_request.function_name}")
+        #                     await raw_msg.ack()
+        #                     logger.debug(f"{self.worker_id} acknowledged message: {raw_msg.data}")
+        #                     return
+                        
+        #             # Create and store the task
+        #             task = asyncio.create_task(
+        #                 self.run_function_execution(function_execution_request)
+        #             )
+        #             self.running_tasks[function_execution_request.execution_id] = task
+                    
+        #             try:
+        #                 logger.debug(f"Waiting for task {function_execution_request.execution_id} to complete")
+        #                 await task
+        #                 logger.debug(f"Task {function_execution_request.execution_id} completed successfully")
+        #             except asyncio.CancelledError:
+        #                 logger.warning(f"Task {function_execution_request.execution_id} was cancelled")
+        #                 # Don't clean up here, let the killjob handler do it
+        #                 raise
+        #             except Exception as e:
+        #                 logger.error(f"Error in task execution: {e}")
+        #                 logger.exception(e)
+        #                 # Clean up on non-cancellation errors
+        #                 self.running_tasks.pop(function_execution_request.execution_id, None)
+        #                 raise
+        #             else:
+        #                 # Clean up only on successful completion
+        #                 self.running_tasks.pop(function_execution_request.execution_id, None)
+                    
+        #         except asyncio.CancelledError:
+        #             # Let cancellation propagate up
+        #             raise
+        #         except Exception as e:
+        #             logger.error(f"Error processing message: {e}")
+        #             logger.exception(e)
+        #         finally:
+        #             # Acknowledge the message after processing, unless it's already acknowledged
+        #             if not raw_msg._ackd:
+        #                 await raw_msg.ack()
+        #                 logger.debug(f"{self.worker_id} acknowledged message: {raw_msg.data}")
+        #             if self.state != ProcessorState.PAUSED:
+        #                 self.state = ProcessorState.RUNNING
+        #                 await self.set_status("idle")
+        #             # # Always try to resubscribe and reset state, even if there was an error
+        #             # try:
+        #             #     if self.state != ProcessorState.PAUSED:
+        #             #         self.state = ProcessorState.RUNNING
+        #             #         await self.set_status("idle")
+        #             #         await self._setup_execute_subscription()
+        #             # except Exception as e:
+        #             #     logger.error(f"Error resubscribing: {e}")
+        #             #     # If we can't resubscribe, we need to make sure we're in a known state
+        #             #     self.state = ProcessorState.PAUSED
+        #             #     await self.set_status("error")
+        #             # finally:
+        #             #     self._processing = False
+                
+        except Exception as e:
+            logger.error(f"Error in message handler: {e}")
+            logger.exception(e)
+        finally:
+            if not raw_msg._ackd:
+                await raw_msg.ack()
+            await self.set_status("idle")
+
+    @debug_trace
     async def control_message_handler(self, raw_msg):
         """Handle control messages for pausing/unpausing the processor"""
         try:
             msg = json.loads(raw_msg.data.decode())
             command = msg.get("command")
             target = msg.get("target", "all")
+            target_id = msg.get("target_id")
             
-            if target not in ["all", "worker"]:
+            # Check if message is targeted for this worker
+            if target not in ["all", "worker"] and target != self.worker_id:
+                logger.debug(f"Ignoring control message - not for this worker (target: {target})")
+                await raw_msg.ack()
+                return
+            
+            # For worker-specific targeting, check if this is the intended worker
+            if target == "worker" and target_id and target_id != self.worker_id:
+                logger.debug(f"Ignoring worker-specific message - not for this worker ID (target_id: {target_id})")
+                await raw_msg.ack()
                 return
 
             if command == "pause":
-                logger.info("Received pause command")
+                logger.debug(f"Received pause command for {target} {target_id or ''}")
+                if self.state == ProcessorState.PAUSED:
+                    logger.debug("Worker is already paused, sending response")
+                    # Send acknowledgment even when already paused
+                    await self.control_qm.publish_message(
+                        subject="control.response.pause",
+                        stream="CONTROL_RESPONSE_PAUSE",
+                        message={
+                            "component_id": self.worker_id,
+                            "type": "worker",
+                            "status": "paused",
+                            "success": True,
+                            "command": "pause",
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                    )
+                    await raw_msg.ack()
+                    return
+                    
                 self.state = ProcessorState.PAUSED
-                self.running.clear()  # Pause message processing
-                self.set_status("paused")
+                # Unsubscribe from execute subscriptions
+                # if self._execute_subscription:
+                #     try:
+                #         await self._execute_subscription.unsubscribe()
+                #         logger.debug(f"Unsubscribed from execute subscription: {self._execute_subscription}")
+                #     except Exception as e:
+                #         logger.warning(f"Error unsubscribing from execute subscription: {e}")
+                #     finally:
+                #         self._execute_subscription = None
+                        
+                await self.set_status("paused")
+                logger.info(f"Worker {self.worker_id} paused")
                 
-                # Send acknowledgment
+                # Send acknowledgment to dedicated stream
                 await self.control_qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
+                    subject="control.response.pause",
+                    stream="CONTROL_RESPONSE_PAUSE",
                     message={
-                        "processor_id": self.worker_id,
+                        "component_id": self.worker_id,
                         "type": "worker",
                         "status": "paused",
+                        "success": True,
+                        "command": "pause",
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
             
             elif command == "unpause":
-                logger.info("Received unpause command")
-                self.state = ProcessorState.RUNNING
-                self.running.set()  # Resume message processing
-                self.set_status("idle")
-                
-                # Send acknowledgment
-                await self.control_qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
-                    message={
-                        "processor_id": self.worker_id,
-                        "type": "worker",
-                        "status": "running",
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                )
+                logger.debug("Received unpause command")
+                try:
+                    # Reset processing state first
+                    async with self._processing_lock:
+                        self._processing = False
+                        self.state = ProcessorState.RUNNING
+
+                    # # Ensure we don't have an existing subscription
+                    # if self._execute_subscription:
+                    #     try:
+                    #         await self._execute_subscription.unsubscribe()
+                    #     except Exception as e:
+                    #         logger.warning(f"Error unsubscribing existing subscription: {e}")
+                    #     finally:
+                    #         self._execute_subscription = None
+
+                    # Resubscribe to the execute stream with a small delay
+                    await asyncio.sleep(0.5)  # Add a small delay before resubscribing
+                    #await self._setup_execute_subscription()
+                    
+                    # Verify subscription was successful
+                    #if not self._execute_subscription:
+                    #    raise Exception("Failed to reestablish execute subscription")
+
+                    #logger.debug(f"Resubscribed to execute subscription: {self._execute_subscription}")
+                    await self.set_status("idle")
+                    logger.info(f"Worker {self.worker_id} resumed")
+                    
+                    # Send acknowledgment to dedicated stream
+                    await self.control_qm.publish_message(
+                        subject="control.response.unpause",
+                        stream="CONTROL_RESPONSE_UNPAUSE",
+                        message={
+                            "component_id": self.worker_id,
+                            "type": "worker",
+                            "status": "running",
+                            "success": True,
+                            "command": "unpause",
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"Error during unpause: {e}")
+                    self.state = ProcessorState.PAUSED
+                    await self.set_status("paused")
+                    # Send error response
+                    await self.control_qm.publish_message(
+                        subject="control.response.unpause",
+                        stream="CONTROL_RESPONSE_UNPAUSE",
+                        message={
+                            "component_id": self.worker_id,
+                            "type": "worker",
+                            "status": "paused",
+                            "success": False,
+                            "error": str(e),
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                    )
             
             elif command == 'killjob':
                 logger.info("Received kill job command")
@@ -174,64 +619,85 @@ class Worker:
                 
                 try:
                     if self.running_tasks:
-                        # Cancel the first running task
-                        execution_id = next(iter(self.running_tasks))
-                        task = self.running_tasks.get(execution_id)
-                        if task:
+                        # Cancel all running tasks
+                        for execution_id, task in list(self.running_tasks.items()):
                             logger.debug(f"Killing job with Execution ID: {execution_id}")
-                            task.cancel()
-                            try:
-                                await task
-                            except asyncio.CancelledError:
-                                logger.info(f"Successfully cancelled task {execution_id}")
-                                success = True
-                            except Exception as e:
-                                error_msg = str(e)
-                                logger.error(f"Error cancelling task: {error_msg}")
+                            if not task.done():
+                                task.cancel()
+                                try:
+                                    # Wait for task to actually cancel with a timeout
+                                    await asyncio.wait_for(task, timeout=5.0)
+                                except asyncio.TimeoutError:
+                                    logger.warning(f"Task {execution_id} taking too long to cancel")
+                                except asyncio.CancelledError:
+                                    logger.info(f"Successfully cancelled task {execution_id}")
+                                    success = True
+                                except Exception as e:
+                                    error_msg = str(e)
+                                    logger.error(f"Error cancelling task: {error_msg}")
+                                finally:
+                                    # Clean up the cancelled task
+                                    self.running_tasks.pop(execution_id, None)
+                                    await self.set_status("idle")
+                        
+                        # Reset worker state and processing lock
+                        # async with self._processing_lock:
+                        #     self._processing = False
+                        #     if self.state != ProcessorState.PAUSED:
+                        #         self.state = ProcessorState.RUNNING
+                        
+                            
+                        # Clean up execute subscription
+                        #if self._execute_subscription:
+                        #    try:
+                        #        await self._execute_subscription.unsubscribe()
+                        #        logger.debug("Successfully unsubscribed execute subscription")
+                        #    except Exception as e:
+                        #        logger.warning(f"Error unsubscribing execute subscription: {e}")
+                        #    finally:
+                        #        self._execute_subscription = None
+                        
+                        # Ensure execute subscription is active
+                        await asyncio.sleep(0.5)  # Small delay before resubscribing
+                        await self.start_pull_processor()
+                        #await self._setup_execute_subscription()
+                        #logger.debug("Re-established execute subscription after job kill")
                     else:
                         success = True  # No tasks running is still a success
                         logger.info("No running tasks to kill")
-                        
+                    
                     # Send acknowledgment with success status
                     await self.control_qm.publish_message(
-                        subject="function.control.response",
-                        stream="FUNCTION_CONTROL_RESPONSE",
+                        subject="control.response.killjob",
+                        stream="CONTROL_RESPONSE_KILLJOB",
                         message={
-                            "processor_id": self.worker_id,
-                            "type": "worker",
+                            "component_id": self.worker_id,
                             "command": "killjob",
                             "success": success,
                             "error": error_msg,
                             "timestamp": datetime.now(timezone.utc).isoformat()
                         }
                     )
+                    logger.debug(f"Kill job response sent: {success}")
                     
                 except Exception as e:
                     logger.error(f"Error processing kill command: {e}")
                     # Send error response
                     await self.control_qm.publish_message(
-                        subject="function.control.response",
-                        stream="FUNCTION_CONTROL_RESPONSE",
+                        subject="control.response.killjob",
+                        stream="CONTROL_RESPONSE_KILLJOB",
                         message={
-                            "processor_id": self.worker_id,
-                            "type": "worker",
+                            "component_id": self.worker_id,
                             "command": "killjob",
                             "success": False,
                             "error": str(e),
                             "timestamp": datetime.now(timezone.utc).isoformat()
                         }
                     )
-            elif command == 'stop' and execution_id:
-                task = self.running_tasks.get(execution_id)
-                if task:
-                    logger.debug(f"Stopping job with Execution ID: {execution_id}")
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        logger.info(f"Successfully cancelled task {execution_id}")
-                else:
-                    logger.warning(f"No running task found with Execution ID: {execution_id}")
+                finally:
+                    # Acknowledge the control message
+                    await raw_msg.ack()
+            
             elif command == "report":
                 logger.info("Received report command")
                 report = await self.generate_report()
@@ -241,7 +707,7 @@ class Worker:
                     subject="function.control.response",
                     stream="FUNCTION_CONTROL_RESPONSE",
                     message={
-                        "processor_id": self.worker_id,
+                        "component_id": self.worker_id,
                         "type": "worker",
                         "command": "report",
                         "report": report,
@@ -249,19 +715,35 @@ class Worker:
                     }
                 )
                 logger.debug("Worker report sent")
+            elif command == 'ping':
+                logger.info(f"Received ping from {msg.get('target')}")
+                # Send pong response
+                await self.control_qm.publish_message(
+                    subject="control.response.ping",
+                    stream="CONTROL_RESPONSE_PING",
+                    message={
+                        "component_id": self.worker_id,
+                        "type": "worker",
+                        "command": "pong",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
             else:
                 logger.warning(f"Received unknown control command or missing execution_id: {msg}")
 
             # Acknowledge the message after successful processing
-            await raw_msg.ack()
+            if not raw_msg._ackd:
+                await raw_msg.ack()
 
         except Exception as processing_error:
             logger.error(f"Error processing individual control message: {processing_error}")
             logger.exception(processing_error)
             # Decide whether to acknowledge based on error type
-            await raw_msg.ack()
+            if not raw_msg._ackd:
+                await raw_msg.ack()
             return
-    
+
+    @debug_trace
     async def should_execute(self, request: FunctionExecutionRequest) -> bool:
         """
         Determine whether a function should be executed based on the last execution time.
@@ -318,7 +800,8 @@ class Worker:
             logger.info(f"No previous execution found for function '{request.function_name}' on target '{request.params.get('target')}'. Proceeding with execution.")
 
         return True
-    
+
+    @debug_trace
     async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
         # Validate function_name is a valid plugin
         try:
@@ -327,165 +810,70 @@ class Worker:
             
             # Check if the function name exists in the function map keys
             plugin_found = any(function_execution_request.function_name in key for key in self.function_executor.function_map.keys())
-            
             if not plugin_found:
-                logger.debug(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found in {list(self.function_executor.function_map.keys())}")
                 raise ValueError(f"Invalid function_name: {function_execution_request.function_name}. No matching plugin found.")
         
         except Exception as e:
             raise ValueError(f"Error validating function_name: {str(e)}")
-        
+        # TODO: Fix this to bring back program_name validation
         # Validate program_name exists in the database
-        try:
-            program_name = await self.db.get_program_name(function_execution_request.program_id)
-            if not program_name:
-                raise ValueError(f"Invalid program_id: {function_execution_request.program_id}. Program not found in database.")
-        
-        except Exception as e:
-            raise ValueError(f"Error validating program_name: {str(e)}")
+        #try:
+        #    program_name = await self.db.get_program_name(function_execution_request.program_id)
+        #    if not program_name:
+        #        raise ValueError(f"Invalid program_id: {function_execution_request.program_id}. Program not found in database.")
+        #except Exception as e:
+        #    raise ValueError(f"Error validating program_name: {str(e)}")
+        return plugin_found
 
-    async def message_handler(self, raw_msg):
-        msg = json.loads(raw_msg.data.decode())
-        logger.debug(f"Message handler called with message type: {type(msg)}")
-        logger.debug(f"Message content: {msg}")
-        
-        # if self.state == ProcessorState.PAUSED or not self._execute_subscription:
-        #     logger.debug(f"Worker is paused (state: {self.state}) or no subscription (subscription: {self._execute_subscription}), skipping message")
-        #     #if hasattr(msg, 'ack'): # TODO: Test if this is ok
-        #     #    await msg.ack()
-        #     return
-
-        self._last_message_time = datetime.now(timezone.utc)
-        logger.debug("Processing message in message_handler")
-        
-        if self.state == ProcessorState.PAUSED:
-            logger.debug(f"Worker is paused (state: {self.state}), skipping message")
-            await raw_msg.ack()
-            return
-
-        processing_lock_acquired = False
-        
-        try:
-            # Try to acquire the processing lock
-            async with self._processing_lock:
-                if self._processing:
-                    logger.info("Already processing a job, skipping new message")
-                    await raw_msg.nack()
-                    return
-                self._processing = True
-                processing_lock_acquired = True
-                logger.debug("Acquired processing lock")
-
-            try:
-                # Parse message
-                logger.debug("Attempting to parse message")
-                function_execution_request = FunctionExecutionRequest(
-                    program_id=msg.get('program_id'),
-                    function_name=msg.get('function'),
-                    params=msg.get('params'),
-                    force=msg.get("force", False)
-                )
-                logger.debug(f"Created function execution request: {function_execution_request}")
-                
-                # Validation
-                await self.validate_function_execution_request(function_execution_request)
-                if not function_execution_request.force:
-                    if not await self.should_execute(function_execution_request):
-                        logger.info(f"Skipping execution: {function_execution_request.function_name} on {function_execution_request.params.get('target')} executed recently.")
-                        await raw_msg.ack()
-                        return
-
-                # Create and track the task
-                task = asyncio.create_task(
-                    self.run_function_execution(function_execution_request)
-                )
-                self.running_tasks[function_execution_request.execution_id] = task
-                self.set_status(f"busy:{function_execution_request.function_name}:{function_execution_request.params.get('target')}")
-                # Add callback to handle task completion
-                task.add_done_callback(
-                    lambda t, eid=function_execution_request.execution_id: self.task_done_callback(t, eid)
-                )
-
-                try:
-                    # Changed from asyncio.shield to direct await
-                    await task
-                    #if hasattr(msg, 'ack'):
-                    logger.debug("Acknowledging message")
-                    await raw_msg.ack()
-                    return
-                except asyncio.CancelledError:
-                    logger.info(f"Task execution cancelled for {function_execution_request.execution_id}")
-                    # Don't re-raise the cancellation
-                    pass
-
-            except Exception as processing_error:
-                logger.error(f"Error processing execute message: {processing_error}")
-                logger.exception(processing_error)
-            # finally:
-            #     # Always acknowledge the message
-            #     if hasattr(msg, 'ack'):
-            #         await msg.ack()
-
-        finally:
-            # Always release the processing lock
-            if processing_lock_acquired:
-                async with self._processing_lock:
-                    self._processing = False
-                    logger.debug("Released processing lock")
-            
-            logger.debug("Exited message_handler")
-
-    def task_done_callback(self, task: asyncio.Task, execution_id: str):
-        """
-        Callback function to handle task completion.
-        """
-        try:
-            exception = task.exception()
-            if exception:
-                logger.error(f"Task {execution_id} encountered an exception: {exception}")
-            else:
-                logger.info(f"Task {execution_id} completed successfully.")
-        except asyncio.CancelledError:
-            logger.info(f"Task {execution_id} was cancelled.")
-        finally:
-            # Remove the task from running_tasks regardless of outcome
-            self.running_tasks.pop(execution_id, None)
-            self.set_status(f"idle")
-
+    @debug_trace
     async def run_function_execution(self, msg_data: FunctionExecutionRequest):
         logger.info(f"Starting execution of function '{msg_data.function_name}' with Execution ID: {msg_data.execution_id}")
+        result_count = 0
+        
         try:
-            execution_id = msg_data.execution_id
-            # Add debug logging to track results
-            result_count = 0
             async for result in self.function_executor.execute_function(
                 function_name=msg_data.function_name,
                 params=msg_data.params,
                 program_id=msg_data.program_id,
-                execution_id=execution_id
+                execution_id=msg_data.execution_id
             ):
+                if asyncio.current_task().cancelled():
+                    logger.info(f"Execution {msg_data.execution_id} was cancelled, stopping execution")
+                    raise asyncio.CancelledError()
+                
                 result_count += 1
-                logger.debug(f"Execution {execution_id}: Received result #{result_count}: {result}")
-                # Make sure we're actually getting results before moving on
+                logger.debug(f"Execution {msg_data.execution_id}: Received result #{result_count}: {result}")
                 if not result:
                     logger.warning(f"Received empty result from {msg_data.function_name}")
                     continue
+                
         except asyncio.CancelledError:
-            logger.info(f"Execution {execution_id} was cancelled.")
+            logger.info(f"Execution {msg_data.execution_id} was cancelled.")
             raise
         except Exception as e:
-            logger.error(f"Error executing function {execution_id}: {e}")
+            logger.error(f"Error executing function {msg_data.execution_id}: {e}")
             logger.exception(e)
             raise
         finally:
             logger.info(f"Finished execution of function '{msg_data.function_name}' with Execution ID: {msg_data.execution_id}. Total results: {result_count}")
+            await self.set_status("idle")
 
+    @debug_trace
     async def stop(self):
         logger.info("Shutting down...")
         # Cancel all running tasks
         for execution_id, task in list(self.running_tasks.items()):
             task.cancel()
             logger.info(f"Cancelled task with Execution ID: {execution_id}")
+        
+        # Clean up execute subscription
+        if self._execute_subscription:
+            try:
+                await self._execute_subscription.unsubscribe()
+                logger.debug("Successfully unsubscribed from execute subscription during shutdown")
+            except Exception as e:
+                logger.warning(f"Error unsubscribing from execute subscription during shutdown: {e}")
+            self._execute_subscription = None
         
         # Disconnect both queue managers
         if self.qm:
@@ -495,6 +883,7 @@ class Worker:
             
         logger.info("Worker shutdown complete")
 
+    @debug_trace
     async def _health_check(self):
         """Monitor worker health and subscription status."""
         while True:
@@ -514,7 +903,7 @@ class Worker:
                 # Check subscription status
                 if not self._execute_subscription:
                     logger.warning("Execute subscription not found. Attempting to resubscribe...")
-                    await self._reconnect_subscriptions()
+                    await self._setup_execute_subscription()
                 
                 if self._last_message_time:
                     time_since_last_message = current_time - self._last_message_time
@@ -531,7 +920,8 @@ class Worker:
                 logger.error(f"Error in health check: {e}")
                 logger.exception(e)
                 await asyncio.sleep(5)
-    
+
+    @debug_trace
     async def _reconnect_subscriptions(self):
         """Reconnect all subscriptions."""
         try:
@@ -542,44 +932,7 @@ class Worker:
         except Exception as e:
             logger.error(f"Error reconnecting subscriptions: {e}")
 
-    async def _setup_execute_subscription(self):
-        """Helper method to set up the function.execute subscription."""
-        logger.debug("Setting up execute subscription...")
-        self._execute_subscription = await self.qm.subscribe(
-            subject="function.execute",
-            stream="FUNCTION_EXECUTE",
-            message_handler=self.message_handler,
-            durable_name=None,
-            batch_size=1,
-            queue_group="workers",
-            consumer_config={
-                'ack_policy': AckPolicy.EXPLICIT,
-                'deliver_policy': DeliverPolicy.ALL,
-                'replay_policy': ReplayPolicy.INSTANT,
-                'max_deliver': -1
-            }
-        )
-        self._execute_sub_key = f"FUNCTION_EXECUTE:function.execute:EXECUTE_{self.worker_id}"
-        logger.debug(f"Execute subscription created: {self._execute_subscription}")
-
-    async def _setup_control_subscription(self):
-        """Helper method to set up the function.control subscription."""
-        logger.debug("Setting up control subscription...")
-        await self.control_qm.subscribe(
-            subject="function.control",
-            stream="FUNCTION_CONTROL",
-            durable_name=f"CONTROL_{self.worker_id}",
-            message_handler=self.control_message_handler,
-            batch_size=1,
-            consumer_config={
-                'ack_policy': AckPolicy.EXPLICIT,
-                'deliver_policy': DeliverPolicy.NEW,
-                'replay_policy': ReplayPolicy.INSTANT
-            },
-            broadcast=True
-        )
-        logger.debug("Successfully subscribed to control messages")
-
+    @debug_trace
     async def generate_report(self) -> Dict[str, Any]:
         """Generate a comprehensive report of the worker's current state."""
         try:
@@ -676,7 +1029,6 @@ async def main():
         
         try:
             await worker.start()
-            
             # Keep the worker running
             while True:
                 await asyncio.sleep(1)
