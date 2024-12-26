@@ -81,6 +81,11 @@ omit = [
     "src/h3xrecon/__about__.py",
 ]
 
+[tool.ruff]
+lint.select = ["F", "E"]
+lint.ignore = ["E501"]  # Example: ignore line-length
+lint.exclude = ["tests/"]  # Example: skip checking tests directory
+
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
