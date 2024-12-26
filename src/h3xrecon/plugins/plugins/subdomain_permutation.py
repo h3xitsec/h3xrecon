@@ -37,10 +37,11 @@ class SubdomainPermutation(ReconPlugin):
             logger.debug(f"Adding {output} to to_test")
         logger.debug(to_test)
         message = {
-            "function": "resolve_domain",
+            "function_name": "resolve_domain",
             "target": params.get("target", {}),
             "to_test": to_test
         }
+        logger.debug(f"Publishing message: {message}")
         yield message
 
         await process.wait()

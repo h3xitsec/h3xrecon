@@ -90,9 +90,9 @@ class QueueManager:
         # Try to delete existing consumer if it exists
         if durable_name:
             try:
-                if self.js.consumer_info(stream, durable_name):
-                    await self.js.delete_consumer(stream, durable_name)
-                    logger.debug(f"Deleted existing consumer {durable_name} from stream {stream}")
+                if await self.js.consumer_info(stream, durable_name):
+                    #await self.js.delete_consumer(stream, durable_name)
+                    logger.debug(f"Consumer {durable_name} from stream {stream} already exists")
             except NotFoundError:
                 pass
             except Exception as e:
@@ -135,19 +135,25 @@ class QueueManager:
                 raise StreamUnavailableError(f"Stream {stream} not available")
 
             if pull_based:
-                # For pull-based, create consumer first then subscription
                 try:
+                    # Check if consumer exists
+                    consumer_info = await self.js.consumer_info(stream, durable_name)
+                    logger.debug(f"Using existing consumer {durable_name}")
+                    # Consumer exists, create subscription without config
+                    subscription = await self.js.pull_subscribe(
+                        subject,
+                        durable=durable_name,
+                        stream=stream
+                    )
+                except NotFoundError:
+                    # Consumer does not exist, create it
                     await self.js.add_consumer(stream, final_config)
-                except Exception as e:
-                    logger.debug(f"Consumer might already exist or error creating: {e}")
-
-                # Create pull subscription
-                subscription = await self.js.pull_subscribe(
-                    subject,
-                    durable=durable_name,
-                    stream=stream,
-                    config=final_config
-                )
+                    subscription = await self.js.pull_subscribe(
+                        subject,
+                        durable=durable_name,
+                        stream=stream,
+                        config=final_config
+                    )
             else:
                 # Create push subscription with callback
                 cb = await self._message_callback(message_handler)
