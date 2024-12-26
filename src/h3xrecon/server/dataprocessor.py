@@ -578,15 +578,6 @@ class DataProcessor:
                     logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
 
-    async def process_service(self, msg_data: Dict[str, Any]):
-        #logger.info(msg_data)
-        if not isinstance(msg_data.get('data'), list):
-            msg_data['data'] = [msg_data.get('data')]
-        for i in msg_data.get('data'):
-            inserted = await self.db_manager.insert_service(ip=i.get("ip"), port=i.get("port"), protocol=i.get("protocol"), program_id=msg_data.get('program_id'), service=i.get("service"))
-            #if inserted:
-            #    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
-
     async def process_certificate(self, msg: Dict[str, Any]):
         if msg:
             logger.debug(f"Processing certificate for program {msg.get('program_id')}: {msg}")
@@ -702,21 +693,11 @@ class DataProcessor:
                     return
                 
                 self.state = ProcessorState.PAUSED
-                self.running.clear()  # Pause message processing
-                await self.set_status("paused")  # Update Redis status
-                
-                # Unsubscribe from data subscription
-                # if self.input_subscription:
-                #     try:
-                #         #await self.input_subscription.unsubscribe()
-                #         logger.debug(f"Unsubscribed from data subscription: {self.input_subscription}")
-                #         #self.input_subscription = None
-                #     except Exception as e:
-                #         logger.error(f"Error unsubscribing: {e}")
+                self.running.clear()
+                await self.set_status("paused")
                 
                 logger.info(f"Data processor {self.dataprocessor_id} paused")
-                
-                # Send acknowledgment to dedicated stream
+
                 await self.qm.publish_message(
                     subject="control.response.pause",
                     stream="CONTROL_RESPONSE_PAUSE",
@@ -732,7 +713,7 @@ class DataProcessor:
             elif command == "unpause":
                 logger.debug("Received unpause command")
                 self.state = ProcessorState.RUNNING
-                self.running.set()  # Resume message processing
+                self.running.set()
                 
                 
                 # Resubscribe to the data stream
