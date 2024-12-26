@@ -231,7 +231,7 @@ class DataProcessor(ReconComponent):
 
     async def process_ip(self, msg_data: Dict[str, Any]):
         """Process IP data."""
-        if msg_data.get('attributes') == None:
+        if msg_data.get('attributes') is None:
             attributes = {}
         else:
             attributes = msg_data.get('attributes')
