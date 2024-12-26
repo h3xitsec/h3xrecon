@@ -1,5 +1,4 @@
 from typing import Dict, Any
-from typing import Dict, Any
 import ipaddress
 from ipwhois import IPWhois
 import requests
