@@ -13,11 +13,6 @@ from datetime import datetime, timezone, timedelta
 from enum import Enum
 import json
 
-class ProcessorState(Enum):
-    RUNNING = "running"
-    PAUSED = "paused"
-    BUSY = "busy"
-
 @dataclass
 class FunctionExecutionRequest:
     program_id: int

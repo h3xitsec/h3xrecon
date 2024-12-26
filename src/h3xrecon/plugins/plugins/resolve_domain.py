@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.core import *
+from h3xrecon.core import Config, QueueManager
 from h3xrecon.plugins.helper import send_ip_data, send_domain_data
 from loguru import logger
 import asyncio
