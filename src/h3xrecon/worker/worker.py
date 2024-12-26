@@ -1,29 +1,16 @@
 import asyncio
-import socket
 import sys
 from loguru import logger
 from h3xrecon.core.component import ReconComponent, ProcessorState
 from h3xrecon.worker.executor import FunctionExecutor
 from h3xrecon.core import Config
-from h3xrecon.core.utils import debug_trace
 from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
-from nats.js.errors import NotFoundError
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
-import redis
-import random
-from enum import Enum
-import psutil
-import platform
 import json
-
-class ProcessorState(Enum):
-    RUNNING = "running"
-    PAUSED = "paused"
-    BUSY = "busy"
 
 @dataclass
 class FunctionExecutionRequest:
@@ -32,7 +19,7 @@ class FunctionExecutionRequest:
     params: Dict[str, Any]
     force: bool = False
     execution_id: Optional[str] = None
-
+    
     def __post_init__(self):
         if self.execution_id is None:
             self.execution_id = str(uuid.uuid4())
@@ -63,7 +50,7 @@ class Worker(ReconComponent):
                 subscription = await self.qm.subscribe(
                     subject="function.execute",
                     stream="FUNCTION_EXECUTE",
-                    durable_name=f"WORKERS_EXECUTE_{self.component_id}",
+                    durable_name="WORKERS_EXECUTE",
                     message_handler=self.message_handler,
                     batch_size=1,
                     queue_group="workers",
@@ -78,7 +65,7 @@ class Worker(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"FUNCTION_EXECUTE:function.execute:WORKERS_EXECUTE_{self.component_id}"
+                self._sub_key = f"FUNCTION_EXECUTE:function.execute:WORKERS_EXECUTE"
                 logger.info("Successfully subscribed to execute channel")
 
                 # Setup control subscriptions
@@ -97,7 +84,7 @@ class Worker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.all_worker",
+                    subject="function.control.all_worker",
                     stream="FUNCTION_CONTROL",
                     durable_name=f"CONTROL_ALL_WORKER_{self.component_id}",
                     message_handler=self.control_message_handler,
@@ -158,11 +145,43 @@ class Worker(ReconComponent):
                 force=msg.get("force", False)
             )
             logger.debug(f"Created function execution request: {function_execution_request}")
+            if not function_execution_request.params.get('extra_params'):
+                function_execution_request.params['extra_params'] = []
+            elif not isinstance(function_execution_request.params['extra_params'], list):
+                function_execution_request.params['extra_params'] = []
+
+            # Check if we should execute this function
+            if not function_execution_request.force and not await self._should_execute(function_execution_request):
+                logger.info(f"Skipping execution of {function_execution_request.function_name} - recently executed")
+                await raw_msg.ack()
+                return
+
+            # Log execution start
+            await self.db.log_worker_execution(
+                execution_id=function_execution_request.execution_id,
+                component_id=self.component_id,
+                function_name=function_execution_request.function_name,
+                program_id=function_execution_request.program_id,
+                target=function_execution_request.params.get('target', 'unknown'),
+                parameters=function_execution_request.params,
+                status='started'
+            )
             
             # Validation
             function_valid = await self.validate_function_execution_request(function_execution_request)
             if not function_valid:
                 logger.info(f"Skipping execution: {function_execution_request.function_name}")
+                await self.db.log_worker_execution(
+                    execution_id=function_execution_request.execution_id,
+                    component_id=self.component_id,
+                    function_name=function_execution_request.function_name,
+                    program_id=function_execution_request.program_id,
+                    target=function_execution_request.params.get('target', 'unknown'),
+                    parameters=function_execution_request.params,
+                    status='failed',
+                    error_message='Invalid function request',
+                    completed_at=datetime.now(timezone.utc)
+                )
                 await raw_msg.ack()
                 return
 
@@ -177,6 +196,18 @@ class Worker(ReconComponent):
         except Exception as e:
             logger.error(f"Error in message handler: {e}")
             logger.exception(e)
+            if 'function_execution_request' in locals():
+                await self.db.log_worker_execution(
+                    execution_id=function_execution_request.execution_id,
+                    component_id=self.component_id,
+                    function_name=function_execution_request.function_name,
+                    program_id=function_execution_request.program_id,
+                    target=function_execution_request.params.get('target', 'unknown'),
+                    parameters=function_execution_request.params,
+                    status='failed',
+                    error_message=str(e),
+                    completed_at=datetime.now(timezone.utc)
+                )
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
@@ -208,16 +239,50 @@ class Worker(ReconComponent):
             ):
                 if asyncio.current_task().cancelled():
                     logger.info(f"Execution {msg_data.execution_id} was cancelled")
+                    await self.db.log_worker_execution(
+                        execution_id=msg_data.execution_id,
+                        component_id=self.component_id,
+                        function_name=msg_data.function_name,
+                        program_id=msg_data.program_id,
+                        target=msg_data.params.get('target', 'unknown'),
+                        parameters=msg_data.params,
+                        status='failed',
+                        error_message='Execution cancelled',
+                        completed_at=datetime.now(timezone.utc)
+                    )
                     raise asyncio.CancelledError()
                 
                 result_count += 1
                 logger.debug(f"Execution {msg_data.execution_id}: Result #{result_count}: {result}")
+                
+            # Log successful completion
+            await self.db.log_worker_execution(
+                execution_id=msg_data.execution_id,
+                component_id=self.component_id,
+                function_name=msg_data.function_name,
+                program_id=msg_data.program_id,
+                target=msg_data.params.get('target', 'unknown'),
+                parameters=msg_data.params,
+                status='completed',
+                completed_at=datetime.now(timezone.utc)
+            )
                 
         except asyncio.CancelledError:
             logger.info(f"Execution {msg_data.execution_id} was cancelled.")
             raise
         except Exception as e:
             logger.error(f"Error executing function {msg_data.execution_id}: {e}")
+            await self.db.log_worker_execution(
+                execution_id=msg_data.execution_id,
+                component_id=self.component_id,
+                function_name=msg_data.function_name,
+                program_id=msg_data.program_id,
+                target=msg_data.params.get('target', 'unknown'),
+                parameters=msg_data.params,
+                status='failed',
+                error_message=str(e),
+                completed_at=datetime.now(timezone.utc)
+            )
             raise
         finally:
             logger.info(f"Finished execution of '{msg_data.function_name}'. Total results: {result_count}")
@@ -230,6 +295,45 @@ class Worker(ReconComponent):
             task.cancel()
             logger.info(f"Cancelled task with Execution ID: {execution_id}")
         await super().stop()
+
+    async def _should_execute(self, request: FunctionExecutionRequest) -> bool:
+        """
+        Check if a function should be executed based on its last execution time.
+        Returns True if the function should be executed, False otherwise.
+        """
+        try:
+            # Handle extra_params specially if it exists as a list
+            params = request.params
+            if 'extra_params' in params and isinstance(params['extra_params'], list):
+                extra_params_str = f"extra_params={sorted(params['extra_params'])}"
+            else:
+                # Create a sorted, filtered copy of params excluding certain keys
+                extra_params = {k: v for k, v in sorted(params.items()) 
+                              if k not in ['target', 'force'] and not k.startswith('--')}
+                # Convert extra_params to a string representation
+                extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
+
+            # Construct Redis key
+            redis_key = f"{request.function_name}:{params.get('target', 'unknown')}:{extra_params_str}"
+            
+            # Get last execution time from Redis
+            last_execution_time = self.redis_cache.get(redis_key)
+            if not last_execution_time:
+                return True
+
+            # Parse the timestamp and ensure it's timezone-aware
+            last_execution_time = datetime.fromisoformat(last_execution_time.decode().replace('Z', '+00:00'))
+            if last_execution_time.tzinfo is None:
+                last_execution_time = last_execution_time.replace(tzinfo=timezone.utc)
+            
+            current_time = datetime.now(timezone.utc)
+            time_since_last = current_time - last_execution_time
+            return time_since_last > self.execution_threshold
+
+        except Exception as e:
+            logger.error(f"Error checking execution history: {e}")
+            # If there's an error checking history, allow execution
+            return True
 
 async def main():
     config = Config()

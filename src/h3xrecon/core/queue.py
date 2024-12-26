@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional, Callable, Awaitable
 from nats.aio.client import Client as NATS
 from nats.js.api import ConsumerConfig, DeliverPolicy, AckPolicy, ReplayPolicy
-from nats.errors import TimeoutError as NatsTimeoutError, ConnectionClosedError, NoRespondersError
+from nats.errors import ConnectionClosedError, NoRespondersError
 from nats.js.errors import NotFoundError
 import random
 from loguru import logger
@@ -9,7 +9,6 @@ import json
 import asyncio
 from .config import Config
 from h3xrecon.__about__ import __version__
-from nats.js.client import JetStreamContext
 from .utils import debug_trace
 
 class StreamUnavailableError(Exception):
@@ -49,7 +48,7 @@ class QueueManager:
             print("Got reconnected...")
 
         async def error_cb(e):
-            print(f"Error connecting to NATS server, retrying...")
+            print("Error connecting to NATS server, retrying...")
 
         try:
             self.nc = NATS()
@@ -275,7 +274,10 @@ class QueueManager:
         try:
             await self.ensure_connected()
             stream_info = await self.js.stream_info(stream)
-            return True
+            if stream_info:
+                return True
+            else:
+                return False
         except StreamUnavailableError:
             return False
         except Exception as e:

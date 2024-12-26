@@ -2,7 +2,6 @@ from h3xrecon.core.component import ReconComponent, ProcessorState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.__about__ import __version__
-from h3xrecon.core.utils import debug_trace
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable
@@ -59,7 +58,7 @@ class DataProcessor(ReconComponent):
                 subscription = await self.qm.subscribe(
                     subject="recon.data",
                     stream="RECON_DATA",
-                    durable_name=f"DATAPROCESSORS_{self.component_id}",  # Make durable name unique
+                    durable_name="DATAPROCESSORS",
                     message_handler=self.message_handler,
                     batch_size=1,
                     queue_group="dataprocessor",
@@ -74,7 +73,7 @@ class DataProcessor(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"RECON_DATA:recon.data:DATAPROCESSORS_{self.component_id}"
+                self._sub_key = f"RECON_DATA:recon.data:DATAPROCESSORS"
                 logger.info("Successfully subscribed to data channel")
 
                 # Setup control subscriptions
@@ -93,7 +92,7 @@ class DataProcessor(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.all_dataprocessor",
+                    subject="function.control.all_dataprocessor",
                     stream="FUNCTION_CONTROL",
                     durable_name=f"CONTROL_ALL_DATAPROCESSOR_{self.component_id}",
                     message_handler=self.control_message_handler,
@@ -167,42 +166,110 @@ class DataProcessor(ReconComponent):
             logger.info("H3XRECON_NO_NEW_JOBS is set. Skipping triggering new jobs.")
             return
 
-        # Check if the data is in the program scope, if it is a domain
-        if data_type == "domain":
-            is_in_scope = await self.db.check_domain_regex_match(result, program_id)
-        else:
-            is_in_scope = True
-        if not is_in_scope:
-            logger.info(f"Data {result} of type {data_type} is not in scope for program {program_id}. Skipping new jobs.")
-            return
+        try:
+            await self.db.log_dataprocessor_operation(
+                component_id=self.component_id,
+                data_type=data_type,
+                program_id=program_id,
+                operation_type='trigger_job',
+                data={'result': result},
+                status='started'
+            )
 
-        if data_type in JOB_MAPPING:
-            for job in JOB_MAPPING[data_type]:
-                new_job = {
-                    "function": job.function,
-                    "program_id": program_id,
-                    "params": job.param_map(result)
-                }
-                logger.info(f"Triggering {job.function} for {result}")
-                try:
-                    await self.qm.publish_message(
-                        subject="function.execute",
-                        stream="FUNCTION_EXECUTE",
-                        message=new_job
-                    )
-                except StreamUnavailableError as e:
-                    logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
-                    break
-                except Exception as e:
-                    logger.error(f"Failed to trigger job: {str(e)}")
-                    raise
+            # Check if the data is in the program scope, if it is a domain
+            if data_type == "domain":
+                is_in_scope = await self.db.check_domain_regex_match(result, program_id)
+            else:
+                is_in_scope = True
+            if not is_in_scope:
+                logger.info(f"Data {result} of type {data_type} is not in scope for program {program_id}. Skipping new jobs.")
+                await self.db.log_dataprocessor_operation(
+                    component_id=self.component_id,
+                    data_type=data_type,
+                    program_id=program_id,
+                    operation_type='trigger_job',
+                    data={'result': result},
+                    status='completed',
+                    result={'skipped': True, 'reason': 'out_of_scope'},
+                    completed_at=datetime.now(timezone.utc)
+                )
+                return
 
-                # Schedule next job if there are more
-                current_job_index = JOB_MAPPING[data_type].index(job)
-                if current_job_index < len(JOB_MAPPING[data_type]) - 1:
-                    logger.debug("scheduling next job trigger in 10 seconds")
-                    asyncio.create_task(self._delay_next_job(program_id, data_type, result, current_job_index + 1))
-                    break
+            triggered_jobs = []
+            if data_type in JOB_MAPPING:
+                for job in JOB_MAPPING[data_type]:
+                    new_job = {
+                        "function": job.function,
+                        "program_id": program_id,
+                        "params": job.param_map(result)
+                    }
+                    logger.info(f"Triggering {job.function} for {result}")
+                    try:
+                        await self.qm.publish_message(
+                            subject="function.execute",
+                            stream="FUNCTION_EXECUTE",
+                            message=new_job
+                        )
+                        triggered_jobs.append(job.function)
+                    except StreamUnavailableError as e:
+                        logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
+                        await self.db.log_dataprocessor_operation(
+                            component_id=self.component_id,
+                            data_type=data_type,
+                            program_id=program_id,
+                            operation_type='trigger_job',
+                            data={'result': result},
+                            status='failed',
+                            error_message=str(e),
+                            completed_at=datetime.now(timezone.utc)
+                        )
+                        break
+                    except Exception as e:
+                        logger.error(f"Failed to trigger job: {str(e)}")
+                        await self.db.log_dataprocessor_operation(
+                            component_id=self.component_id,
+                            data_type=data_type,
+                            program_id=program_id,
+                            operation_type='trigger_job',
+                            data={'result': result},
+                            status='failed',
+                            error_message=str(e),
+                            completed_at=datetime.now(timezone.utc)
+                        )
+                        raise
+
+                    # Schedule next job if there are more
+                    current_job_index = JOB_MAPPING[data_type].index(job)
+                    if current_job_index < len(JOB_MAPPING[data_type]) - 1:
+                        logger.debug("scheduling next job trigger in 10 seconds")
+                        asyncio.create_task(self._delay_next_job(program_id, data_type, result, current_job_index + 1))
+                        break
+
+            # Log successful job triggers
+            if triggered_jobs:
+                await self.db.log_dataprocessor_operation(
+                    component_id=self.component_id,
+                    data_type=data_type,
+                    program_id=program_id,
+                    operation_type='trigger_job',
+                    data={'result': result},
+                    status='completed',
+                    result={'triggered_jobs': triggered_jobs},
+                    completed_at=datetime.now(timezone.utc)
+                )
+
+        except Exception as e:
+            logger.error(f"Error triggering new jobs: {e}")
+            await self.db.log_dataprocessor_operation(
+                component_id=self.component_id,
+                data_type=data_type,
+                program_id=program_id,
+                operation_type='trigger_job',
+                data={'result': result},
+                status='failed',
+                error_message=str(e),
+                completed_at=datetime.now(timezone.utc)
+            )
 
     async def _delay_next_job(self, program_id: int, data_type: str, result: Any, next_job_index: int):
         """Helper method to handle delayed job triggering."""
@@ -232,22 +299,55 @@ class DataProcessor(ReconComponent):
 
     async def process_ip(self, msg_data: Dict[str, Any]):
         """Process IP data."""
-        if msg_data.get('attributes') == None:
+        if msg_data.get('attributes') is None:
             attributes = {}
         else:
             attributes = msg_data.get('attributes')
         for ip in msg_data.get('data'):
-            ptr = attributes.get('ptr')
-            if isinstance(ptr, list):
-                ptr = ptr[0] if ptr else None  # Take the first PTR record if it's a list
-            elif ptr == '':
-                ptr = None  # Set empty string to None
-            cloud_provider = attributes.get('cloud_provider', None)
-            result = await self.db.insert_ip(ip=ip, ptr=ptr, cloud_provider=cloud_provider, program_id=msg_data.get('program_id'))
-            # Check if operation was successful, regardless of inserted/updated status
-            if result.get('inserted'):
-                await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
-    
+            try:
+                await self.db.log_dataprocessor_operation(
+                    component_id=self.component_id,
+                    data_type='ip',
+                    program_id=msg_data.get('program_id'),
+                    operation_type='insert',
+                    data={'ip': ip, 'attributes': attributes},
+                    status='started'
+                )
+
+                ptr = attributes.get('ptr')
+                if isinstance(ptr, list):
+                    ptr = ptr[0] if ptr else None
+                elif ptr == '':
+                    ptr = None
+                cloud_provider = attributes.get('cloud_provider', None)
+                result = await self.db.insert_ip(ip=ip, ptr=ptr, cloud_provider=cloud_provider, program_id=msg_data.get('program_id'))
+                
+                # Log operation result
+                if result.get('inserted'):
+                    await self.db.log_dataprocessor_operation(
+                        component_id=self.component_id,
+                        data_type='ip',
+                        program_id=msg_data.get('program_id'),
+                        operation_type='insert',
+                        data={'ip': ip, 'attributes': attributes},
+                        status='completed',
+                        result={'inserted': True, 'id': result.get('id')},
+                        completed_at=datetime.now(timezone.utc)
+                    )
+                    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
+            except Exception as e:
+                await self.db.log_dataprocessor_operation(
+                    component_id=self.component_id,
+                    data_type='ip',
+                    program_id=msg_data.get('program_id'),
+                    operation_type='insert',
+                    data={'ip': ip, 'attributes': attributes},
+                    status='failed',
+                    error_message=str(e),
+                    completed_at=datetime.now(timezone.utc)
+                )
+                logger.error(f"Error processing IP {ip}: {e}")
+
     async def process_domain(self, msg_data: Dict[str, Any]):
         """Process domain data."""
         for domain in msg_data.get('data'):
@@ -375,6 +475,8 @@ class DataProcessor(ReconComponent):
                 program_id=msg_data.get('program_id'), 
                 service=i.get("service")
             )
+            if inserted:
+                logger.info(f"New service inserted: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
 
 async def main():
     config = Config()

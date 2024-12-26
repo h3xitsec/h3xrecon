@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any, AsyncGenerator
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.core import *
+from h3xrecon.core import Config, QueueManager
 from loguru import logger
 
 

@@ -1,7 +1,6 @@
 from h3xrecon.core.component import ReconComponent, ProcessorState
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
-from h3xrecon.core.utils import debug_trace
 from h3xrecon.core import Config
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from datetime import datetime, timezone
@@ -11,11 +10,11 @@ from dataclasses import dataclass
 import importlib
 import pkgutil
 import json
-import uuid
 import traceback
 import asyncio
 import sys
 from uuid import UUID
+import uuid
 
 @dataclass
 class FunctionExecution:
@@ -117,7 +116,7 @@ class JobProcessor(ReconComponent):
                 subscription = await self.qm.subscribe(
                     subject="function.output",
                     stream="FUNCTION_OUTPUT",
-                    durable_name=f"JOBPROCESSORS_{self.component_id}",  # Make durable name unique
+                    durable_name="JOBPROCESSORS",
                     message_handler=self.message_handler,
                     batch_size=1,
                     queue_group="jobprocessors",
@@ -133,7 +132,7 @@ class JobProcessor(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"FUNCTION_OUTPUT:function.output:JOBPROCESSORS_{self.component_id}"
+                self._sub_key = f"FUNCTION_OUTPUT:function.output:JOBPROCESSORS"
                 logger.info("Successfully subscribed to output channel")
 
                 # Setup control subscriptions
@@ -152,7 +151,7 @@ class JobProcessor(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.all_jobprocessor",
+                    subject="function.control.all_jobprocessor",
                     stream="FUNCTION_CONTROL",
                     durable_name=f"CONTROL_ALL_JOBPROCESSOR_{self.component_id}",
                     message_handler=self.control_message_handler,
@@ -191,6 +190,17 @@ class JobProcessor(ReconComponent):
             return
 
         try:
+            # Log message receipt
+            message_id = msg.get('execution_id', str(uuid.uuid4()))
+            await self.db.log_jobprocessor_message(
+                component_id=self.component_id,
+                message_id=message_id,
+                message_type='function_output',
+                program_id=msg.get('program_id'),
+                message_data=msg,
+                status='received'
+            )
+
             # Validate the message using FunctionExecution dataclass
             function_execution = FunctionExecution(
                 execution_id=msg['execution_id'],
@@ -204,17 +214,75 @@ class JobProcessor(ReconComponent):
             await self.log_or_update_function_execution(msg, function_execution.execution_id, function_execution.timestamp)
             function_name = function_execution.source.get("function")
             if function_name:
-                await self.process_function_output(msg)
-                await raw_msg.ack()
+                processing_result = {}
+                actions_taken = []
+                try:
+                    await self.process_function_output(msg)
+                    processing_result['status'] = 'success'
+                    actions_taken.append(f"Processed output from {function_name}")
+                    
+                    # Log successful processing
+                    await self.db.log_jobprocessor_message(
+                        component_id=self.component_id,
+                        message_id=message_id,
+                        message_type='function_output',
+                        program_id=msg.get('program_id'),
+                        message_data=msg,
+                        status='processed',
+                        processing_result=processing_result,
+                        actions_taken=actions_taken,
+                        processed_at=datetime.now(timezone.utc)
+                    )
+                    await raw_msg.ack()
+                except Exception as e:
+                    processing_result['status'] = 'error'
+                    processing_result['error'] = str(e)
+                    # Log processing failure
+                    await self.db.log_jobprocessor_message(
+                        component_id=self.component_id,
+                        message_id=message_id,
+                        message_type='function_output',
+                        program_id=msg.get('program_id'),
+                        message_data=msg,
+                        status='failed',
+                        processing_result=processing_result,
+                        actions_taken=actions_taken,
+                        error_message=str(e),
+                        processed_at=datetime.now(timezone.utc)
+                    )
+                    await raw_msg.nak()
             else:
                 logger.error(f"No function name found in message: {msg}")
+                await self.db.log_jobprocessor_message(
+                    component_id=self.component_id,
+                    message_id=message_id,
+                    message_type='function_output',
+                    program_id=msg.get('program_id'),
+                    message_data=msg,
+                    status='failed',
+                    error_message='No function name found in message',
+                    processed_at=datetime.now(timezone.utc)
+                )
                 await raw_msg.nak()
             
         except (KeyError, ValueError, TypeError) as e:
             error_location = traceback.extract_tb(e.__traceback__)[-1]
             file_name = error_location.filename.split('/')[-1]
             line_number = error_location.lineno
-            logger.error(f"Error in {file_name}:{line_number} - {type(e).__name__}: {str(e)}")
+            error_msg = f"Error in {file_name}:{line_number} - {type(e).__name__}: {str(e)}"
+            logger.error(error_msg)
+            
+            if 'message_id' in locals():
+                await self.db.log_jobprocessor_message(
+                    component_id=self.component_id,
+                    message_id=message_id,
+                    message_type='function_output',
+                    program_id=msg.get('program_id'),
+                    message_data=msg,
+                    status='failed',
+                    error_message=error_msg,
+                    processed_at=datetime.now(timezone.utc)
+                )
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
@@ -240,12 +308,10 @@ class JobProcessor(ReconComponent):
                                if k not in ['target', 'force'] and not k.startswith('--')}
                 # Convert extra_params to a string representation
                 extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
-                logger.debug(f"Using dict extra_params in jobprocessor: {extra_params_str}")
+            logger.debug(f"Using dict extra_params in jobprocessor: {extra_params_str}")
             
             # Construct Redis key with extra parameters
-            redis_key = f"{function_name}:{target}"
-            if extra_params_str:
-                redis_key = f"{redis_key}:{extra_params_str}"
+            redis_key = f"{function_name}:{target}:{extra_params_str}"
             
             logger.debug(f"Setting Redis key in jobprocessor: {redis_key}")
             

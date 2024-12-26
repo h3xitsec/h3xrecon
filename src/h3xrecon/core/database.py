@@ -11,6 +11,7 @@ import dateutil.parser
 from dataclasses import dataclass
 from typing import Optional
 from h3xrecon.__about__ import __version__
+import json
 
 @dataclass
 class DbResult:
@@ -139,7 +140,7 @@ class DatabaseManager():
             await self.pool.close()
     
     async def _fetch_records(self, query: str, *args):
-        logger.debug(f"Starting _fetch_records...")
+        logger.debug("Starting _fetch_records...")
         try:
             logger.debug("Ensuring connection...")
             await self.ensure_connected()
@@ -882,3 +883,83 @@ class DatabaseManager():
         if result.success and result.data:
             return result.data[0]
         return None
+
+    async def log_worker_execution(self, execution_id: str, component_id: str, function_name: str, program_id: int, target: str, parameters: Dict[str, Any], status: str, error_message: str = None, completed_at: datetime = None) -> bool:
+        """Log worker function execution."""
+        try:
+            query = """
+            INSERT INTO worker_logs (execution_id, component_id, function_name, program_id, target, parameters, status, error_message, completed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (execution_id, status) DO NOTHING
+            """
+            result = await self._write_records(
+                query,
+                execution_id,
+                component_id,
+                function_name,
+                program_id,
+                target,
+                json.dumps(parameters),
+                status,
+                error_message,
+                completed_at
+            )
+            return result.success
+        except Exception as e:
+            logger.error(f"Error logging worker execution: {str(e)}")
+            return False
+
+    async def log_jobprocessor_message(self, component_id: str, message_id: str, message_type: str, program_id: int, 
+                                     message_data: Dict[str, Any], status: str, processing_result: Dict[str, Any] = None, 
+                                     actions_taken: Dict[str, Any] = None, error_message: str = None, processed_at: datetime = None) -> bool:
+        """Log job processor message handling."""
+        try:
+            query = """
+            INSERT INTO jobprocessor_logs (component_id, message_id, message_type, program_id, message_data, 
+                                         processing_result, actions_taken, status, error_message, processed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            """
+            result = await self._write_records(
+                query,
+                component_id,
+                message_id,
+                message_type,
+                program_id,
+                json.dumps(message_data),
+                json.dumps(processing_result) if processing_result else None,
+                json.dumps(actions_taken) if actions_taken else None,
+                status,
+                error_message,
+                processed_at
+            )
+            return result.success
+        except Exception as e:
+            logger.error(f"Error logging job processor message: {str(e)}")
+            return False
+
+    async def log_dataprocessor_operation(self, component_id: str, data_type: str, program_id: int, operation_type: str, 
+                                        data: Dict[str, Any], status: str, result: Dict[str, Any] = None, 
+                                        error_message: str = None, completed_at: datetime = None) -> bool:
+        """Log data processor operations."""
+        try:
+            query = """
+            INSERT INTO dataprocessor_logs (component_id, data_type, program_id, operation_type, data, 
+                                          result, status, error_message, completed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            """
+            result = await self._write_records(
+                query,
+                component_id,
+                data_type,
+                program_id,
+                operation_type,
+                json.dumps(data),
+                json.dumps(result) if result else None,
+                status,
+                error_message,
+                completed_at
+            )
+            return result.success
+        except Exception as e:
+            logger.error(f"Error logging data processor operation: {str(e)}")
+            return False

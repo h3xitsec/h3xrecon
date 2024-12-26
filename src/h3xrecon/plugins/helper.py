@@ -1,8 +1,6 @@
 from typing import Dict, Any
-from typing import Dict, Any
 import ipaddress
 from ipwhois import IPWhois
-import json
 import requests
 
 async def send_nuclei_data(qm, data: str, program_id: int):
