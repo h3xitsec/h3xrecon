@@ -150,7 +150,7 @@ class JobProcessor(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.all_jobprocessor",
+                    subject="function.control.all_jobprocessor",
                     stream="FUNCTION_CONTROL",
                     durable_name=f"CONTROL_ALL_JOBPROCESSOR_{self.component_id}",
                     message_handler=self.control_message_handler,

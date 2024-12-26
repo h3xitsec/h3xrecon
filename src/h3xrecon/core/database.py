@@ -139,7 +139,7 @@ class DatabaseManager():
             await self.pool.close()
     
     async def _fetch_records(self, query: str, *args):
-        logger.debug(f"Starting _fetch_records...")
+        logger.debug("Starting _fetch_records...")
         try:
             logger.debug("Ensuring connection...")
             await self.ensure_connected()

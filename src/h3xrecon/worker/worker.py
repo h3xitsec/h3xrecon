@@ -90,7 +90,7 @@ class Worker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.all_worker",
+                    subject="function.control.all_worker",
                     stream="FUNCTION_CONTROL",
                     durable_name=f"CONTROL_ALL_WORKER_{self.component_id}",
                     message_handler=self.control_message_handler,

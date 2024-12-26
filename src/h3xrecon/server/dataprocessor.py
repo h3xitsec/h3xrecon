@@ -92,7 +92,7 @@ class DataProcessor(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.all_dataprocessor",
+                    subject="function.control.all_dataprocessor",
                     stream="FUNCTION_CONTROL",
                     durable_name=f"CONTROL_ALL_DATAPROCESSOR_{self.component_id}",
                     message_handler=self.control_message_handler,

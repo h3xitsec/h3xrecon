@@ -48,7 +48,7 @@ class QueueManager:
             print("Got reconnected...")
 
         async def error_cb(e):
-            print(f"Error connecting to NATS server, retrying...")
+            print("Error connecting to NATS server, retrying...")
 
         try:
             self.nc = NATS()
