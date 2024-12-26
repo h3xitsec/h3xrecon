@@ -1,31 +1,21 @@
-from h3xrecon.core import DatabaseManager
-from h3xrecon.core import QueueManager
-from h3xrecon.core import Config
-from h3xrecon.core.queue import StreamUnavailableError
+from h3xrecon.core.component import ReconComponent, ProcessorState
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
 from h3xrecon.core.utils import debug_trace
-from h3xrecon.core.preflight import PreflightCheck
+from h3xrecon.core import Config
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
-from nats.js.errors import NotFoundError
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Dict, Any, Callable, List
 from loguru import logger
 from dataclasses import dataclass
-import socket
-import traceback
 import importlib
 import pkgutil
-import redis
+import json
+import uuid
+import traceback
 import asyncio
 import sys
-
 from uuid import UUID
-from datetime import datetime
-from enum import Enum
-import json
-import psutil
-import platform
 
 @dataclass
 class FunctionExecution:
@@ -67,51 +57,14 @@ class FunctionExecution:
             logger.error("output must be a list")
             raise TypeError("output must be a list")
 
-class ProcessorState(Enum):
-    RUNNING = "running"
-    PAUSED = "paused"
-
-class JobProcessor:
+class JobProcessor(ReconComponent):
     def __init__(self, config: Config):
-        self.config = config
-        self.db = DatabaseManager()
-        self.qm = QueueManager(client_name="jobprocessor", config=config.nats)
-        self.role = "jobprocessor"
-        self.component_id = f"{self.role}-{socket.gethostname()}"
-        self.jobprocessor_id = self.component_id
+        super().__init__("jobprocessor", config)
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
-        redis_config = config.redis
-        self.redis_cache = redis.Redis(
-            host=redis_config.host,
-            port=redis_config.port,
-            db=redis_config.db,
-            password=redis_config.password
-        )
-        try:
-            logger.debug(f"Connecting to Redis status db at {config.redis.host}:{config.redis.port} db=1")
-            self.redis_status = redis.Redis(
-                host=config.redis.host,
-                port=config.redis.port,
-                db=1,
-                password=config.redis.password
-            )
-            # Test connection
-            self.redis_status.ping()
-            logger.debug("Successfully connected to Redis status db")
-            self.state = ProcessorState.RUNNING
-            self.control_subscription = None
-            self.output_subscription = None
-            self.running = asyncio.Event()
-            self.running.set()  # Start in running state
-        except redis.exceptions.ConnectionError as e:
-            logger.error(f"Failed to connect to Redis status db: {e}")
-            self.redis_status = None
-        except redis.exceptions.AuthenticationError:
-            logger.error("Redis authentication failed")
-            self.redis_status = None
-        except Exception as e:
-            logger.error(f"Unexpected error connecting to Redis: {e}")
-            self.redis_status = None
+        self._load_plugins()
+
+    def _load_plugins(self):
+        """Load all available plugins."""
         try:
             package = importlib.import_module('h3xrecon.plugins.plugins')
             logger.debug(f"Found plugin package at: {package.__path__}")
@@ -150,171 +103,88 @@ class JobProcessor:
             except Exception as e:
                 logger.warning(f"Error loading plugin '{module_name}': {e}", exc_info=True)
 
-        self._last_message_time = None
-        self._health_check_task = None
-        self._output_subscription = None
-
-    async def _setup_subscription(self):
-        """Helper method to setup NATS subscriptions with consistent configuration."""
+    async def setup_subscriptions(self):
+        """Setup NATS subscriptions for the job processor."""
         try:
-            if self._output_subscription:
-                try:
-                    await self._output_subscription.unsubscribe()
-                    logger.debug("Successfully unsubscribed from output subscription")
-                except NotFoundError:
-                    logger.debug("Output subscription already deleted.")
-                except Exception as e:
-                    logger.warning(f"Error unsubscribing from output subscription: {e}")
-                finally:
-                    self._output_subscription = None
+            async with self._subscription_lock:
+                if self.state == ProcessorState.PAUSED:
+                    logger.debug("Job processor is paused, skipping subscription setup")
+                    return
 
-            subscription = await self.qm.subscribe(
-                subject="function.output",
-                stream="FUNCTION_OUTPUT",
-                durable_name=f"JOBPROCESSORS",
-                message_handler=self.message_handler,
-                batch_size=1,
-                queue_group="jobprocessors",
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.NEW,
-                    'replay_policy': ReplayPolicy.INSTANT,
-                    'max_deliver': 1,
-                    'max_ack_pending': 1000,
-                    'flow_control': False,
-                    'deliver_group': 'jobprocessors'
-                },
-                pull_based=True
-            )
-            self._output_subscription = subscription
-            self._output_sub_key = f"FUNCTION_OUTPUT:function.output:OUTPUT_{self.jobprocessor_id}"
-            logger.info("Successfully subscribed to output channel")
-            return subscription
+                # Clean up existing subscriptions using parent class method
+                await self._cleanup_subscriptions()
+
+                subscription = await self.qm.subscribe(
+                    subject="function.output",
+                    stream="FUNCTION_OUTPUT",
+                    durable_name=f"JOBPROCESSORS_{self.component_id}",  # Make durable name unique
+                    message_handler=self.message_handler,
+                    batch_size=1,
+                    queue_group="jobprocessors",
+                    consumer_config={
+                        'ack_policy': AckPolicy.EXPLICIT,
+                        'deliver_policy': DeliverPolicy.NEW,
+                        'replay_policy': ReplayPolicy.INSTANT,
+                        'max_deliver': 1,
+                        'max_ack_pending': 1000,
+                        'flow_control': False,
+                        'deliver_group': 'jobprocessors'
+                    },
+                    pull_based=True
+                )
+                self._subscription = subscription
+                self._sub_key = f"FUNCTION_OUTPUT:function.output:JOBPROCESSORS_{self.component_id}"
+                logger.info("Successfully subscribed to output channel")
+
+                # Setup control subscriptions
+                await self.qm.subscribe(
+                    subject="function.control.all",
+                    stream="FUNCTION_CONTROL",
+                    durable_name=f"CONTROL_ALL_{self.component_id}",
+                    message_handler=self.control_message_handler,
+                    batch_size=1,
+                    consumer_config={
+                        'ack_policy': AckPolicy.EXPLICIT,
+                        'deliver_policy': DeliverPolicy.NEW,
+                        'replay_policy': ReplayPolicy.INSTANT
+                    },
+                    broadcast=True
+                )
+
+                await self.qm.subscribe(
+                    subject=f"function.control.all_jobprocessor",
+                    stream="FUNCTION_CONTROL",
+                    durable_name=f"CONTROL_ALL_JOBPROCESSOR_{self.component_id}",
+                    message_handler=self.control_message_handler,
+                    batch_size=1,
+                    consumer_config={
+                        'ack_policy': AckPolicy.EXPLICIT,
+                        'deliver_policy': DeliverPolicy.NEW,
+                        'replay_policy': ReplayPolicy.INSTANT
+                    },
+                    broadcast=True
+                )
+
+                await self.qm.subscribe(
+                    subject=f"function.control.{self.component_id}",
+                    stream="FUNCTION_CONTROL",
+                    durable_name=f"CONTROL_{self.component_id}",
+                    message_handler=self.control_message_handler,
+                    batch_size=1,
+                    consumer_config={
+                        'ack_policy': AckPolicy.EXPLICIT,
+                        'deliver_policy': DeliverPolicy.NEW,
+                        'replay_policy': ReplayPolicy.INSTANT
+                    },
+                    broadcast=True
+                )
+
         except Exception as e:
-            logger.error(f"Failed to setup subscription: {e}")
+            logger.error(f"Error setting up job processor subscriptions: {e}")
             raise
 
-    async def start(self):
-        logger.info(f"Starting Job Processor (ID: {self.jobprocessor_id}) version {__version__}...")
-        try:
-            # Run preflight checks
-            preflight = PreflightCheck(self.config, f"jobprocessor-{self.jobprocessor_id}")
-            if not await preflight.run_checks():
-                raise ConnectionError("Preflight checks failed. Cannot start job processor.")
-
-            # Initialize components with retry logic
-            retry_count = 0
-            max_retries = 3
-            while retry_count < max_retries:
-                try:
-                    await self.qm.connect()
-                    # Store the subscription object
-                    logger.debug("Attempting to subscribe to function.output stream")
-                    self.output_subscription = await self._setup_subscription()
-                    logger.debug("Successfully subscribed to function.output stream")
-                    logger.info(f"Job Processor started and listening for messages...")
-                    break
-                except Exception as e:
-                    retry_count += 1
-                    if retry_count == max_retries:
-                        raise e
-                    await asyncio.sleep(1)
-
-            # Subscribe to broadcast messages (all components)
-            await self.qm.subscribe(
-                subject="function.control.all",
-                stream="FUNCTION_CONTROL",
-                durable_name=f"CONTROL_ALL_{self.jobprocessor_id}",
-                message_handler=self.control_message_handler,
-                batch_size=1,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.NEW,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
-                broadcast=True
-            )
-
-            # Subscribe to broadcast messages (all workers)
-            await self.qm.subscribe(
-                subject="function.control.all_jobprocessor",
-                stream="FUNCTION_CONTROL",
-                durable_name=f"CONTROL_ALL_JOBPROCESSOR_{self.jobprocessor_id}",
-                message_handler=self.control_message_handler,
-                batch_size=1,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.NEW,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
-                broadcast=True
-            )
-            
-            # Subscribe to worker-specific messages
-            await self.qm.subscribe(
-                subject=f"function.control.{self.jobprocessor_id}",
-                stream="FUNCTION_CONTROL",
-                durable_name=f"CONTROL_{self.jobprocessor_id}",
-                message_handler=self.control_message_handler,
-                batch_size=1,
-                consumer_config={
-                    'ack_policy': AckPolicy.EXPLICIT,
-                    'deliver_policy': DeliverPolicy.NEW,
-                    'replay_policy': ReplayPolicy.INSTANT
-                },
-                broadcast=True
-            )
-            await self.set_status("running")  # Set initial status
-            # Start health check
-            self._health_check_task = asyncio.create_task(self._health_check())
-            # Start message processing loop
-            asyncio.create_task(self._process_pull_messages())
-        except Exception as e:
-            logger.error(f"Failed to start job processor: {str(e)}")
-            sys.exit(1)
-
-    async def _process_pull_messages(self):
-        """Process messages from the pull-based subscription."""
-        while True:
-            if self.state == ProcessorState.PAUSED:
-                await asyncio.sleep(1)
-                continue
-
-            try:
-                # Check if we have a valid subscription
-                if not self._output_subscription:
-                    logger.debug("No output subscription found, setting up...")
-                    await self._setup_subscription()
-                    continue
-
-                # Fetch messages
-                #logger.debug("Attempting to fetch messages...")
-                messages = await self.qm.fetch_messages(self._output_subscription, batch_size=1)
-                
-                if messages:
-                    logger.debug(f"Received {len(messages)} messages")
-                    for msg in messages:
-                        # Process each message
-                        await self.message_handler(msg)
-                else:
-                    #logger.debug("No messages received, waiting...")
-                    await asyncio.sleep(0.1)
-
-            except asyncio.CancelledError:
-                logger.info("Pull message processing loop cancelled")
-                break
-            except Exception as e:
-                if not isinstance(e, TimeoutError):
-                    logger.error(f"Error in pull message processing loop: {e}")
-                await asyncio.sleep(0.1)
-
-    async def stop(self):
-        logger.info("Shutting down...")
-        # Clean up Redis status
-        if hasattr(self, 'redis_status'):
-            self.redis_status.delete(self.jobprocessor_id)
-
     async def message_handler(self, raw_msg):
+        """Handle incoming function output messages."""
         msg = json.loads(raw_msg.data.decode())
         if self.state == ProcessorState.PAUSED:
             await raw_msg.nak()
@@ -349,8 +219,9 @@ class JobProcessor:
             if not raw_msg._ackd:
                 await raw_msg.ack()
             await self.set_status("running")
-    
+
     async def log_or_update_function_execution(self, message_data: Dict[str, Any], execution_id: str, timestamp: str):
+        """Log or update function execution in the database."""
         try:
             # Extract function parameters
             params = message_data.get("source", {}).get("params", {})
@@ -397,276 +268,37 @@ class JobProcessor:
             logger.error(f"Error logging or updating function execution: {e}")
 
     async def process_function_output(self, msg_data: Dict[str, Any]):
+        """Process the output from a function execution."""
         function_name = msg_data.get("source", {}).get("function")
         if function_name in self.processor_map:
             logger.info(f"Processing output from plugin '{function_name}' on target '{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:
-                try:
-                    await self.processor_map[function_name](msg_data, self.db, self.qm)
-                except StreamUnavailableError as e:
-                    logger.error(f"Failed to process output - stream unavailable: {str(e)}")
-                    # Optionally store failed outputs for retry
-                    # await self.store_failed_output(msg_data)
-                except Exception as e:
-                    logger.error(f"Error processing output with plugin '{function_name}': {e}")
-                    logger.exception(e)
-                    raise
+                await self.processor_map[function_name](msg_data, self.db, self.qm)
             except Exception as e:
-                logger.error(f"Error in output processor for '{function_name}': {e}")
-                logger.exception(e)
+                logger.error(f"Error processing output with plugin '{function_name}': {e}")
+                raise
         else:
             logger.warning(f"No processor found for function: {function_name}")
-
-    #############################################
-    ## Recon tools output processing functions ##
-    #############################################
-    
-    async def _health_check(self):
-        """Monitor processor health and subscription status."""
-        while True:
-            try:
-                current_time = datetime.now(timezone.utc)
-                if self._last_message_time:
-                    time_since_last_message = current_time - self._last_message_time
-                    if time_since_last_message > timedelta(minutes=5):
-                        logger.warning(f"No messages received for {time_since_last_message}. Reconnecting subscriptions...")
-                        await self._reconnect_subscriptions()
-                
-                # Check if we're still connected to NATS
-                if not self.qm.nc.is_connected:
-                    logger.error("NATS connection lost. Attempting to reconnect...")
-                    await self.qm.ensure_connected()
-                
-                await asyncio.sleep(30)  # Check every 30 seconds
-                
-            except Exception as e:
-                logger.error(f"Error in health check: {e}")
-                await asyncio.sleep(5)
-
-    async def _reconnect_subscriptions(self):
-        """Reconnect all subscriptions."""
-        try:
-            logger.info("Reconnecting subscriptions...")
-            await self.qm.connect()
-            self.output_subscription = await self._setup_subscription()
-            logger.info("Successfully reconnected subscriptions")
-        except Exception as e:
-            logger.error(f"Error reconnecting subscriptions: {e}")
-
-    async def control_message_handler(self, raw_msg):
-        """Handle control messages for pausing/unpausing the processor"""
-        try:
-            msg = json.loads(raw_msg.data.decode())
-            command = msg.get("command")
-            target = msg.get("target", "all")
-            target_id = msg.get("target_id")
-
-            # Check if message is targeted for this processor
-            if target not in ["all", "jobprocessor"] and target != self.jobprocessor_id:
-                logger.debug(f"Ignoring control message - not for this processor (target: {target})")
-                await raw_msg.ack()
-                return
-            
-            # For processor-specific targeting, check if this is the intended processor
-            if target == "jobprocessor" and target_id and target_id != self.jobprocessor_id:
-                logger.debug(f"Ignoring processor-specific message - not for this processor ID (target_id: {target_id})")
-                await raw_msg.ack()
-                return
-
-            if command == "pause":
-                logger.debug(f"Received pause command for {target} {target_id or ''}")
-                if self.state == ProcessorState.PAUSED:
-                    logger.debug("Job processor is already paused, sending response")
-                    # Send acknowledgment even when already paused
-                    await self.qm.publish_message(
-                        subject="control.response.pause",
-                        stream="CONTROL_RESPONSE_PAUSE",
-                        message={
-                            "component_id": self.jobprocessor_id,
-                            "type": "jobprocessor",
-                            "status": "paused",
-                            "success": True,
-                            "timestamp": datetime.now(timezone.utc).isoformat()
-                        }
-                    )
-                    await raw_msg.ack()
-                    return
-                
-                self.state = ProcessorState.PAUSED
-                self.running.clear()  # Pause message processing
-                await self.set_status("paused")  # Update Redis status
-                
-                # Unsubscribe from output subscription
-                if self.output_subscription:
-                    try:
-                        await self.output_subscription.unsubscribe()
-                        logger.debug(f"Unsubscribed from output subscription: {self.output_subscription}")
-                        self.output_subscription = None
-                    except Exception as e:
-                        logger.error(f"Error unsubscribing: {e}")
-                
-                logger.info(f"Job processor {self.jobprocessor_id} paused")
-                
-                # Send acknowledgment to dedicated stream
-                await self.qm.publish_message(
-                    subject="control.response.pause",
-                    stream="CONTROL_RESPONSE_PAUSE",
-                    message={
-                        "component_id": self.jobprocessor_id,
-                        "type": "jobprocessor",
-                        "status": "paused",
-                        "success": True,
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                )
-            
-            elif command == "unpause":
-                logger.debug("Received unpause command")
-                self.state = ProcessorState.RUNNING
-                self.running.set()  # Resume message processing
-                
-                # Resubscribe to the output stream
-                await self._setup_subscription()
-                logger.debug(f"Resubscribed to output subscription: {self.output_subscription}")
-                
-                logger.info(f"Job processor {self.jobprocessor_id} resumed")
-                await self.set_status("running")  # Update Redis status
-                # Send acknowledgment to dedicated stream
-                await self.qm.publish_message(
-                    subject="control.response.unpause",
-                    stream="CONTROL_RESPONSE_UNPAUSE",
-                    message={
-                        "component_id": self.jobprocessor_id,
-                        "type": "jobprocessor",
-                        "status": "running",
-                        "success": True,
-                        "command": "unpause",
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                )
-
-            elif command == "report":
-                logger.info("Received report command")
-                report = await self.generate_report()
-                logger.debug(f"Report: {report}")
-                # Send report through control response channel
-                await self.qm.publish_message(
-                    subject="function.control.response",
-                    stream="FUNCTION_CONTROL_RESPONSE",
-                    message={
-                        "processor_id": self.jobprocessor_id,
-                        "type": "jobprocessor",
-                        "command": "report",
-                        "report": report,
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                )
-                logger.debug("Job processor report sent")
-            elif command == 'ping':
-                logger.info(f"Received ping from {msg.get('target')}")
-                # Send pong response
-                await self.qm.publish_message(
-                    subject="control.response.ping",
-                    stream="CONTROL_RESPONSE_PING",
-                    message={
-                        "component_id": self.jobprocessor_id,
-                        "type": "jobprocessor",
-                        "command": "pong",
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                )
-            await raw_msg.ack()
-        except Exception as e:
-            logger.error(f"Error in control_message_handler: {e}")
-            await raw_msg.nak()
-
-    async def generate_report(self) -> Dict[str, Any]:
-        """Generate a comprehensive report of the job processor's current state."""
-        try:
-            # Get process info
-            process = psutil.Process()
-            cpu_percent = process.cpu_percent(interval=1)
-            mem_info = process.memory_info()
-            
-            report = {
-                "processor": {
-                    "id": self.jobprocessor_id,
-                    "version": __version__,
-                    "hostname": socket.gethostname(),
-                    "state": self.state.value,
-                    "uptime": (datetime.now(timezone.utc) - self._start_time).total_seconds() if hasattr(self, '_start_time') else None,
-                    "last_message_time": self._last_message_time.isoformat() if self._last_message_time else None
-                },
-                "system": {
-                    "platform": platform.platform(),
-                    "python_version": sys.version,
-                    "cpu_count": psutil.cpu_count(),
-                    "total_memory": psutil.virtual_memory().total
-                },
-                "process": {
-                    "cpu_percent": cpu_percent,
-                    "memory_usage": {
-                        "rss": mem_info.rss,
-                        "vms": mem_info.vms,
-                        "percent": process.memory_percent()
-                    },
-                    "threads": process.num_threads()
-                },
-                "queues": {
-                    "nats_connected": self.qm.nc.is_connected if self.qm else False,
-                    "output_subscription": {
-                        "active": self.output_subscription is not None,
-                        "queue_group": "jobprocessor"
-                    },
-                    "control_subscription": {
-                        "active": self.control_subscription is not None
-                    }
-                },
-                "plugins": {
-                    "registered_processors": list(self.processor_map.keys())
-                },
-                "redis": {
-                    "cache_connection": bool(self.redis_cache.ping() if self.redis_cache else False),
-                    "status_connection": bool(self.redis_status.ping() if self.redis_status else False)
-                }
-            }
-            
-            return report
-        except Exception as e:
-            logger.error(f"Error generating report: {e}")
-            return {"error": str(e)}
-    
-    @debug_trace
-    async def set_status(self, status: str):
-        self.redis_status.set(self.component_id, status)
-        for attempt in range(5):
-            current_status = self.redis_status.get(self.component_id).decode()
-            logger.debug(f"Current status: {current_status}, Target status: {status}")
-            if current_status != status:
-                logger.error(f"Failed to set status for {self.component_id} to {status} (attempt {attempt + 1}/5)")
-                if attempt < 4:  # Don't sleep on last attempt
-                    await asyncio.sleep(1)
-            else:
-                logger.debug(f"Successfully set status for {self.component_id} to {status}")
-                break
 
 async def main():
     config = Config()
     config.setup_logging()
+    logger.info(f"Starting H3XRecon job processor... (v{__version__})")
+
     job_processor = JobProcessor(config)
-    await job_processor.start()
-    
     try:
-        # Keep the data processor running
+        await job_processor.start()
         while True:
             await asyncio.sleep(1)
     except KeyboardInterrupt:
-        pass
-    finally:
+        logger.info("Shutting down job processor...")
         await job_processor.stop()
+    except Exception as e:
+        logger.error(f"Critical error: {str(e)}")
+        sys.exit(1)
 
 def run():
     asyncio.run(main())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run()
