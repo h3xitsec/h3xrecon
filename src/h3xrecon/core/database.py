@@ -420,14 +420,14 @@ class DatabaseManager():
         finally:
             logger.debug("Exiting check_domain_regex_match method")
 
-    async def insert_ip(self, ip: str, ptr: str, cloud_provider: str, program_id: int) -> bool:
+    async def insert_ip(self, ip: str, ptr: str, cloud_provider: str, program_id: int) -> Dict[str, Any]:
         # Validate IP address is IPv4 or IPv6
         import ipaddress
         try:
             ipaddress.ip_address(ip)
         except ValueError:
             logger.error(f"Invalid IP address: {ip}")
-            return False
+            return {'inserted': False, 'id': None}
 
         query = """
         INSERT INTO ips (ip, ptr, cloud_provider, program_id)
@@ -443,24 +443,21 @@ class DatabaseManager():
             END,
             program_id = EXCLUDED.program_id,
             discovered_at = CURRENT_TIMESTAMP
-        RETURNING id
+        RETURNING (xmax = 0) AS inserted, id
         """
         try:
             result = await self._write_records(query, ip, ptr, cloud_provider, program_id)
-            
-            # Handle nested DbResult objects
-            if result.success and isinstance(result.data, DbResult):
-                data = result.data.data
-            else:
-                data = result.data
-            logger.debug(result)
-            if data and isinstance(data, list) and len(data) > 0:
-                logger.info(f"IP operation successful: {ip}")
-                return result
-            return DbResult(success=False, error="No data returned from query")
+            logger.debug(f"Insert result: {result}")
+            if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                return {
+                    'inserted': result.data[0]['inserted'],
+                    'id': result.data[0]['id']
+                }
+            return {'inserted': False, 'id': None}
         except Exception as e:
-            logger.error(f"Error inserting IP: {e}")
-            return DbResult(success=False, error=str(e))
+            logger.error(f"Error inserting or updating IP in database: {str(e)}")
+            logger.exception(e)
+            return {'inserted': False, 'id': None}
     
     async def insert_service(self, ip: str, program_id: int, port: int = None, protocol: str = None, service: str = None) -> bool:
         try:
@@ -529,7 +526,7 @@ class DatabaseManager():
             logger.exception(e)
             return False
     
-    async def insert_domain(self, domain: str, program_id: int, ips: List[str] = None, cnames: List[str] = None, is_catchall: bool = False):
+    async def insert_domain(self, domain: str, program_id: int, ips: List[str] = None, cnames: List[str] = None, is_catchall: bool = False) -> Dict[str, Any]:
         try:
             logger.debug(f"insert_domain called with is_catchall={is_catchall}, type={type(is_catchall)}")
             if await self.check_domain_regex_match(domain, program_id):
@@ -550,7 +547,7 @@ class DatabaseManager():
                         ips = EXCLUDED.ips, 
                         cnames = EXCLUDED.cnames, 
                         is_catchall = EXCLUDED.is_catchall::boolean
-                    RETURNING (xmax = 0) AS inserted, is_catchall
+                    RETURNING (xmax = 0) AS inserted, is_catchall, id
                     ''',
                     domain.lower(),
                     program_id,
@@ -560,22 +557,18 @@ class DatabaseManager():
                 )
                 logger.debug(f"Insert result: {result}")
                 
-                # Verify the insert
-                verify = await self._fetch_records(
-                    'SELECT is_catchall FROM domains WHERE domain = $1',
-                    domain.lower()
-                )
-                logger.debug(f"Verification query result: {verify}")
-                
                 if result.success and isinstance(result.data, list) and len(result.data) > 0:
-                    return result.data[0]['inserted']
-                return False
+                    return {
+                        'inserted': result.data[0]['inserted'],
+                        'id': result.data[0]['id']
+                    }
+                return {'inserted': False, 'id': None}
             else:
-                return False
+                return {'inserted': False, 'id': None}
         except Exception as e:
             logger.error(f"Error inserting or updating domain in database: {str(e)}")
             logger.exception(e)
-            return False
+            return {'inserted': False, 'id': None}
     
     async def insert_url(self, url: str, httpx_data: Dict[str, Any], program_id: int):
         logger.debug(f"{url}:{httpx_data}")

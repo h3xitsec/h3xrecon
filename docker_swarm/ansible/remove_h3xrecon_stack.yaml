@@ -24,3 +24,4 @@
       retries: 3
       delay: 5
       until: volume_removal is not failed
+      ignore_errors: true

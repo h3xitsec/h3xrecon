@@ -72,7 +72,10 @@ class DataProcessor:
         self.running.set()  # Start in running state
         self.state = ProcessorState.RUNNING
         self.control_subscription = None
-        self.data_subscription = None
+        self.input_subscription = None
+        self._subscription_lock = asyncio.Lock()
+        self._input_subscription = None
+        self._pull_processor_task = None
         # Add Redis status connection
         
     @debug_trace
@@ -93,14 +96,14 @@ class DataProcessor:
                                 broadcast: bool = False, queue_group: str = None):
         """Helper method to setup NATS subscriptions with consistent configuration."""
         try:
-            if self.data_subscription:
+            if self.input_subscription:
                 try:
-                    await self.data_subscription.unsubscribe()
+                    await self.input_subscription.unsubscribe()
                     logger.debug("Successfully unsubscribed from data subscription")
                 except Exception as e:
                     logger.warning(f"Error unsubscribing from data subscription: {e}")
                 finally:
-                    self.data_subscription = None
+                    self.input_subscription = None
 
             subscription = await self.qm.subscribe(
                 subject=subject,
@@ -136,9 +139,9 @@ class DataProcessor:
 
             try:
                 # Check if we have a valid subscription
-                if not self.data_subscription:
+                if not self.input_subscription:
                     logger.debug("No data subscription found, setting up...")
-                    self.data_subscription = await self._setup_subscription(
+                    self.input_subscription = await self._setup_subscription(
                         subject="recon.data",
                         stream="RECON_DATA",
                         message_handler=self.message_handler,
@@ -148,7 +151,7 @@ class DataProcessor:
                 
                 # Fetch messages
                 #logger.debug("Attempting to fetch messages...")
-                messages = await self.qm.fetch_messages(self.data_subscription, batch_size=1)
+                messages = await self.qm.fetch_messages(self.input_subscription, batch_size=1)
                 
                 if messages:
                     logger.debug(f"Received {len(messages)} messages")
@@ -182,12 +185,7 @@ class DataProcessor:
                 try:
                     await self.qm.connect()
                     # Store the subscription object
-                    self.data_subscription = await self._setup_subscription(
-                        subject="recon.data",
-                        stream="RECON_DATA",
-                        message_handler=self.message_handler,
-                        queue_group="dataprocessor"
-                    )
+                    await self._setup_input_subscription()
                     logger.info(f"Data Processor started and listening for messages...")
                     break
                 except Exception as e:
@@ -260,7 +258,104 @@ class DataProcessor:
         # Clean up Redis status
         if hasattr(self, 'redis_status'):
             self.redis_status.delete(self.dataprocessor_id)
+    
+    @debug_trace
+    async def _setup_input_subscription(self):
+        """Helper method to set up the function.execute subscription."""
+        logger.debug("Setting up execute subscription...")
+        try:
+            async with self._subscription_lock:  # Use lock to prevent concurrent setup
+                if self.state == ProcessorState.PAUSED:
+                    logger.debug("Worker is paused, skipping execute subscription setup")
+                    return
 
+                # Clean up existing subscription and task
+                if self._input_subscription:
+                    try:
+                        await self._input_subscription.unsubscribe()
+                        logger.debug("Successfully unsubscribed from execute subscription")
+                    except NotFoundError:
+                        logger.debug("Execute subscription already deleted.")
+                    except Exception as e:
+                        logger.warning(f"Error unsubscribing from execute subscription: {e}")
+                    finally:
+                        self._input_subscription = None
+
+                # Cancel existing pull processor task
+                if self._pull_processor_task and not self._pull_processor_task.done():
+                    self._pull_processor_task.cancel()
+                    try:
+                        await self._pull_processor_task
+                    except asyncio.CancelledError:
+                        pass
+                    self._pull_processor_task = None
+
+                subscription = await self.qm.subscribe(
+                        subject="recon.data",
+                        stream="RECON_DATA",
+                        durable_name=f"DATAPROCESSORS",
+                        message_handler=self.message_handler,
+                        batch_size=1,
+                        queue_group="dataprocessor",
+                        consumer_config={
+                            'ack_policy': AckPolicy.EXPLICIT,
+                            'deliver_policy': DeliverPolicy.ALL,
+                            'replay_policy': ReplayPolicy.INSTANT,
+                            'max_deliver': 1,
+                            'max_ack_pending': 1000,
+                            'flow_control': False
+                        },
+                        pull_based=True
+                    )
+                self._input_subscription = subscription
+                self._input_sub_key = f"RECON_DATA:recon.data:DATAPROCESSORS"
+                logger.info("Successfully subscribed to input channel")
+                
+                # Start the pull message processing loop with proper task tracking
+                await self.start_pull_processor()
+
+        except Exception as e:
+            logger.error(f"Error setting up input subscription: {e}")
+            raise
+    
+    @debug_trace
+    async def start_pull_processor(self):
+        if not self._pull_processor_task or self._pull_processor_task.done():
+            self._pull_processor_task = asyncio.create_task(self._process_pull_messages())
+    
+    @debug_trace
+    async def _process_pull_messages(self):
+        """Process messages from the pull-based subscription."""
+        logger.debug(f"{self.component_id}: Starting pull message processing loop")
+        while True:
+            try:
+                if self.state == ProcessorState.PAUSED:
+                    await asyncio.sleep(1)
+                    continue
+
+                if not self._input_subscription:
+                    logger.debug("No input subscription found")
+                    await self._setup_input_subscription()
+                    continue
+
+                # Fetch one message
+                messages = await self.qm.fetch_messages(self._input_subscription, batch_size=1)
+                if not messages:
+                    await asyncio.sleep(0.1)
+                    continue
+
+                message = messages[0]
+                # Process the message
+                await self.message_handler(message)
+
+            except asyncio.CancelledError:
+                logger.info("Pull message processing loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in pull message processing loop: {e}", exc_info=True)
+                await asyncio.sleep(1)
+
+    @debug_trace
     async def message_handler(self, raw_msg):
         msg = json.loads(raw_msg.data.decode())
         if self.state == ProcessorState.PAUSED:
@@ -384,9 +479,8 @@ class DataProcessor:
                 ptr = None  # Set empty string to None
             cloud_provider = attributes.get('cloud_provider', None)
             result = await self.db_manager.insert_ip(ip=ip, ptr=ptr, cloud_provider=cloud_provider, program_id=msg_data.get('program_id'))
-            logger.debug(result)
             # Check if operation was successful, regardless of inserted/updated status
-            if result.success:
+            if result.get('inserted'):
                 await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
     
     async def process_domain(self, msg_data: Dict[str, Any]):
@@ -408,14 +502,14 @@ class DataProcessor:
                 # Only update is_catchall if explicitly provided
                 is_catchall = attributes.get('is_catchall', existing_domain.get('is_catchall', False) if existing_domain else False)
                 
-                inserted = await self.db_manager.insert_domain(
+                result = await self.db_manager.insert_domain(
                     domain=domain, 
                     ips=attributes.get('ips', []), 
                     cnames=attributes.get('cnames', []), 
                     is_catchall=is_catchall,
                     program_id=msg_data.get('program_id')
                 )
-                if inserted:
+                if result.get('inserted'):
                     logger.info(f"New domain inserted: {domain}")
                     await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
     
@@ -548,17 +642,17 @@ class DataProcessor:
         try:
             logger.info("Reconnecting subscriptions...")
             await self.qm.connect()
-            if self.data_subscription:
+            if self.input_subscription:
                 try:
-                    await self.data_subscription.unsubscribe()
+                    await self.input_subscription.unsubscribe()
                     logger.debug("Successfully unsubscribed from data subscription")
                 except NotFoundError:
                     logger.debug("Data subscription already deleted.")
                 except Exception as e:
                     logger.warning(f"Error unsubscribing from data subscription: {e}")
                 finally:
-                    self.data_subscription = None
-            self.data_subscription = await self._setup_subscription(
+                    self.input_subscription = None
+            self.input_subscription = await self._setup_subscription(
                 subject="recon.data",
                 stream="RECON_DATA",
                 message_handler=self.message_handler,
@@ -612,13 +706,13 @@ class DataProcessor:
                 await self.set_status("paused")  # Update Redis status
                 
                 # Unsubscribe from data subscription
-                if self.data_subscription:
-                    try:
-                        await self.data_subscription.unsubscribe()
-                        logger.debug(f"Unsubscribed from data subscription: {self.data_subscription}")
-                        self.data_subscription = None
-                    except Exception as e:
-                        logger.error(f"Error unsubscribing: {e}")
+                # if self.input_subscription:
+                #     try:
+                #         #await self.input_subscription.unsubscribe()
+                #         logger.debug(f"Unsubscribed from data subscription: {self.input_subscription}")
+                #         #self.input_subscription = None
+                #     except Exception as e:
+                #         logger.error(f"Error unsubscribing: {e}")
                 
                 logger.info(f"Data processor {self.dataprocessor_id} paused")
                 
@@ -642,13 +736,13 @@ class DataProcessor:
                 
                 
                 # Resubscribe to the data stream
-                self.data_subscription = await self._setup_subscription(
+                self.input_subscription = await self._setup_subscription(
                     subject="recon.data",
                     stream="RECON_DATA",
                     message_handler=self.message_handler,
                     queue_group="dataprocessor"
                 )
-                logger.debug(f"Resubscribed to data subscription: {self.data_subscription}")
+                logger.debug(f"Resubscribed to data subscription: {self.input_subscription}")
                 
                 logger.info(f"Data processor {self.dataprocessor_id} resumed")
                 await self.set_status("running")  # Update Redis status
@@ -734,8 +828,8 @@ class DataProcessor:
                 },
                 "queues": {
                     "nats_connected": self.qm.nc.is_connected if self.qm else False,
-                    "data_subscription": {
-                        "active": self.data_subscription is not None,
+                    "input_subscription": {
+                        "active": self.input_subscription is not None,
                         "queue_group": "dataprocessor"
                     },
                     "control_subscription": {
