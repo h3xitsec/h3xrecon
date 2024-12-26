@@ -374,106 +374,6 @@ class Worker:
             )
             self.running_tasks[function_execution_request.execution_id] = task
             await task
-        # try:
-        #     # Use processing lock for the entire message handling to prevent race conditions
-        #     async with self._processing_lock:
-        #         if self._processing:
-        #             logger.warning("Already processing a message, rejecting new message")
-        #             # First unsubscribe to prevent more messages
-        #             #await self.unsubscribe_execute_subscription()
-        #             # Then NAK the message so it can be processed by other workers
-        #             await raw_msg.nak()
-        #             logger.debug(f"{self.worker_id} nak'd message: {raw_msg.data}")
-        #             return
-
-        #         # Set state to busy and unsubscribe atomically
-        #         self._processing = True
-        #         self.state = ProcessorState.BUSY
-        #         await self.set_status(f"busy")
-        #         #await self.unsubscribe_execute_subscription()
-
-        #         try:
-        #             msg = json.loads(raw_msg.data.decode())
-        #             self._last_message_time = datetime.now(timezone.utc)
-        #             logger.debug(f"Processing message: {msg}")
-
-        #             # Parse message
-        #             logger.debug("Attempting to parse message")
-        #             function_execution_request = FunctionExecutionRequest(
-        #                 program_id=msg.get('program_id'),
-        #                 function_name=msg.get('function'),
-        #                 params=msg.get('params'),
-        #                 force=msg.get("force", False)
-        #             )
-        #             logger.debug(f"Created function execution request: {function_execution_request}")
-                    
-        #             # Validation
-        #             function_valid = await self.validate_function_execution_request(function_execution_request)
-        #             logger.debug(f"Function valid: {function_valid}")
-        #             await self.set_status(f"busy:{function_execution_request.function_name}:{function_execution_request.params.get('target')}")
-        #             if not function_valid:
-        #                 logger.info(f"Skipping execution: {function_execution_request.function_name}")
-        #                 await raw_msg.ack()  # ACK invalid messages to prevent redelivery
-        #                 return
-                            
-        #             if not function_execution_request.force:
-        #                 if not await self.should_execute(function_execution_request):
-        #                     logger.info(f"Skipping execution: {function_execution_request.function_name}")
-        #                     await raw_msg.ack()
-        #                     logger.debug(f"{self.worker_id} acknowledged message: {raw_msg.data}")
-        #                     return
-                        
-        #             # Create and store the task
-        #             task = asyncio.create_task(
-        #                 self.run_function_execution(function_execution_request)
-        #             )
-        #             self.running_tasks[function_execution_request.execution_id] = task
-                    
-        #             try:
-        #                 logger.debug(f"Waiting for task {function_execution_request.execution_id} to complete")
-        #                 await task
-        #                 logger.debug(f"Task {function_execution_request.execution_id} completed successfully")
-        #             except asyncio.CancelledError:
-        #                 logger.warning(f"Task {function_execution_request.execution_id} was cancelled")
-        #                 # Don't clean up here, let the killjob handler do it
-        #                 raise
-        #             except Exception as e:
-        #                 logger.error(f"Error in task execution: {e}")
-        #                 logger.exception(e)
-        #                 # Clean up on non-cancellation errors
-        #                 self.running_tasks.pop(function_execution_request.execution_id, None)
-        #                 raise
-        #             else:
-        #                 # Clean up only on successful completion
-        #                 self.running_tasks.pop(function_execution_request.execution_id, None)
-                    
-        #         except asyncio.CancelledError:
-        #             # Let cancellation propagate up
-        #             raise
-        #         except Exception as e:
-        #             logger.error(f"Error processing message: {e}")
-        #             logger.exception(e)
-        #         finally:
-        #             # Acknowledge the message after processing, unless it's already acknowledged
-        #             if not raw_msg._ackd:
-        #                 await raw_msg.ack()
-        #                 logger.debug(f"{self.worker_id} acknowledged message: {raw_msg.data}")
-        #             if self.state != ProcessorState.PAUSED:
-        #                 self.state = ProcessorState.RUNNING
-        #                 await self.set_status("idle")
-        #             # # Always try to resubscribe and reset state, even if there was an error
-        #             # try:
-        #             #     if self.state != ProcessorState.PAUSED:
-        #             #         self.state = ProcessorState.RUNNING
-        #             #         await self.set_status("idle")
-        #             #         await self._setup_execute_subscription()
-        #             # except Exception as e:
-        #             #     logger.error(f"Error resubscribing: {e}")
-        #             #     # If we can't resubscribe, we need to make sure we're in a known state
-        #             #     self.state = ProcessorState.PAUSED
-        #             #     await self.set_status("error")
-        #             # finally:
-        #             #     self._processing = False
                 
         except Exception as e:
             logger.error(f"Error in message handler: {e}")
@@ -525,15 +425,6 @@ class Worker:
                     return
                     
                 self.state = ProcessorState.PAUSED
-                # Unsubscribe from execute subscriptions
-                # if self._execute_subscription:
-                #     try:
-                #         await self._execute_subscription.unsubscribe()
-                #         logger.debug(f"Unsubscribed from execute subscription: {self._execute_subscription}")
-                #     except Exception as e:
-                #         logger.warning(f"Error unsubscribing from execute subscription: {e}")
-                #     finally:
-                #         self._execute_subscription = None
                         
                 await self.set_status("paused")
                 logger.info(f"Worker {self.worker_id} paused")
@@ -559,25 +450,6 @@ class Worker:
                     async with self._processing_lock:
                         self._processing = False
                         self.state = ProcessorState.RUNNING
-
-                    # # Ensure we don't have an existing subscription
-                    # if self._execute_subscription:
-                    #     try:
-                    #         await self._execute_subscription.unsubscribe()
-                    #     except Exception as e:
-                    #         logger.warning(f"Error unsubscribing existing subscription: {e}")
-                    #     finally:
-                    #         self._execute_subscription = None
-
-                    # Resubscribe to the execute stream with a small delay
-                    await asyncio.sleep(0.5)  # Add a small delay before resubscribing
-                    #await self._setup_execute_subscription()
-                    
-                    # Verify subscription was successful
-                    #if not self._execute_subscription:
-                    #    raise Exception("Failed to reestablish execute subscription")
-
-                    #logger.debug(f"Resubscribed to execute subscription: {self._execute_subscription}")
                     await self.set_status("idle")
                     logger.info(f"Worker {self.worker_id} resumed")
                     
@@ -639,29 +511,10 @@ class Worker:
                                     # Clean up the cancelled task
                                     self.running_tasks.pop(execution_id, None)
                                     await self.set_status("idle")
-                        
-                        # Reset worker state and processing lock
-                        # async with self._processing_lock:
-                        #     self._processing = False
-                        #     if self.state != ProcessorState.PAUSED:
-                        #         self.state = ProcessorState.RUNNING
-                        
-                            
-                        # Clean up execute subscription
-                        #if self._execute_subscription:
-                        #    try:
-                        #        await self._execute_subscription.unsubscribe()
-                        #        logger.debug("Successfully unsubscribed execute subscription")
-                        #    except Exception as e:
-                        #        logger.warning(f"Error unsubscribing execute subscription: {e}")
-                        #    finally:
-                        #        self._execute_subscription = None
-                        
-                        # Ensure execute subscription is active
-                        await asyncio.sleep(0.5)  # Small delay before resubscribing
+
+                        await asyncio.sleep(0.5)
                         await self.start_pull_processor()
-                        #await self._setup_execute_subscription()
-                        #logger.debug("Re-established execute subscription after job kill")
+
                     else:
                         success = True  # No tasks running is still a success
                         logger.info("No running tasks to kill")
