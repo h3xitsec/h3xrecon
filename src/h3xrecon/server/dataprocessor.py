@@ -374,6 +374,8 @@ class DataProcessor(ReconComponent):
                 program_id=msg_data.get('program_id'), 
                 service=i.get("service")
             )
+            if inserted:
+                logger.info(f"New service inserted: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
 
 async def main():
     config = Config()

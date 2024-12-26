@@ -274,7 +274,10 @@ class QueueManager:
         try:
             await self.ensure_connected()
             stream_info = await self.js.stream_info(stream)
-            return True
+            if stream_info:
+                return True
+            else:
+                return False
         except StreamUnavailableError:
             return False
         except Exception as e:
