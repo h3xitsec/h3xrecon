@@ -35,7 +35,7 @@ class FunctionExecutor():
                 if not name.endswith('.base'):  # Skip the base module
                     plugin_modules.append(name)
             
-            logger.info(f"Loaded plugins: {plugin_modules}")
+            logger.info(f"LOADED PLUGINS: {', '.join(p.split('.')[-1] for p in plugin_modules)}")
             
         except ModuleNotFoundError as e:
             logger.error(f"Failed to import 'plugins': {e}")
@@ -73,7 +73,7 @@ class FunctionExecutor():
                 logger.error(f"Function {function_name} not found")
                 raise ValueError(f"Function {function_name} not found")
 
-            logger.info(f"Running function {function_name} on {params.get('target')} ({execution_id})")
+            logger.debug(f"Running function {function_name} on {params.get('target')} ({execution_id})")
             
             try:
                 async for result in plugin(params, program_id, execution_id, self.db):
@@ -107,7 +107,7 @@ class FunctionExecutor():
                 logger.exception(e)
                 raise
             finally:
-                logger.info(f"Finished running {function_name} on {params.get('target')} ({execution_id})")
+                logger.debug(f"Finished running {function_name} on {params.get('target')} ({execution_id})")
 
         except Exception as e:
             logger.error(f"Error executing function {function_name}: {str(e)}")

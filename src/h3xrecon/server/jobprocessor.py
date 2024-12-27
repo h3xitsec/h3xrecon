@@ -101,6 +101,7 @@ class JobProcessor(ReconComponent):
                     self.processor_map[plugin_instance.name] = plugin_instance.process_output
             except Exception as e:
                 logger.warning(f"Error loading plugin '{module_name}': {e}", exc_info=True)
+        logger.success(f"LOADED PLUGINS: {', '.join(p.split('.')[-1] for p in plugin_modules)}")
 
     async def setup_subscriptions(self):
         """Setup NATS subscriptions for the job processor."""
@@ -133,7 +134,7 @@ class JobProcessor(ReconComponent):
                 )
                 self._subscription = subscription
                 self._sub_key = f"FUNCTION_OUTPUT:function.output:JOBPROCESSORS"
-                logger.info("Successfully subscribed to output channel")
+                logger.debug(f"Subscribed to output channel: {self._sub_key}")
 
                 # Setup control subscriptions
                 await self.qm.subscribe(
@@ -337,7 +338,7 @@ class JobProcessor(ReconComponent):
         """Process the output from a function execution."""
         function_name = msg_data.get("source", {}).get("function")
         if function_name in self.processor_map:
-            logger.info(f"Processing output from plugin '{function_name}' on target '{msg_data.get('source', {}).get('params', {}).get('target')}'")
+            logger.info(f"PROCESSING OUTPUT: '{function_name}':'{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:
                 await self.processor_map[function_name](msg_data, self.db, self.qm)
             except Exception as e:
@@ -353,7 +354,6 @@ class JobProcessor(ReconComponent):
 async def main():
     config = Config()
     config.setup_logging()
-    logger.info(f"Starting H3XRecon job processor... (v{__version__})")
 
     job_processor = JobProcessor(config)
     try:
@@ -361,7 +361,6 @@ async def main():
         while True:
             await asyncio.sleep(1)
     except KeyboardInterrupt:
-        logger.info("Shutting down job processor...")
         await job_processor.stop()
     except Exception as e:
         logger.error(f"Critical error: {str(e)}")
