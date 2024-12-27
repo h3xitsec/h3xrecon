@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS function_logs;
+DROP TABLE IF EXISTS logs;
 -- Component Logging Tables
 
 -- Worker execution logs
