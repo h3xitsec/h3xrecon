@@ -32,7 +32,7 @@ class ReconComponent:
         self.redis_status = None
         self.redis_cache = None
         self._health_check_task = None
-        self._last_message_time = None
+        self._last_message_time = datetime.now(timezone.utc)
         self._subscription = None
         self._sub_key = None
         self._pull_processor_task = None
@@ -99,6 +99,15 @@ class ReconComponent:
                 pass
         self._pull_processor_task = asyncio.create_task(self._process_pull_messages())
         logger.debug(f"{self.component_id}: Started new pull processor task")
+    
+    async def stop_pull_processor(self):
+        """Stop the pull message processor task."""
+        if self._pull_processor_task and not self._pull_processor_task.done():
+            self._pull_processor_task.cancel()
+            try:
+                await self._pull_processor_task
+            except asyncio.CancelledError:
+                pass
 
     async def start(self):
         """Start the component with common initialization logic."""
@@ -156,6 +165,7 @@ class ReconComponent:
     async def _cleanup_subscriptions(self):
         """Clean up existing subscriptions and consumers."""
         try:
+            await self.stop_pull_processor()
             # Clean up existing subscriptions
             if self._subscription:
                 try:
@@ -203,8 +213,6 @@ class ReconComponent:
 
     async def setup_subscriptions(self):
         """Setup NATS subscriptions. Should be implemented by child classes."""
-        # Clean up existing subscriptions before setting up new ones
-        await self._cleanup_subscriptions()
         raise NotImplementedError("Subclasses must implement setup_subscriptions")
 
     async def message_handler(self, raw_msg):
@@ -349,14 +357,6 @@ class ReconComponent:
     async def _handle_unpause_command(self, msg: Dict[str, Any]):
         """Handle unpause command."""
         try:
-            # Set up subscriptions first
-            await self.setup_subscriptions()
-            if self._subscription is None:
-                logger.error("Failed to set up subscriptions during unpause")
-                await self._send_control_response("unpause", "failed", False)
-                return
-
-            # Only if subscriptions are set up, proceed with unpausing
             self.state = ProcessorState.RUNNING
             self.running.set()
             await self.set_status("idle")
