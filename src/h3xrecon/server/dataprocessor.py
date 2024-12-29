@@ -74,7 +74,7 @@ class DataProcessor(ReconComponent):
                 )
                 self._subscription = subscription
                 self._sub_key = f"RECON_DATA:recon.data:DATAPROCESSORS"
-                logger.info("Successfully subscribed to data channel")
+                logger.debug(f"Subscribed to data channel: {self._sub_key}")
 
                 # Setup control subscriptions
                 await self.qm.subscribe(
@@ -159,11 +159,10 @@ class DataProcessor(ReconComponent):
         """Trigger new jobs based on processed data."""
         # Check if processor is paused before triggering new jobs
         if self.state == ProcessorState.PAUSED:
-            logger.info("Processor is paused, skipping triggering new jobs")
             return
 
         if os.getenv("H3XRECON_NO_NEW_JOBS", "false").lower() == "true":
-            logger.info("H3XRECON_NO_NEW_JOBS is set. Skipping triggering new jobs.")
+            logger.debug("H3XRECON_NO_NEW_JOBS is set. Skipping triggering new jobs.")
             return
 
         try:
@@ -182,7 +181,7 @@ class DataProcessor(ReconComponent):
             else:
                 is_in_scope = True
             if not is_in_scope:
-                logger.info(f"Data {result} of type {data_type} is not in scope for program {program_id}. Skipping new jobs.")
+                logger.debug(f"Data {result} of type {data_type} is not in scope for program {program_id}. Skipping new jobs.")
                 await self.db.log_dataprocessor_operation(
                     component_id=self.component_id,
                     data_type=data_type,
@@ -203,7 +202,7 @@ class DataProcessor(ReconComponent):
                         "program_id": program_id,
                         "params": job.param_map(result)
                     }
-                    logger.info(f"Triggering {job.function} for {result}")
+                    logger.info(f"JOB TRIGGERED: {job.function} : {result}")
                     try:
                         await self.qm.publish_message(
                             subject="function.execute",
@@ -275,7 +274,6 @@ class DataProcessor(ReconComponent):
         """Helper method to handle delayed job triggering."""
         # Check state before proceeding with delayed job
         if self.state == ProcessorState.PAUSED:
-            logger.info("Processor is paused, skipping delayed job trigger")
             return
 
         await asyncio.sleep(5)
@@ -285,7 +283,6 @@ class DataProcessor(ReconComponent):
             "program_id": program_id,
             "params": job.param_map(result)
         }
-        logger.info(f"Triggering delayed job {job.function} for {result}")
         await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message=new_job)
         
         # Schedule next job if there are more
@@ -324,6 +321,7 @@ class DataProcessor(ReconComponent):
                 
                 # Log operation result
                 if result.get('inserted'):
+                    logger.success(f"INSERTED IP: {ip}")
                     await self.db.log_dataprocessor_operation(
                         component_id=self.component_id,
                         data_type='ip',
@@ -335,6 +333,8 @@ class DataProcessor(ReconComponent):
                         completed_at=datetime.now(timezone.utc)
                     )
                     await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
+                else:
+                    logger.info(f"UPDATED IP: {ip}")
             except Exception as e:
                 await self.db.log_dataprocessor_operation(
                     component_id=self.component_id,
@@ -351,9 +351,9 @@ class DataProcessor(ReconComponent):
     async def process_domain(self, msg_data: Dict[str, Any]):
         """Process domain data."""
         for domain in msg_data.get('data'):
-            logger.info(f"Processing domain: {domain}")
+            logger.info(f"PROCESSING DOMAIN: {domain}")
             if not await self.db.check_domain_regex_match(domain, msg_data.get('program_id')):
-                logger.info(f"Domain {domain} is not part of program {msg_data.get('program_id')}. Skipping processing.")
+                logger.debug(f"Domain {domain} is not part of program {msg_data.get('program_id')}. Skipping processing.")
                 continue
             else:
                 # Get existing domain data first
@@ -376,13 +376,14 @@ class DataProcessor(ReconComponent):
                     program_id=msg_data.get('program_id')
                 )
                 if result.get('inserted'):
-                    logger.info(f"New domain inserted: {domain}")
+                    logger.success(f"INSERTED DOMAIN: {domain}")
                     await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
+                else:
+                    logger.info(f"UPDATED DOMAIN: {domain}")
     
     async def process_url(self, msg: Dict[str, Any]):
         """Process URL data."""
         if msg:
-            logger.info(msg)
             msg_data = msg.get('data', {})
             # Extract hostname from the URL
             for d in msg_data:
@@ -396,16 +397,20 @@ class DataProcessor(ReconComponent):
                     is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
                     if not is_in_scope:
                         return
-                    logger.info(f"Processing URL result for program {msg.get('program_id')}: {d.get('url', {})}")
+                    logger.info(f"PROCESSING URL: {d.get('url', {})}")
                     result = await self.db.insert_url(
                         url=d.get('url'),
                         httpx_data=d.get('httpx_data', {}),
                         program_id=msg.get('program_id')
                     )
-                    logger.debug(result)
+                    if result.get('inserted'):
+                        logger.success(f"INSERTED URL: {d.get('url', {})}")
+                    else:
+                        logger.info(f"UPDATED URL: {d.get('url', {})}")
+                        #await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="url", result=d.get('url'))
                     # Send a job to the workers to test the URL if httpx_data is missing
                     if not d.get('httpx_data'):
-                        logger.info(f"Sending job to test URL: {d.get('url')}")
+                        logger.info(f"TRIGGERED JOB: test_http : {d.get('url')}")
                         await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message={"function": "test_http", "program_id": msg.get('program_id'), "params": {"target": d.get('url')}})
             
                 except Exception as e:
@@ -415,7 +420,6 @@ class DataProcessor(ReconComponent):
     async def process_nuclei(self, msg: Dict[str, Any]):
         """Process Nuclei data."""
         if msg:
-            logger.debug(f"Processing Nuclei result for program {msg.get('program_id')}: {msg}")
             msg_data = msg.get('data', {})
             for d in msg_data:
                 try:
@@ -430,15 +434,17 @@ class DataProcessor(ReconComponent):
                     else:
                         is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
                         if is_in_scope:
-                            logger.info(f"Processing Nuclei result for program {msg.get('program_id')}: {d.get('matched_at', {})}")
+                            logger.info(f"PROCESSING NUCLEI: {d.get('matched_at', {})}")
                             inserted = await self.db.insert_nuclei(
                                 program_id=msg.get('program_id'),
                                 data=d
                             )
                             if inserted:
-                                logger.info(f"New Nuclei result inserted: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
+                                logger.success(f"INSERTED NUCLEI: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
+                            else:
+                                logger.info(f"UPDATED NUCLEI: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
                         else:
-                            logger.info(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
+                            logger.debug(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
                 except Exception as e:
                     logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
@@ -446,19 +452,18 @@ class DataProcessor(ReconComponent):
     async def process_certificate(self, msg: Dict[str, Any]):
         """Process certificate data."""
         if msg:
-            logger.debug(f"Processing certificate for program {msg.get('program_id')}: {msg}")
+            logger.info(f"PROCESSING CERTIFICATE: {msg}")
             msg_data = msg.get('data', {})
             for d in msg_data:
                 try:
-                    logger.info(f"Processing certificate for program {msg.get('program_id')}: {d.get('subject_cn', {})}")
                     inserted = await self.db.insert_certificate(
                         program_id=msg.get('program_id'),
                         data=d
                     )
                     if inserted:
-                        logger.info(f"New certificate inserted: {d.get('cert', {}).get('serial', {})}")
+                        logger.success(f"INSERTED CERTIFICATE: {d.get('cert', {}).get('serial', {})}")
                     else:
-                        logger.info(f"Certificate updated: {d.get('cert', {}).get('serial', {})}")
+                        logger.info(f"UPDATED CERTIFICATE: {d.get('cert', {}).get('serial', {})}")
                 except Exception as e:
                     logger.error(f"Failed to process certificate in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
@@ -468,6 +473,7 @@ class DataProcessor(ReconComponent):
         if not isinstance(msg_data.get('data'), list):
             msg_data['data'] = [msg_data.get('data')]
         for i in msg_data.get('data'):
+            logger.info(f"PROCESSING SERVICE: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
             inserted = await self.db.insert_service(
                 ip=i.get("ip"), 
                 port=i.get("port"), 
@@ -476,14 +482,13 @@ class DataProcessor(ReconComponent):
                 service=i.get("service")
             )
             if inserted:
-                logger.info(f"New service inserted: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
+                logger.success(f"INSERTED SERVICE: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
     async def _handle_killjob_command(self, msg: Dict[str, Any]):
         """Handle killjob command to cancel the running task."""
         pass
 async def main():
     config = Config()
     config.setup_logging()
-    logger.info(f"Starting H3XRecon data processor... (v{__version__})")
 
     data_processor = DataProcessor(config)
     try:
@@ -491,7 +496,6 @@ async def main():
         while True:
             await asyncio.sleep(1)
     except KeyboardInterrupt:
-        logger.info("Shutting down data processor...")
         await data_processor.stop()
     except Exception as e:
         logger.error(f"Critical error: {str(e)}")

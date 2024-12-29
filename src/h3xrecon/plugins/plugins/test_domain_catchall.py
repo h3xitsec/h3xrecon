@@ -33,7 +33,7 @@ class TestDomainCatchall(ReconPlugin):
             return False
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {params.get("target", {})}")
+        logger.debug(f"Running {self.name} on {params.get("target", {})}")
         
         resolver = dns.resolver.Resolver()
         resolver.nameservers = ['8.8.8.8']  # Using Google's DNS server, you can change this if needed

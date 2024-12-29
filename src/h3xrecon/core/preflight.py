@@ -15,7 +15,7 @@ class PreflightCheck:
     async def check_redis(self) -> bool:
         """Check Redis connectivity."""
         try:
-            logger.info("Checking Redis connectivity...")
+            logger.debug("Checking Redis connectivity...")
             self.redis_client = redis.Redis(
                 host=self.config.redis.host,
                 port=self.config.redis.port,
@@ -31,7 +31,7 @@ class PreflightCheck:
     async def check_nats(self) -> bool:
         """Check NATS connectivity."""
         try:
-            logger.info("Checking NATS connectivity...")
+            logger.debug("Checking NATS connectivity...")
             self.qm = QueueManager(self.config.nats)
             await self.qm.connect()
             return True
@@ -42,7 +42,7 @@ class PreflightCheck:
     async def check_database(self) -> bool:
         """Check Database connectivity."""
         try:
-            logger.info("Checking Database connectivity...")
+            logger.debug("Checking Database connectivity...")
             temp_db = DatabaseManager()
             result = await temp_db._fetch_value("SELECT 1")
             if result.success:
@@ -66,28 +66,28 @@ class PreflightCheck:
             "NATS": self.check_nats,
             "Database": self.check_database
         }
-
+        logger.debug(f"STARTING PREFLIGHT CHECKS")
         while max_attempts is None or attempt <= max_attempts:
-            logger.info(f"Preflight check attempt {attempt}")
+            logger.debug(f"PREFLIGHT CHECK ATTEMPT {attempt}")
             
             all_services_ready = True
             for service_name, check_func in services.items():
                 try:
                     if not await check_func():
-                        logger.warning(f"{service_name} is not ready")
+                        logger.debug(f"{service_name} is not ready")
                         all_services_ready = False
                     else:
-                        logger.success(f"{service_name} is ready")
+                        logger.debug(f"{service_name} is ready")
                 except Exception as e:
                     logger.error(f"Error checking {service_name}: {e}")
                     all_services_ready = False
 
             if all_services_ready:
-                logger.success("All services are ready!")
+                logger.success(f"COMPLETED PREFLIGHT CHECKS AFTER {attempt} ATTEMPTS")
                 return True
 
             attempt += 1
-            logger.info(f"Waiting {retry_delay} seconds before next attempt...")
+            logger.debug(f"Waiting {retry_delay} seconds before next attempt...")
             await asyncio.sleep(retry_delay)
 
         logger.error("Maximum preflight check attempts reached")

@@ -71,7 +71,12 @@ class ReconComponent:
         """Set component status in Redis."""
         if not self.redis_status:
             return
-        
+        try:
+            old_status = self.redis_status.get(self.component_id).decode()
+        except Exception as e:
+            old_status = None
+        if old_status == status:
+            return
         self.redis_status.set(self.component_id, status)
         for attempt in range(5):
             current_status = self.redis_status.get(self.component_id).decode()
@@ -81,12 +86,23 @@ class ReconComponent:
                 if attempt < 4:  # Don't sleep on last attempt
                     await asyncio.sleep(1)
             else:
-                logger.debug(f"Successfully set status for {self.component_id} to {status}")
+                logger.success(f"STATUS CHANGE: {old_status} -> {status}")
                 break
+
+    async def start_pull_processor(self):
+        """Start the pull message processor task."""
+        if self._pull_processor_task and not self._pull_processor_task.done():
+            self._pull_processor_task.cancel()
+            try:
+                await self._pull_processor_task
+            except asyncio.CancelledError:
+                pass
+        self._pull_processor_task = asyncio.create_task(self._process_pull_messages())
+        logger.debug(f"{self.component_id}: Started new pull processor task")
 
     async def start(self):
         """Start the component with common initialization logic."""
-        logger.info(f"Starting {self.role} (ID: {self.component_id}) version {__version__}...")
+        logger.info(f"STARTING {self.role.upper()} {self.component_id} : (v{__version__})")
         try:
             # Run preflight checks
             preflight = PreflightCheck(self.config, f"{self.role}-{self.component_id}")
@@ -109,14 +125,12 @@ class ReconComponent:
                     if retry_count == max_retries:
                         raise e
                     await asyncio.sleep(1)
-
-            await self.set_status("idle")
-            # Start health check
             self._health_check_task = asyncio.create_task(self._health_check())
-            # Start message processing loop
-            asyncio.create_task(self._process_pull_messages())
-            
-            logger.info(f"{self.role} started and listening for messages...")
+            if self.role == "jobprocessor":
+                self._load_plugins()
+            await self.start_pull_processor()
+            await self.set_status("idle")
+            logger.success(f"STARTED {self.role.upper()}: {self.component_id}")
 
         except Exception as e:
             logger.error(f"Failed to start {self.role}: {str(e)}")
@@ -124,7 +138,7 @@ class ReconComponent:
 
     async def stop(self):
         """Stop the component and clean up resources."""
-        logger.info("Shutting down...")
+        logger.info(f"SHUTTING DOWN {self.role.upper()}: {self.component_id}")
         if self._health_check_task:
             self._health_check_task.cancel()
         if self._pull_processor_task:
@@ -137,7 +151,7 @@ class ReconComponent:
         await self.qm.disconnect()
         if self.redis_status:
             self.redis_status.delete(self.component_id)
-        logger.info(f"{self.role} shutdown complete")
+        logger.success(f"{self.role.upper()} SHUTDOWN COMPLETE")
 
     async def _cleanup_subscriptions(self):
         """Clean up existing subscriptions and consumers."""
@@ -212,7 +226,6 @@ class ReconComponent:
                         logger.debug(f"{self.component_id}: Already processing, sleeping...")
                         await asyncio.sleep(0.1)
                         continue
-                    logger.debug(f"{self.component_id}: Acquired processing lock")
                     self._processing = True
 
                 # Fetch one message
@@ -221,7 +234,6 @@ class ReconComponent:
                     if not messages:
                         async with self._processing_lock:
                             self._processing = False
-                        logger.debug(f"{self.component_id}: No messages fetched, sleeping...")
                         await asyncio.sleep(0.1)
                         continue
 
@@ -232,10 +244,9 @@ class ReconComponent:
                     # Always ensure we reset the processing flag
                     async with self._processing_lock:
                         self._processing = False
-                    logger.debug(f"{self.component_id}: Released processing lock")
 
             except asyncio.CancelledError:
-                logger.info("Pull message processing loop cancelled")
+                logger.debug("Pull message processing loop cancelled")
                 break
             except Exception as e:
                 logger.error(f"Error in pull message processing loop: {e}", exc_info=True)
@@ -247,6 +258,7 @@ class ReconComponent:
 
     async def _health_check(self):
         """Monitor component health and subscription status."""
+        logger.info("STARTED HEALTH CHECK")
         while True:
             try:
                 if self.state == ProcessorState.PAUSED:
@@ -273,12 +285,15 @@ class ReconComponent:
     async def _reconnect_subscriptions(self):
         """Reconnect all subscriptions."""
         try:
-            logger.info("Reconnecting subscriptions...")
-            await self.qm.connect()
+            logger.debug("Reconnecting subscriptions...")
+            await self.qm.ensure_connected()  # Ensure NATS connection first
+            await self._cleanup_subscriptions()
             await self.setup_subscriptions()
-            logger.info("Successfully reconnected subscriptions")
+            await self.start_pull_processor()  # Restart pull processor after reconnection
+            logger.debug("Successfully reconnected subscriptions")
         except Exception as e:
             logger.error(f"Error reconnecting subscriptions: {e}")
+            await asyncio.sleep(1)  # Add delay before retry
 
     async def control_message_handler(self, raw_msg):
         """Handle control messages for component management."""
@@ -328,7 +343,7 @@ class ReconComponent:
         self.state = ProcessorState.PAUSED
         self.running.clear()
         await self.set_status("paused")
-        logger.info(f"{self.role} {self.component_id} paused")
+        #logger.info(f"{self.role} {self.component_id} paused")
         await self._send_control_response("pause", "paused", True)
 
     async def _handle_unpause_command(self, msg: Dict[str, Any]):
@@ -353,7 +368,7 @@ class ReconComponent:
 
     async def _handle_report_command(self, msg: Dict[str, Any]):
         """Handle report command."""
-        logger.info("Received report command")
+        #logger.info("Received report command")
         report = await self.generate_report()
         await self.qm.publish_message(
             subject="function.control.response",

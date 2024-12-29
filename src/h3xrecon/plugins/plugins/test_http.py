@@ -16,7 +16,7 @@ class TestHTTP(ReconPlugin):
         return 300  # 5 minutes timeout
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.info(f"Running {self.name} on {params.get('target', {})}")
+        logger.debug(f"Running {self.name} on {params.get('target', {})}")
         command = (
             f"~/.pdtm/go/bin/httpx -u {params.get('target', {})} "
             "-fr "

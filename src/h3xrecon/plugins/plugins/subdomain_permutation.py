@@ -13,7 +13,7 @@ class SubdomainPermutation(ReconPlugin):
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug("Checking if the target is a dns catchall domain")
         
-        logger.info(f"Running {self.name} on {params.get("target", {})}")
+        logger.debug(f"Running {self.name} on {params.get("target", {})}")
 
         # For testing purposes, use a different permutation file for h3xit.io
         if params.get("target", {}) == "h3xit.io":

@@ -63,7 +63,7 @@ class Worker(ReconComponent):
                 )
                 self._subscription = subscription
                 self._sub_key = f"FUNCTION_EXECUTE:function.execute:WORKERS_EXECUTE"
-                logger.info("Successfully subscribed to execute channel")
+                logger.debug(f"Subscribed to execute channel : {self._sub_key}")
 
                 # Setup control subscriptions
                 await self.qm.subscribe(
@@ -125,11 +125,25 @@ class Worker(ReconComponent):
 
     async def message_handler(self, raw_msg):
         """Handle incoming function execution messages."""
-        logger.debug(f"Worker {self.component_id} received message: {raw_msg.data}")
+        # First check if we're already processing or paused
         if self.state == ProcessorState.PAUSED:
             await raw_msg.nak()
             return
+
+        # Try to acquire the processing lock
+        if not await self._processing_lock.acquire():
+            await raw_msg.nak()
+            return
+
         try:
+            # Double check state after acquiring lock
+            if self.state != ProcessorState.RUNNING:
+                await raw_msg.nak()
+                return
+
+            logger.debug(f"{self.component_id} received message: {raw_msg.data}")
+            
+            # Set state to busy before processing
             self.state = ProcessorState.BUSY
             msg = json.loads(raw_msg.data.decode())
             self._last_message_time = datetime.now(timezone.utc)
@@ -149,10 +163,10 @@ class Worker(ReconComponent):
 
             # Check if we should execute this function
             if not function_execution_request.force and not await self._should_execute(function_execution_request):
-                logger.info(f"Skipping execution of {function_execution_request.function_name} - recently executed")
+                logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : recently executed")
                 await raw_msg.ack()
                 return
-
+            
             # Log execution start
             await self.db.log_worker_execution(
                 execution_id=function_execution_request.execution_id,
@@ -167,7 +181,7 @@ class Worker(ReconComponent):
             # Validation
             function_valid = await self.validate_function_execution_request(function_execution_request)
             if not function_valid:
-                logger.info(f"Skipping execution: {function_execution_request.function_name}")
+                logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid function request")
                 await self.db.log_worker_execution(
                     execution_id=function_execution_request.execution_id,
                     component_id=self.component_id,
@@ -184,6 +198,7 @@ class Worker(ReconComponent):
 
             await self.set_status(f"busy:{function_execution_request.function_name}:{function_execution_request.params.get('target')}")
             # Execution
+            logger.info(f"STARTING JOB: {function_execution_request.function_name} : {function_execution_request.params.get('target')} : {function_execution_request.execution_id}")
             self.current_task = asyncio.create_task(
                 self.run_function_execution(function_execution_request)
             )
@@ -209,6 +224,8 @@ class Worker(ReconComponent):
             if not raw_msg._ackd:
                 await raw_msg.ack()
             await self.set_status("idle")
+            self.state = ProcessorState.RUNNING
+            self._processing_lock.release()
 
     async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
         """Validate the function execution request."""
@@ -224,7 +241,6 @@ class Worker(ReconComponent):
 
     async def run_function_execution(self, msg_data: FunctionExecutionRequest):
         """Execute the requested function."""
-        logger.info(f"Starting execution of function '{msg_data.function_name}' with Execution ID: {msg_data.execution_id}")
         result_count = 0
         
         try:
@@ -235,7 +251,6 @@ class Worker(ReconComponent):
                 execution_id=msg_data.execution_id
             ):
                 if asyncio.current_task().cancelled():
-                    logger.info(f"Execution {msg_data.execution_id} was cancelled")
                     await self.db.log_worker_execution(
                         execution_id=msg_data.execution_id,
                         component_id=self.component_id,
@@ -265,7 +280,7 @@ class Worker(ReconComponent):
             )
                 
         except asyncio.CancelledError:
-            logger.info(f"Execution {msg_data.execution_id} was cancelled.")
+            logger.warning(f"JOB CANCELLED: {msg_data.execution_id}:{msg_data.function_name} : {msg_data.params.get('target')}")
             # Handle cancellation without affecting the message processing loop
             return
         except Exception as e:
@@ -283,7 +298,7 @@ class Worker(ReconComponent):
             )
             raise
         finally:
-            logger.info(f"Finished execution of '{msg_data.function_name}'. Total results: {result_count}")
+            logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
             await self.set_status("idle")
 
     async def stop(self):
@@ -291,7 +306,7 @@ class Worker(ReconComponent):
         # Cancel all running tasks
         for execution_id, task in list(self.running_tasks.items()):
             task.cancel()
-            logger.info(f"Cancelled task with Execution ID: {execution_id}")
+            logger.debug(f"Cancelled task with Execution ID: {execution_id}")
         await super().stop()
 
     async def _should_execute(self, request: FunctionExecutionRequest) -> bool:
@@ -345,7 +360,6 @@ class Worker(ReconComponent):
 async def main():
     config = Config()
     config.setup_logging()
-    logger.info(f"Starting H3XRecon worker... (v{__version__})")
 
     worker = Worker(config)
     try:
@@ -353,7 +367,6 @@ async def main():
         while True:
             await asyncio.sleep(1)
     except KeyboardInterrupt:
-        logger.info("Shutting down worker...")
         await worker.stop()
     except Exception as e:
         logger.error(f"Critical error: {str(e)}")
