@@ -278,6 +278,7 @@ class ReconComponent:
                     time_since_last_message = current_time - self._last_message_time
                     if time_since_last_message > timedelta(minutes=5):
                         logger.warning(f"No messages received for {time_since_last_message}. Checking connection...")
+                        self._last_message_time = current_time
                         await self._reconnect_subscriptions()
 
                 if not self.qm.nc.is_connected:
