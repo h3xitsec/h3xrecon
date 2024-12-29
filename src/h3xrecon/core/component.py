@@ -371,17 +371,8 @@ class ReconComponent:
         """Handle report command."""
         #logger.info("Received report command")
         report = await self.generate_report()
-        await self.qm.publish_message(
-            subject="function.control.response",
-            stream="FUNCTION_CONTROL_RESPONSE",
-            message={
-                "component_id": self.component_id,
-                "type": self.role,
-                "command": "report",
-                "report": report,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-        )
+        logger.info(f"Sending report to {msg.get('target')}")
+        await self._send_control_response("report", "success", True, report)
 
     async def _handle_ping_command(self, msg: Dict[str, Any]):
         """Handle ping command."""
@@ -398,7 +389,7 @@ class ReconComponent:
         )
     
     @debug_trace
-    async def _send_control_response(self, command: str, status: str, success: bool):
+    async def _send_control_response(self, command: str, status: str, success: bool, data: Dict[str, Any] = None):
         """Send control response message."""
         logger.debug(f"{self.component_id}: Sending control response for {command} with status {status} and success {success}")
         await self.qm.publish_message(
@@ -410,7 +401,8 @@ class ReconComponent:
                 "status": status,
                 "success": success,
                 "command": command,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": data
             }
         )
 
