@@ -30,10 +30,7 @@ class Worker(ReconComponent):
         self.function_executor = None
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
-        self.running_tasks: Dict[str, asyncio.Task] = {}
-        self._execution_semaphore = asyncio.Semaphore(1)
-        self._processing = False
-        self._processing_lock = asyncio.Lock()
+        self.current_task: Optional[asyncio.Task] = None  # Track the currently running task
 
     async def setup_subscriptions(self):
         """Setup NATS subscriptions for the worker."""
@@ -187,11 +184,11 @@ class Worker(ReconComponent):
 
             await self.set_status(f"busy:{function_execution_request.function_name}:{function_execution_request.params.get('target')}")
             # Execution
-            task = asyncio.create_task(
+            self.current_task = asyncio.create_task(
                 self.run_function_execution(function_execution_request)
             )
-            self.running_tasks[function_execution_request.execution_id] = task
-            await task
+            await self.current_task
+            self.current_task = None  # Reset the current task when done
                 
         except Exception as e:
             logger.error(f"Error in message handler: {e}")
@@ -250,7 +247,7 @@ class Worker(ReconComponent):
                         error_message='Execution cancelled',
                         completed_at=datetime.now(timezone.utc)
                     )
-                    raise asyncio.CancelledError()
+                    return  # Exit the function to prevent further processing
                 
                 result_count += 1
                 logger.debug(f"Execution {msg_data.execution_id}: Result #{result_count}: {result}")
@@ -269,7 +266,8 @@ class Worker(ReconComponent):
                 
         except asyncio.CancelledError:
             logger.info(f"Execution {msg_data.execution_id} was cancelled.")
-            raise
+            # Handle cancellation without affecting the message processing loop
+            return
         except Exception as e:
             logger.error(f"Error executing function {msg_data.execution_id}: {e}")
             await self.db.log_worker_execution(
@@ -334,6 +332,15 @@ class Worker(ReconComponent):
             logger.error(f"Error checking execution history: {e}")
             # If there's an error checking history, allow execution
             return True
+
+    async def _handle_killjob_command(self, msg: Dict[str, Any]):
+        """Handle killjob command to cancel the running task."""
+        if self.current_task:
+            self.current_task.cancel()
+            await self._send_control_response("killjob", "killed", True)
+            logger.info("Cancelled the current running task")
+        else:
+            logger.warning("No running task to cancel")
 
 async def main():
     config = Config()

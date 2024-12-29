@@ -346,6 +346,10 @@ class JobProcessor(ReconComponent):
         else:
             logger.warning(f"No processor found for function: {function_name}")
 
+    async def _handle_killjob_command(self, msg: Dict[str, Any]):
+        """Handle killjob command to cancel the running task."""
+        pass
+
 async def main():
     config = Config()
     config.setup_logging()

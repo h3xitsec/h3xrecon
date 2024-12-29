@@ -477,7 +477,9 @@ class DataProcessor(ReconComponent):
             )
             if inserted:
                 logger.info(f"New service inserted: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
-
+    async def _handle_killjob_command(self, msg: Dict[str, Any]):
+        """Handle killjob command to cancel the running task."""
+        pass
 async def main():
     config = Config()
     config.setup_logging()

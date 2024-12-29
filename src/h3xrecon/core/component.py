@@ -8,6 +8,7 @@ import sys
 import json
 from datetime import datetime, timezone, timedelta
 from h3xrecon.core.config import Config
+from h3xrecon.core.utils import debug_trace
 from enum import Enum
 from loguru import logger
 from typing import Dict, Any
@@ -37,6 +38,9 @@ class ReconComponent:
         self._pull_processor_task = None
         self._subscription_lock = asyncio.Lock()
         self._start_time = datetime.now(timezone.utc)
+        self._execution_semaphore = asyncio.Semaphore(1)
+        self._processing = False
+        self._processing_lock = asyncio.Lock()
         self.running = asyncio.Event()
         self.running.set()  # Start in running state
 
@@ -197,25 +201,38 @@ class ReconComponent:
         """Process messages from the pull-based subscription."""
         logger.debug(f"{self.component_id}: Starting pull message processing loop")
         while True:
-            try:
-                if self.state == ProcessorState.PAUSED:
-                    await asyncio.sleep(1)
-                    continue
+            if self.state == ProcessorState.PAUSED:
+                await asyncio.sleep(1)
+                continue
 
-                if not self._subscription:
-                    logger.debug("No subscription found")
-                    await self.setup_subscriptions()
-                    continue
+            try:
+                # Check if we're already processing
+                async with self._processing_lock:
+                    if self._processing:
+                        logger.debug(f"{self.component_id}: Already processing, sleeping...")
+                        await asyncio.sleep(0.1)
+                        continue
+                    logger.debug(f"{self.component_id}: Acquired processing lock")
+                    self._processing = True
 
                 # Fetch one message
-                messages = await self.qm.fetch_messages(self._subscription, batch_size=1)
-                if not messages:
-                    await asyncio.sleep(0.1)
-                    continue
+                try:
+                    messages = await self.qm.fetch_messages(self._subscription, batch_size=1)
+                    if not messages:
+                        async with self._processing_lock:
+                            self._processing = False
+                        logger.debug(f"{self.component_id}: No messages fetched, sleeping...")
+                        await asyncio.sleep(0.1)
+                        continue
 
-                message = messages[0]
-                # Process the message
-                await self.message_handler(message)
+                    message = messages[0]
+                    # Process the message
+                    await self.message_handler(message)
+                finally:
+                    # Always ensure we reset the processing flag
+                    async with self._processing_lock:
+                        self._processing = False
+                    logger.debug(f"{self.component_id}: Released processing lock")
 
             except asyncio.CancelledError:
                 logger.info("Pull message processing loop cancelled")
@@ -223,6 +240,10 @@ class ReconComponent:
             except Exception as e:
                 logger.error(f"Error in pull message processing loop: {e}", exc_info=True)
                 await asyncio.sleep(1)
+                # Ensure processing flag is reset on error
+                async with self._processing_lock:
+                    self._processing = False
+                logger.debug(f"{self.component_id}: Released processing lock after error")
 
     async def _health_check(self):
         """Monitor component health and subscription status."""
@@ -261,6 +282,7 @@ class ReconComponent:
 
     async def control_message_handler(self, raw_msg):
         """Handle control messages for component management."""
+        logger.debug(f"{self.component_id}: Received control message: {raw_msg.data}")
         try:
             msg = json.loads(raw_msg.data.decode())
             command = msg.get("command")
@@ -279,6 +301,7 @@ class ReconComponent:
                 await raw_msg.ack()
                 return
 
+            logger.debug(f"Processing control command: {command}")
             if command == "pause":
                 await self._handle_pause_command(msg)
             elif command == "unpause":
@@ -287,6 +310,8 @@ class ReconComponent:
                 await self._handle_report_command(msg)
             elif command == "ping":
                 await self._handle_ping_command(msg)
+            elif command == "killjob":
+                await self._handle_killjob_command(msg)
 
             await raw_msg.ack()
         except Exception as e:
@@ -308,12 +333,23 @@ class ReconComponent:
 
     async def _handle_unpause_command(self, msg: Dict[str, Any]):
         """Handle unpause command."""
-        self.state = ProcessorState.RUNNING
-        self.running.set()
-        await self.setup_subscriptions()
-        await self.set_status("idle")
-        logger.info(f"{self.role} {self.component_id} resumed")
-        await self._send_control_response("unpause", "running", True)
+        try:
+            # Set up subscriptions first
+            await self.setup_subscriptions()
+            if self._subscription is None:
+                logger.error("Failed to set up subscriptions during unpause")
+                await self._send_control_response("unpause", "failed", False)
+                return
+
+            # Only if subscriptions are set up, proceed with unpausing
+            self.state = ProcessorState.RUNNING
+            self.running.set()
+            await self.set_status("idle")
+            logger.info(f"{self.role} {self.component_id} resumed")
+            await self._send_control_response("unpause", "running", True)
+        except Exception as e:
+            logger.error(f"Error during unpause: {e}")
+            await self._send_control_response("unpause", "failed", False)
 
     async def _handle_report_command(self, msg: Dict[str, Any]):
         """Handle report command."""
@@ -344,9 +380,11 @@ class ReconComponent:
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         )
-
+    
+    @debug_trace
     async def _send_control_response(self, command: str, status: str, success: bool):
         """Send control response message."""
+        logger.debug(f"{self.component_id}: Sending control response for {command} with status {status} and success {success}")
         await self.qm.publish_message(
             subject=f"control.response.{command}",
             stream=f"CONTROL_RESPONSE_{command.upper()}",
@@ -409,3 +447,7 @@ class ReconComponent:
         except Exception as e:
             logger.error(f"Error generating report: {e}")
             return {"error": str(e)}
+
+    # async def _handle_killjob_command(self, msg: Dict[str, Any]):
+    #     """Handle killjob command to cancel running tasks."""
+    #     await self._handle_killjob_command(msg)
