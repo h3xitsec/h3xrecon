@@ -673,14 +673,13 @@ class DatabaseManager():
                 data = result.data.data
             else:
                 data = result.data
-
             if data and isinstance(data, list) and len(data) > 0:
                 inserted = data[0]['inserted']
                 if inserted:
                     logger.info(f"New URL inserted: {url}")
                 else:
                     logger.info(f"URL updated: {url}")
-                return inserted 
+                return data[0]
             return False
         except Exception as e:
             logger.error(f"Error inserting or updating URL in database: {e}")
