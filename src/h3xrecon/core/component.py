@@ -226,7 +226,6 @@ class ReconComponent:
                         logger.debug(f"{self.component_id}: Already processing, sleeping...")
                         await asyncio.sleep(0.1)
                         continue
-                    logger.debug(f"{self.component_id}: Acquired processing lock")
                     self._processing = True
 
                 # Fetch one message
@@ -235,7 +234,6 @@ class ReconComponent:
                     if not messages:
                         async with self._processing_lock:
                             self._processing = False
-                        logger.debug(f"{self.component_id}: No messages fetched, sleeping...")
                         await asyncio.sleep(0.1)
                         continue
 
@@ -246,7 +244,6 @@ class ReconComponent:
                     # Always ensure we reset the processing flag
                     async with self._processing_lock:
                         self._processing = False
-                    logger.debug(f"{self.component_id}: Released processing lock")
 
             except asyncio.CancelledError:
                 logger.debug("Pull message processing loop cancelled")
