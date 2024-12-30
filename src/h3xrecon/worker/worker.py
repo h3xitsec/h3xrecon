@@ -350,12 +350,17 @@ class Worker(ReconComponent):
 
     async def _handle_killjob_command(self, msg: Dict[str, Any]):
         """Handle killjob command to cancel the running task."""
-        if self.current_task:
-            self.current_task.cancel()
-            await self._send_control_response("killjob", "killed", True)
-            logger.info("Cancelled the current running task")
-        else:
-            logger.warning("No running task to cancel")
+        try:
+            if self.current_task:
+                self.current_task.cancel()
+                await self._send_control_response(command="killjob", status="task killed", success=True)
+                logger.info("Cancelled the current running task")
+            else:
+                logger.warning("No running task to cancel")
+                await self._send_control_response(command="killjob", status="no running task", success=True)
+        except Exception as e:
+            logger.error(f"Error handling killjob command: {e}")
+            await self._send_control_response(command="killjob", status="error", success=False)
 
 async def main():
     config = Config()
