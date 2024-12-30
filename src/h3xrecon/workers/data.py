@@ -32,9 +32,9 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
     ]
 }
 
-class DataProcessor(ReconComponent):
+class DataWorker(ReconComponent):
     def __init__(self, config: Config):
-        super().__init__("dataprocessor", config)
+        super().__init__("data", config)
         self.data_type_processors = {
             "ip": self.process_ip,
             "domain": self.process_domain,
@@ -58,10 +58,10 @@ class DataProcessor(ReconComponent):
                 subscription = await self.qm.subscribe(
                     subject="recon.data",
                     stream="RECON_DATA",
-                    durable_name="DATAPROCESSORS",
+                    durable_name="DATA_WORKERS",
                     message_handler=self.message_handler,
                     batch_size=1,
-                    queue_group="dataprocessor",
+                    queue_group="dataworkers",
                     consumer_config={
                         'ack_policy': AckPolicy.EXPLICIT,
                         'deliver_policy': DeliverPolicy.ALL,
@@ -73,7 +73,7 @@ class DataProcessor(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"RECON_DATA:recon.data:DATAPROCESSORS"
+                self._sub_key = f"RECON_DATA:recon.data:DATA_WORKERS"
                 logger.debug(f"Subscribed to data channel: {self._sub_key}")
 
                 # Setup control subscriptions
@@ -92,9 +92,9 @@ class DataProcessor(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject="function.control.all_dataprocessor",
+                    subject="function.control.all_data",
                     stream="FUNCTION_CONTROL",
-                    durable_name=f"CONTROL_ALL_DATAPROCESSOR_{self.component_id}",
+                    durable_name=f"CONTROL_ALL_DATA_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
                     consumer_config={
@@ -166,7 +166,7 @@ class DataProcessor(ReconComponent):
             return
 
         try:
-            await self.db.log_dataprocessor_operation(
+            await self.db.log_dataworker_operation(
                 component_id=self.component_id,
                 data_type=data_type,
                 program_id=program_id,
@@ -182,7 +182,7 @@ class DataProcessor(ReconComponent):
                 is_in_scope = True
             if not is_in_scope:
                 logger.debug(f"Data {result} of type {data_type} is not in scope for program {program_id}. Skipping new jobs.")
-                await self.db.log_dataprocessor_operation(
+                await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type=data_type,
                     program_id=program_id,
@@ -212,7 +212,7 @@ class DataProcessor(ReconComponent):
                         triggered_jobs.append(job.function)
                     except StreamUnavailableError as e:
                         logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
-                        await self.db.log_dataprocessor_operation(
+                        await self.db.log_dataworker_operation(
                             component_id=self.component_id,
                             data_type=data_type,
                             program_id=program_id,
@@ -225,7 +225,7 @@ class DataProcessor(ReconComponent):
                         break
                     except Exception as e:
                         logger.error(f"Failed to trigger job: {str(e)}")
-                        await self.db.log_dataprocessor_operation(
+                        await self.db.log_dataworker_operation(
                             component_id=self.component_id,
                             data_type=data_type,
                             program_id=program_id,
@@ -246,7 +246,7 @@ class DataProcessor(ReconComponent):
 
             # Log successful job triggers
             if triggered_jobs:
-                await self.db.log_dataprocessor_operation(
+                await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type=data_type,
                     program_id=program_id,
@@ -259,7 +259,7 @@ class DataProcessor(ReconComponent):
 
         except Exception as e:
             logger.error(f"Error triggering new jobs: {e}")
-            await self.db.log_dataprocessor_operation(
+            await self.db.log_dataworker_operation(
                 component_id=self.component_id,
                 data_type=data_type,
                 program_id=program_id,
@@ -302,7 +302,7 @@ class DataProcessor(ReconComponent):
             attributes = msg_data.get('attributes')
         for ip in msg_data.get('data'):
             try:
-                await self.db.log_dataprocessor_operation(
+                await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type='ip',
                     program_id=msg_data.get('program_id'),
@@ -322,7 +322,7 @@ class DataProcessor(ReconComponent):
                 # Log operation result
                 if result.get('inserted'):
                     logger.success(f"INSERTED IP: {ip}")
-                    await self.db.log_dataprocessor_operation(
+                    await self.db.log_dataworker_operation(
                         component_id=self.component_id,
                         data_type='ip',
                         program_id=msg_data.get('program_id'),
@@ -336,7 +336,7 @@ class DataProcessor(ReconComponent):
                 else:
                     logger.info(f"UPDATED IP: {ip}")
             except Exception as e:
-                await self.db.log_dataprocessor_operation(
+                await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type='ip',
                     program_id=msg_data.get('program_id'),
@@ -490,7 +490,7 @@ async def main():
     config = Config()
     config.setup_logging()
 
-    data_processor = DataProcessor(config)
+    data_processor = DataWorker(config)
     try:
         await data_processor.start()
         while True:
