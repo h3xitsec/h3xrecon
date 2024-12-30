@@ -168,7 +168,7 @@ class ReconWorker(ReconComponent):
                 return
             
             # Log execution start
-            await self.db.log_worker_execution(
+            await self.db.log_reconworker_operation(
                 execution_id=function_execution_request.execution_id,
                 component_id=self.component_id,
                 function_name=function_execution_request.function_name,
@@ -182,7 +182,7 @@ class ReconWorker(ReconComponent):
             function_valid = await self.validate_function_execution_request(function_execution_request)
             if not function_valid:
                 logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid function request")
-                await self.db.log_worker_execution(
+                await self.db.log_reconworker_operation(
                     execution_id=function_execution_request.execution_id,
                     component_id=self.component_id,
                     function_name=function_execution_request.function_name,
@@ -209,7 +209,7 @@ class ReconWorker(ReconComponent):
             logger.error(f"Error in message handler: {e}")
             logger.exception(e)
             if 'function_execution_request' in locals():
-                await self.db.log_worker_execution(
+                await self.db.log_reconworker_operation(
                     execution_id=function_execution_request.execution_id,
                     component_id=self.component_id,
                     function_name=function_execution_request.function_name,
@@ -251,7 +251,7 @@ class ReconWorker(ReconComponent):
                 execution_id=msg_data.execution_id
             ):
                 if asyncio.current_task().cancelled():
-                    await self.db.log_worker_execution(
+                    await self.db.log_reconworker_operation(
                         execution_id=msg_data.execution_id,
                         component_id=self.component_id,
                         function_name=msg_data.function_name,
@@ -268,7 +268,7 @@ class ReconWorker(ReconComponent):
                 logger.debug(f"Execution {msg_data.execution_id}: Result #{result_count}: {result}")
                 
             # Log successful completion
-            await self.db.log_worker_execution(
+            await self.db.log_reconworker_operation(
                 execution_id=msg_data.execution_id,
                 component_id=self.component_id,
                 function_name=msg_data.function_name,
@@ -285,7 +285,7 @@ class ReconWorker(ReconComponent):
             return
         except Exception as e:
             logger.error(f"Error executing function {msg_data.execution_id}: {e}")
-            await self.db.log_worker_execution(
+            await self.db.log_reconworker_operation(
                 execution_id=msg_data.execution_id,
                 component_id=self.component_id,
                 function_name=msg_data.function_name,

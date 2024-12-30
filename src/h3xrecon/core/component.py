@@ -135,7 +135,7 @@ class ReconComponent:
                         raise e
                     await asyncio.sleep(1)
             self._health_check_task = asyncio.create_task(self._health_check())
-            if self.role == "jobprocessor":
+            if self.role == "parsing":
                 self._load_plugins()
             await self.start_pull_processor()
             await self.set_status("idle")
@@ -352,7 +352,6 @@ class ReconComponent:
         self.state = ProcessorState.PAUSED
         self.running.clear()
         await self.set_status("paused")
-        #logger.info(f"{self.role} {self.component_id} paused")
         await self._send_control_response("pause", "paused", True)
 
     async def _handle_unpause_command(self, msg: Dict[str, Any]):
@@ -361,7 +360,6 @@ class ReconComponent:
             self.state = ProcessorState.RUNNING
             self.running.set()
             await self.set_status("idle")
-            logger.info(f"{self.role} {self.component_id} resumed")
             await self._send_control_response("unpause", "running", True)
         except Exception as e:
             logger.error(f"Error during unpause: {e}")

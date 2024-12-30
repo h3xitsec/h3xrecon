@@ -117,10 +117,10 @@ class ParsingWorker(ReconComponent):
                 subscription = await self.qm.subscribe(
                     subject="function.output",
                     stream="FUNCTION_OUTPUT",
-                    durable_name="JOBPROCESSORS",
+                    durable_name="PARSING_WORKERS",
                     message_handler=self.message_handler,
                     batch_size=1,
-                    queue_group="jobprocessors",
+                    queue_group="parsingworkers",
                     consumer_config={
                         'ack_policy': AckPolicy.EXPLICIT,
                         'deliver_policy': DeliverPolicy.NEW,
@@ -128,7 +128,7 @@ class ParsingWorker(ReconComponent):
                         'max_deliver': 1,
                         'max_ack_pending': 1000,
                         'flow_control': False,
-                        'deliver_group': 'jobprocessors'
+                        'deliver_group': 'parsingworkers'
                     },
                     pull_based=True
                 )
@@ -193,7 +193,7 @@ class ParsingWorker(ReconComponent):
         try:
             # Log message receipt
             message_id = msg.get('execution_id', str(uuid.uuid4()))
-            await self.db.log_jobprocessor_message(
+            await self.db.log_parsingworker_operation(
                 component_id=self.component_id,
                 message_id=message_id,
                 message_type='function_output',
@@ -223,7 +223,7 @@ class ParsingWorker(ReconComponent):
                     actions_taken.append(f"Processed output from {function_name}")
                     
                     # Log successful processing
-                    await self.db.log_jobprocessor_message(
+                    await self.db.log_parsingworker_operation(
                         component_id=self.component_id,
                         message_id=message_id,
                         message_type='function_output',
@@ -239,7 +239,7 @@ class ParsingWorker(ReconComponent):
                     processing_result['status'] = 'error'
                     processing_result['error'] = str(e)
                     # Log processing failure
-                    await self.db.log_jobprocessor_message(
+                    await self.db.log_parsingworker_operation(
                         component_id=self.component_id,
                         message_id=message_id,
                         message_type='function_output',
@@ -254,7 +254,7 @@ class ParsingWorker(ReconComponent):
                     await raw_msg.nak()
             else:
                 logger.error(f"No function name found in message: {msg}")
-                await self.db.log_jobprocessor_message(
+                await self.db.log_parsingworker_operation(
                     component_id=self.component_id,
                     message_id=message_id,
                     message_type='function_output',
@@ -274,7 +274,7 @@ class ParsingWorker(ReconComponent):
             logger.error(error_msg)
             
             if 'message_id' in locals():
-                await self.db.log_jobprocessor_message(
+                await self.db.log_parsingworker_operation(
                     component_id=self.component_id,
                     message_id=message_id,
                     message_type='function_output',
@@ -297,24 +297,24 @@ class ParsingWorker(ReconComponent):
             function_name = message_data.get("source", {}).get("function", "unknown")
             target = params.get("target", "unknown")
             
-            logger.debug(f"Original params in jobprocessor: {params}")
+            logger.debug(f"Original params in parsing worker: {params}")
             
             # Handle extra_params specially if it exists as a list
             if 'extra_params' in params and isinstance(params['extra_params'], list):
                 extra_params_str = f"extra_params={sorted(params['extra_params'])}"
-                logger.debug(f"Using list extra_params in jobprocessor: {extra_params_str}")
+                logger.debug(f"Using list extra_params in parsing worker: {extra_params_str}")
             else:
                 # Create a sorted, filtered copy of params excluding certain keys
                 extra_params = {k: v for k, v in sorted(params.items()) 
                                if k not in ['target', 'force'] and not k.startswith('--')}
                 # Convert extra_params to a string representation
                 extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
-            logger.debug(f"Using dict extra_params in jobprocessor: {extra_params_str}")
+            logger.debug(f"Using dict extra_params in parsing worker: {extra_params_str}")
             
             # Construct Redis key with extra parameters
             redis_key = f"{function_name}:{target}:{extra_params_str}"
             
-            logger.debug(f"Setting Redis key in jobprocessor: {redis_key}")
+            logger.debug(f"Setting Redis key in parsing worker: {redis_key}")
             
             log_entry = {
                 "execution_id": execution_id,

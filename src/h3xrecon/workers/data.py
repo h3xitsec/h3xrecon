@@ -58,10 +58,10 @@ class DataWorker(ReconComponent):
                 subscription = await self.qm.subscribe(
                     subject="recon.data",
                     stream="RECON_DATA",
-                    durable_name="DATAPROCESSORS",
+                    durable_name="DATA_WORKERS",
                     message_handler=self.message_handler,
                     batch_size=1,
-                    queue_group="dataprocessor",
+                    queue_group="dataworkers",
                     consumer_config={
                         'ack_policy': AckPolicy.EXPLICIT,
                         'deliver_policy': DeliverPolicy.ALL,
@@ -73,7 +73,7 @@ class DataWorker(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"RECON_DATA:recon.data:data"
+                self._sub_key = f"RECON_DATA:recon.data:DATA_WORKERS"
                 logger.debug(f"Subscribed to data channel: {self._sub_key}")
 
                 # Setup control subscriptions
@@ -166,7 +166,7 @@ class DataWorker(ReconComponent):
             return
 
         try:
-            await self.db.log_dataprocessor_operation(
+            await self.db.log_dataworker_operation(
                 component_id=self.component_id,
                 data_type=data_type,
                 program_id=program_id,
@@ -182,7 +182,7 @@ class DataWorker(ReconComponent):
                 is_in_scope = True
             if not is_in_scope:
                 logger.debug(f"Data {result} of type {data_type} is not in scope for program {program_id}. Skipping new jobs.")
-                await self.db.log_dataprocessor_operation(
+                await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type=data_type,
                     program_id=program_id,
@@ -212,7 +212,7 @@ class DataWorker(ReconComponent):
                         triggered_jobs.append(job.function)
                     except StreamUnavailableError as e:
                         logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
-                        await self.db.log_dataprocessor_operation(
+                        await self.db.log_dataworker_operation(
                             component_id=self.component_id,
                             data_type=data_type,
                             program_id=program_id,
@@ -225,7 +225,7 @@ class DataWorker(ReconComponent):
                         break
                     except Exception as e:
                         logger.error(f"Failed to trigger job: {str(e)}")
-                        await self.db.log_dataprocessor_operation(
+                        await self.db.log_dataworker_operation(
                             component_id=self.component_id,
                             data_type=data_type,
                             program_id=program_id,
@@ -246,7 +246,7 @@ class DataWorker(ReconComponent):
 
             # Log successful job triggers
             if triggered_jobs:
-                await self.db.log_dataprocessor_operation(
+                await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type=data_type,
                     program_id=program_id,
@@ -259,7 +259,7 @@ class DataWorker(ReconComponent):
 
         except Exception as e:
             logger.error(f"Error triggering new jobs: {e}")
-            await self.db.log_dataprocessor_operation(
+            await self.db.log_dataworker_operation(
                 component_id=self.component_id,
                 data_type=data_type,
                 program_id=program_id,
@@ -302,7 +302,7 @@ class DataWorker(ReconComponent):
             attributes = msg_data.get('attributes')
         for ip in msg_data.get('data'):
             try:
-                await self.db.log_dataprocessor_operation(
+                await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type='ip',
                     program_id=msg_data.get('program_id'),
@@ -322,7 +322,7 @@ class DataWorker(ReconComponent):
                 # Log operation result
                 if result.get('inserted'):
                     logger.success(f"INSERTED IP: {ip}")
-                    await self.db.log_dataprocessor_operation(
+                    await self.db.log_dataworker_operation(
                         component_id=self.component_id,
                         data_type='ip',
                         program_id=msg_data.get('program_id'),
@@ -336,7 +336,7 @@ class DataWorker(ReconComponent):
                 else:
                     logger.info(f"UPDATED IP: {ip}")
             except Exception as e:
-                await self.db.log_dataprocessor_operation(
+                await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type='ip',
                     program_id=msg_data.get('program_id'),
