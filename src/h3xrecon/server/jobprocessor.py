@@ -287,7 +287,7 @@ class JobProcessor(ReconComponent):
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
-            await self.set_status("running")
+            await self.set_status("idle")
 
     async def log_or_update_function_execution(self, message_data: Dict[str, Any], execution_id: str, timestamp: str):
         """Log or update function execution in the database."""
