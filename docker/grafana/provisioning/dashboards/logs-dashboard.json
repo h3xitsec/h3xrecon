@@ -55,12 +55,12 @@
             "uid": "P8E80F9AEF21F6940"
           },
           "editorMode": "code",
-          "expr": "{service_name=~\".*worker.*\"} !~ `^$`",
+          "expr": "{service_name=~\".*recon.*\"} !~ `^$`",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Worker Logs",
+      "title": "Recon Worker Logs",
       "type": "logs"
     },
     {
@@ -97,12 +97,12 @@
             "uid": "P8E80F9AEF21F6940"
           },
           "editorMode": "code",
-          "expr": "{service_name=~\".*jobprocessor.*\"} !~ `^$`",
+          "expr": "{service_name=~\".*parsing.*\"} !~ `^$`",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Job Processor Logs",
+      "title": "Parsing Worker Logs",
       "type": "logs"
     },
     {
@@ -139,12 +139,12 @@
             "uid": "P8E80F9AEF21F6940"
           },
           "editorMode": "code",
-          "expr": "{service_name=~\".*dataprocessor.*\"} !~ `^$`",
+          "expr": "{service_name=~\".*data.*\"} !~ `^$`",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Data Processor Logs",
+      "title": "Data Worker Logs",
       "type": "logs"
     }
   ],
