@@ -374,6 +374,7 @@ class ReconComponent:
         logger.info(f"Sending report to {msg.get('target')}")
         await self._send_control_response("report", "success", True, report)
 
+    @debug_trace
     async def _handle_ping_command(self, msg: Dict[str, Any]):
         """Handle ping command."""
         logger.info(f"Received ping from {msg.get('target')}")
