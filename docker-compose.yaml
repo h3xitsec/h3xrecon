@@ -171,13 +171,13 @@ services:
       retries: 5
       start_period: 5s
 
-  jobprocessor:
+  parsing:
     image: ghcr.io/h3xitsec/h3xrecon/server:${H3XRECON_IMAGE_VERSION}
     env_file:
       - .env.compose
     environment:
       - H3XRECON_LOG_LEVEL
-      - H3XRECON_ROLE=jobprocessor
+      - H3XRECON_ROLE=parsing
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -186,13 +186,13 @@ services:
       database:
         condition: service_healthy
 
-  dataprocessor:
+  data:
     image: ghcr.io/h3xitsec/h3xrecon/server:${H3XRECON_IMAGE_VERSION}
     env_file:
       - .env.compose
     environment:
       - H3XRECON_LOG_LEVEL
-      - H3XRECON_ROLE=dataprocessor
+      - H3XRECON_ROLE=data
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -201,7 +201,7 @@ services:
       database:
         condition: service_healthy
 
-  worker:
+  recon:
     image: ghcr.io/h3xitsec/h3xrecon/worker:${H3XRECON_IMAGE_VERSION}
     env_file:
       - .env.compose

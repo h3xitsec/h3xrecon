@@ -2,15 +2,18 @@ import asyncio
 import sys
 from loguru import logger
 from h3xrecon.core.component import ReconComponent, ProcessorState
-from h3xrecon.worker.executor import FunctionExecutor
 from h3xrecon.core import Config
+from h3xrecon.core.queue import StreamUnavailableError
+from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable, AsyncGenerator
 import uuid
 from datetime import datetime, timezone, timedelta
 import json
+import importlib
+import pkgutil
 
 @dataclass
 class FunctionExecutionRequest:
@@ -24,13 +27,17 @@ class FunctionExecutionRequest:
         if self.execution_id is None:
             self.execution_id = str(uuid.uuid4())
 
-class Worker(ReconComponent):
+class ReconWorker(ReconComponent):
     def __init__(self, config: Config):
-        super().__init__("worker", config)
-        self.function_executor = None
+        super().__init__("recon", config)
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
-        self.current_task: Optional[asyncio.Task] = None  # Track the currently running task
+        self.current_task: Optional[asyncio.Task] = None
+        self.function_map: Dict[str, Callable] = {}
+        self.load_plugins()
+        self.current_module = None
+        self.current_target = None
+        self.current_start_time = None
 
     async def setup_subscriptions(self):
         """Setup NATS subscriptions for the worker."""
@@ -47,10 +54,10 @@ class Worker(ReconComponent):
                 subscription = await self.qm.subscribe(
                     subject="function.execute",
                     stream="FUNCTION_EXECUTE",
-                    durable_name="WORKERS_EXECUTE",
+                    durable_name="RECON_EXECUTE",
                     message_handler=self.message_handler,
                     batch_size=1,
-                    queue_group="workers",
+                    queue_group="recon",
                     consumer_config={
                         'ack_policy': AckPolicy.EXPLICIT,
                         'deliver_policy': DeliverPolicy.ALL,
@@ -62,7 +69,7 @@ class Worker(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"FUNCTION_EXECUTE:function.execute:WORKERS_EXECUTE"
+                self._sub_key = f"FUNCTION_EXECUTE:function.execute:RECON_EXECUTE"
                 logger.debug(f"Subscribed to execute channel : {self._sub_key}")
 
                 # Setup control subscriptions
@@ -81,9 +88,9 @@ class Worker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject="function.control.all_worker",
+                    subject="function.control.all_recon",
                     stream="FUNCTION_CONTROL",
-                    durable_name=f"CONTROL_ALL_WORKER_{self.component_id}",
+                    durable_name=f"CONTROL_ALL_RECON_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
                     consumer_config={
@@ -115,13 +122,6 @@ class Worker(ReconComponent):
     async def start(self):
         """Start the worker with additional initialization."""
         await super().start()
-        self.function_executor = FunctionExecutor(
-            worker_id=self.component_id,
-            qm=self.qm,
-            db=self.db,
-            config=self.config,
-            redis_status=self.redis_status
-        )
 
     async def message_handler(self, raw_msg):
         """Handle incoming function execution messages."""
@@ -231,7 +231,7 @@ class Worker(ReconComponent):
         """Validate the function execution request."""
         try:
             plugin_found = any(function_execution_request.function_name in key 
-                             for key in self.function_executor.function_map.keys())
+                             for key in self.function_map.keys())
             if not plugin_found:
                 raise ValueError(f"Invalid function_name: {function_execution_request.function_name}")
             return plugin_found
@@ -244,7 +244,7 @@ class Worker(ReconComponent):
         result_count = 0
         
         try:
-            async for result in self.function_executor.execute_function(
+            async for result in self.execute_function(
                 function_name=msg_data.function_name,
                 params=msg_data.params,
                 program_id=msg_data.program_id,
@@ -300,6 +300,104 @@ class Worker(ReconComponent):
         finally:
             logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
             await self.set_status("idle")
+
+    def load_plugins(self):
+        """Dynamically load all recon plugins."""
+        try:
+            package = importlib.import_module('h3xrecon.plugins.plugins')
+            logger.debug(f"Found plugin package at: {package.__path__}")
+            
+            # Walk through all subdirectories
+            plugin_modules = []
+            for finder, name, ispkg in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
+                if not name.endswith('.base'):  # Skip the base module
+                    plugin_modules.append(name)
+            
+            logger.info(f"LOADED PLUGINS: {', '.join(p.split('.')[-1] for p in plugin_modules)}")
+            
+        except ModuleNotFoundError as e:
+            logger.error(f"Failed to import 'plugins': {e}")
+            return
+
+        for module_name in plugin_modules:
+            try:
+                logger.debug(f"Attempting to load module: {module_name}")
+                module = importlib.import_module(module_name)
+                
+                for attribute_name in dir(module):
+                    attribute = getattr(module, attribute_name)
+                    
+                    if not isinstance(attribute, type) or not issubclass(attribute, ReconPlugin) or attribute is ReconPlugin:
+                       continue
+                        
+                    plugin_instance = attribute()
+                    bound_method = plugin_instance.execute
+                    self.function_map[plugin_instance.name] = bound_method
+                    logger.debug(f"Loaded plugin: {plugin_instance.name} with timeout: {plugin_instance.timeout}s")
+                
+            except Exception as e:
+                logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
+        logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
+    
+    async def execute_function(self, function_name: str, params: Dict[str, Any], program_id: int, execution_id: str) -> AsyncGenerator[Dict[str, Any], None]:
+        try:
+            # Update current execution info
+            self.current_module = function_name
+            self.current_target = params.get('target')
+            self.current_start_time = datetime.now(timezone.utc)
+
+            plugin = self.function_map.get(function_name)
+            if not plugin:
+                logger.error(f"Function {function_name} not found")
+                raise ValueError(f"Function {function_name} not found")
+
+            logger.debug(f"Running function {function_name} on {params.get('target')} ({execution_id})")
+            
+            try:
+                async for result in plugin(params, program_id, execution_id, self.db):
+                    output_data = {
+                        "program_id": program_id,
+                        "execution_id": execution_id,
+                        "source": {
+                            "function": function_name,
+                            "params": params
+                        },
+                        "output": result,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+                    # Yield the result first
+                    yield output_data
+                    
+                    # Then attempt to publish it
+                    try:
+                        await self.qm.publish_message(
+                            subject="function.output",
+                            stream="FUNCTION_OUTPUT",
+                            message=output_data
+                        )
+                    except StreamUnavailableError as e:
+                        logger.warning(f"Stream locked, dropping message: {str(e)}")
+                        continue  # Continue with the next result
+
+            except Exception as e:
+                logger.error(f"Error executing function {function_name}: {str(e)}")
+                logger.exception(e)
+                raise
+            finally:
+                logger.debug(f"Finished running {function_name} on {params.get('target')} ({execution_id})")
+
+        except Exception as e:
+            logger.error(f"Error executing function {function_name}: {str(e)}")
+            logger.exception(e)
+            raise
+
+        finally:
+            # Clear current execution info when done
+            self.current_module = None
+            self.current_target = None
+            self.current_start_time = None
+
 
     async def stop(self):
         """Stop the worker with additional cleanup."""
@@ -366,7 +464,7 @@ async def main():
     config = Config()
     config.setup_logging()
 
-    worker = Worker(config)
+    worker = ReconWorker(config)
     try:
         await worker.start()
         while True:

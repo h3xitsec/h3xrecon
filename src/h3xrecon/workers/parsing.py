@@ -56,9 +56,9 @@ class FunctionExecution:
             logger.error("output must be a list")
             raise TypeError("output must be a list")
 
-class JobProcessor(ReconComponent):
+class ParsingWorker(ReconComponent):
     def __init__(self, config: Config):
-        super().__init__("jobprocessor", config)
+        super().__init__("parsing", config)
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
         self._load_plugins()
 
@@ -133,7 +133,7 @@ class JobProcessor(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"FUNCTION_OUTPUT:function.output:JOBPROCESSORS"
+                self._sub_key = f"FUNCTION_OUTPUT:function.output:parsing"
                 logger.debug(f"Subscribed to output channel: {self._sub_key}")
 
                 # Setup control subscriptions
@@ -152,9 +152,9 @@ class JobProcessor(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject="function.control.all_jobprocessor",
+                    subject="function.control.all_parsing",
                     stream="FUNCTION_CONTROL",
-                    durable_name=f"CONTROL_ALL_JOBPROCESSOR_{self.component_id}",
+                    durable_name=f"CONTROL_ALL_PARSING_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
                     consumer_config={
@@ -355,7 +355,7 @@ async def main():
     config = Config()
     config.setup_logging()
 
-    job_processor = JobProcessor(config)
+    job_processor = ParsingWorker(config)
     try:
         await job_processor.start()
         while True:

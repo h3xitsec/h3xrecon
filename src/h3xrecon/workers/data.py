@@ -32,9 +32,9 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
     ]
 }
 
-class DataProcessor(ReconComponent):
+class DataWorker(ReconComponent):
     def __init__(self, config: Config):
-        super().__init__("dataprocessor", config)
+        super().__init__("data", config)
         self.data_type_processors = {
             "ip": self.process_ip,
             "domain": self.process_domain,
@@ -73,7 +73,7 @@ class DataProcessor(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"RECON_DATA:recon.data:DATAPROCESSORS"
+                self._sub_key = f"RECON_DATA:recon.data:data"
                 logger.debug(f"Subscribed to data channel: {self._sub_key}")
 
                 # Setup control subscriptions
@@ -92,9 +92,9 @@ class DataProcessor(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject="function.control.all_dataprocessor",
+                    subject="function.control.all_data",
                     stream="FUNCTION_CONTROL",
-                    durable_name=f"CONTROL_ALL_DATAPROCESSOR_{self.component_id}",
+                    durable_name=f"CONTROL_ALL_DATA_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
                     consumer_config={
@@ -490,7 +490,7 @@ async def main():
     config = Config()
     config.setup_logging()
 
-    data_processor = DataProcessor(config)
+    data_processor = DataWorker(config)
     try:
         await data_processor.start()
         while True:

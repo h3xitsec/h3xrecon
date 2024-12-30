@@ -45,4 +45,4 @@ ENV PYTHONUNBUFFERED=1
 
 ENV PYTHONFAULTHANDLER=1
 
-ENTRYPOINT ["/app/venv/bin/python", "-m", "h3xrecon.worker.worker"]
+ENTRYPOINT ["/app/venv/bin/h3xrecon-recon"]
