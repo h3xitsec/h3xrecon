@@ -421,6 +421,30 @@ class DatabaseManager():
         finally:
             logger.debug("Exiting check_domain_regex_match method")
 
+
+    async def insert_screenshot(self, program_id: int, url: str, filepath: str, md5_hash: str) -> bool:
+        try:
+            url_id = await self._fetch_value('''
+                SELECT id FROM urls WHERE url = $1
+            ''', url)
+            logger.debug(f"URL ID: {url_id}")
+            result = await self._write_records(
+                '''INSERT INTO screenshots (program_id, filepath, md5_hash, url_id) VALUES ($1, $2, $3, $4) 
+                ON CONFLICT (program_id, filepath) DO UPDATE SET md5_hash = $3, updated_at = CURRENT_TIMESTAMP, url_id = $4
+                RETURNING (xmax = 0) AS inserted, id''',
+                program_id, filepath, md5_hash, url_id.data
+            )
+            logger.debug(f"Insert result: {result}")
+            if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                return {
+                    'inserted': result.data[0]['inserted'],
+                    'id': result.data[0]['id']
+                }
+            return {'inserted': False, 'id': None}
+        except Exception as e:
+            logger.error(f"Error inserting screenshot: {str(e)}")
+            return False
+
     async def insert_ip(self, ip: str, ptr: str, cloud_provider: str, program_id: int) -> Dict[str, Any]:
         # Validate IP address is IPv4 or IPv6
         import ipaddress

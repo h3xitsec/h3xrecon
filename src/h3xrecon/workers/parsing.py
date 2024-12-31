@@ -221,14 +221,15 @@ class ParsingWorker(ReconComponent):
                     await self.process_function_output(msg)
                     processing_result['status'] = 'success'
                     actions_taken.append(f"Processed output from {function_name}")
-                    
+                    short_msg = msg.copy()
+                    short_msg['output']['data'] = msg.get('output', {}).get('data')[0:50]
                     # Log successful processing
                     await self.db.log_parsingworker_operation(
                         component_id=self.component_id,
                         message_id=message_id,
                         message_type='function_output',
                         program_id=msg.get('program_id'),
-                        message_data=msg,
+                        message_data=short_msg,
                         status='processed',
                         processing_result=processing_result,
                         actions_taken=actions_taken,
@@ -244,7 +245,7 @@ class ParsingWorker(ReconComponent):
                         message_id=message_id,
                         message_type='function_output',
                         program_id=msg.get('program_id'),
-                        message_data=msg,
+                        message_data=short_msg,
                         status='failed',
                         processing_result=processing_result,
                         actions_taken=actions_taken,
@@ -259,7 +260,7 @@ class ParsingWorker(ReconComponent):
                     message_id=message_id,
                     message_type='function_output',
                     program_id=msg.get('program_id'),
-                    message_data=msg,
+                    message_data=short_msg,
                     status='failed',
                     error_message='No function name found in message',
                     processed_at=datetime.now(timezone.utc)

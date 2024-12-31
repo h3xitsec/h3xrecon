@@ -11,6 +11,7 @@ import os
 import json
 import asyncio
 import sys
+import hashlib
 from datetime import datetime, timezone
 
 @dataclass
@@ -41,7 +42,8 @@ class DataWorker(ReconComponent):
             "url": self.process_url,
             "service": self.process_service,
             "nuclei": self.process_nuclei,
-            "certificate": self.process_certificate
+            "certificate": self.process_certificate,
+            "screenshot": self.process_screenshot
         }
 
     async def setup_subscriptions(self):
@@ -347,6 +349,23 @@ class DataWorker(ReconComponent):
                     completed_at=datetime.now(timezone.utc)
                 )
                 logger.error(f"Error processing IP {ip}: {e}")
+
+    async def process_screenshot(self, msg_data: Dict[str, Any]):
+        """Process screenshot data."""
+        logger.debug(f"PROCESSING SCREENSHOT: {msg_data}")
+        for screenshot in msg_data.get('data'):
+            logger.info(f"PROCESSING SCREENSHOT: {screenshot}")
+            md5_hash = hashlib.md5(open(screenshot.get('path'), 'rb').read()).hexdigest()
+            result = await self.db.insert_screenshot(
+                program_id=msg_data.get('program_id'),
+                filepath=screenshot.get('path'),
+                md5_hash=md5_hash,
+                url=screenshot.get('url')
+            )
+            if result['inserted']:
+                logger.success(f"INSERTED SCREENSHOT: {screenshot.get('url')}")
+            else:
+                logger.info(f"UPDATED SCREENSHOT: {screenshot.get('url')}")
 
     async def process_domain(self, msg_data: Dict[str, Any]):
         """Process domain data."""
