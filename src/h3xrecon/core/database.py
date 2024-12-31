@@ -425,10 +425,13 @@ class DatabaseManager():
         # Validate IP address is IPv4 or IPv6
         import ipaddress
         try:
-            ipaddress.ip_address(ip)
-        except ValueError:
+            ip_obj = ipaddress.ip_address(ip)
+            if not isinstance(ip_obj, ipaddress.IPv4Address):
+                raise ValueError("IP address must be IPv4")
+        except ValueError as e:
             logger.error(f"Invalid IP address: {ip}")
-            return {'inserted': False, 'id': None}
+            raise
+            #return {'inserted': False, 'id': None}
 
         query = """
         INSERT INTO ips (ip, ptr, cloud_provider, program_id)
