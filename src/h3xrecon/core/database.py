@@ -514,11 +514,6 @@ class DatabaseManager():
 
             if data and isinstance(data, list) and len(data) > 0:
                 inserted = data[0]['inserted']
-                service_desc = f"{protocol or 'unknown'}:{ip}:{port if port else 'no_port'}"
-                if inserted:
-                    logger.info(f"New service inserted: {service_desc}")
-                else:
-                    logger.info(f"Service updated: {service_desc}")
                 return inserted
             return False
                 

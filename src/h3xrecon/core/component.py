@@ -66,7 +66,7 @@ class ReconComponent:
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             raise
-
+    @debug_trace
     async def set_status(self, status: str):
         """Set component status in Redis."""
         if not self.redis_status:
@@ -350,9 +350,13 @@ class ReconComponent:
             return
 
         self.state = ProcessorState.PAUSED
-        self.running.clear()
         await self.set_status("paused")
         await self._send_control_response("pause", "paused", True)
+        if self.role == "recon":
+            if self.current_task:
+                logger.debug(f"Cancelling current task: {self.current_task}")
+                self.current_task.cancel()
+            
 
     async def _handle_unpause_command(self, msg: Dict[str, Any]):
         """Handle unpause command."""

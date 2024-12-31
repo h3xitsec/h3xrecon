@@ -8,6 +8,7 @@ from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
+from h3xrecon.core.utils import debug_trace
 from typing import Dict, Any, Optional, Callable, AsyncGenerator
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -223,7 +224,8 @@ class ReconWorker(ReconComponent):
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
-            await self.set_status("idle")
+            if self.state != ProcessorState.PAUSED:
+                await self.set_status("idle")
             self.state = ProcessorState.RUNNING
             self._processing_lock.release()
 
@@ -238,7 +240,8 @@ class ReconWorker(ReconComponent):
         except Exception as e:
             logger.error(f"Error validating function request: {e}")
             return False
-
+    
+    @debug_trace
     async def run_function_execution(self, msg_data: FunctionExecutionRequest):
         """Execute the requested function."""
         result_count = 0
@@ -299,7 +302,6 @@ class ReconWorker(ReconComponent):
             raise
         finally:
             logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
-            await self.set_status("idle")
 
     def load_plugins(self):
         """Dynamically load all recon plugins."""
