@@ -12,7 +12,7 @@ import re
 import shutil
 from os.path import basename
 
-SCREENSHOT_BASE_STORAGE_PATH = "/home/h3x/data/projects/recondev/screenshots"
+SCREENSHOT_BASE_STORAGE_PATH = "/app/screenshots"
 
 class Screenshot(ReconPlugin):
     @property
@@ -26,18 +26,16 @@ class Screenshot(ReconPlugin):
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get('target', {})}")
         command = f"""
-            tmp="/tmp/testing"
-            mkdir -p $tmp
+            tmp=$(mktemp -d)
             gowitness scan single -u "{params.get('target', {})}" -s $tmp --quiet --screenshot-format png
             (
                 cd $tmp
-                if [[ $(ls -l *.png | wc -l) -gt 0 ]]
+                if [ "$(ls -l *.png 2>/dev/null | wc -l)" -gt 0 ]
                 then
                     tar czf $tmp/output.tar.gz ./*.png
-                    base64 -w 0 $tmp/output.tar.gz > $tmp/output.txt
+                    base64 $tmp/output.tar.gz | tr -d '\n'
                 fi
             )
-            cat $tmp/output.txt
             rm -rf $tmp
         """
         process = None
@@ -75,10 +73,9 @@ class Screenshot(ReconPlugin):
         base64_archive = output_msg.get('output', {}).get('data')
         if base64_archive:
             archive_data = base64.b64decode(base64_archive)
-            temp_dir = "/tmp/testing"
-            os.makedirs(temp_dir, exist_ok=True)
-            with tempfile.TemporaryDirectory() as temp_dir2:
+            with tempfile.TemporaryDirectory() as temp_dir:
                 logger.debug(f"Extracting screenshots to {temp_dir}")
+                os.makedirs(temp_dir, exist_ok=True)
                 try:
                     with open(os.path.join(temp_dir, 'output_parser.tar.gz'), 'wb') as f:
                         f.write(archive_data)
