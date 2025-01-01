@@ -210,10 +210,10 @@ class ParsingWorker(ReconComponent):
                 source=msg['source'],
                 output=msg.get('data', [])
             )
-            
             # Log or update function execution in database
             await self.log_or_update_function_execution(msg, function_execution.execution_id, function_execution.timestamp)
             function_name = function_execution.source.get("function")
+            
             if function_name:
                 processing_result = {}
                 actions_taken = []
@@ -221,7 +221,6 @@ class ParsingWorker(ReconComponent):
                     await self.process_function_output(msg)
                     processing_result['status'] = 'success'
                     actions_taken.append(f"Processed output from {function_name}")
-                    
                     # Log successful processing
                     await self.db.log_parsingworker_operation(
                         component_id=self.component_id,

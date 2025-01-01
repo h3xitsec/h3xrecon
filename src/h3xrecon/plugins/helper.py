@@ -59,6 +59,15 @@ async def send_certificate_data(qm, data: str, program_id: int):
     }
     await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
 
+async def send_screenshot_data(qm, data: str, program_id: int):
+    
+    msg = {
+        "program_id": program_id,
+        "data_type": "screenshot",
+        "data": [data]
+    }
+    await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+
 def fetch_aws_cidr():
     url = 'https://ip-ranges.amazonaws.com/ip-ranges.json'
     response = requests.get(url)

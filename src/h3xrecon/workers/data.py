@@ -11,6 +11,7 @@ import os
 import json
 import asyncio
 import sys
+import hashlib
 from datetime import datetime, timezone
 
 @dataclass
@@ -29,6 +30,9 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
     "ip": [
         JobConfig(function="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
         JobConfig(function="port_scan", param_map=lambda result: {"target": result.lower()})
+    ],
+    "url": [
+        JobConfig(function="screenshot", param_map=lambda result: {"target": result.lower()})
     ]
 }
 
@@ -41,7 +45,8 @@ class DataWorker(ReconComponent):
             "url": self.process_url,
             "service": self.process_service,
             "nuclei": self.process_nuclei,
-            "certificate": self.process_certificate
+            "certificate": self.process_certificate,
+            "screenshot": self.process_screenshot
         }
 
     async def setup_subscriptions(self):
@@ -348,6 +353,23 @@ class DataWorker(ReconComponent):
                 )
                 logger.error(f"Error processing IP {ip}: {e}")
 
+    async def process_screenshot(self, msg_data: Dict[str, Any]):
+        """Process screenshot data."""
+        logger.debug(f"PROCESSING SCREENSHOT: {msg_data}")
+        for screenshot in msg_data.get('data'):
+            logger.info(f"PROCESSING SCREENSHOT: {screenshot}")
+            md5_hash = hashlib.md5(open(screenshot.get('path'), 'rb').read()).hexdigest()
+            result = await self.db.insert_screenshot(
+                program_id=msg_data.get('program_id'),
+                filepath=screenshot.get('path'),
+                md5_hash=md5_hash,
+                url=screenshot.get('url')
+            )
+            if result['inserted']:
+                logger.success(f"INSERTED SCREENSHOT: {screenshot.get('url')}")
+            else:
+                logger.info(f"UPDATED SCREENSHOT: {screenshot.get('url')}")
+
     async def process_domain(self, msg_data: Dict[str, Any]):
         """Process domain data."""
         for domain in msg_data.get('data'):
@@ -407,7 +429,7 @@ class DataWorker(ReconComponent):
                         logger.success(f"INSERTED URL: {d.get('url', {})}")
                     else:
                         logger.info(f"UPDATED URL: {d.get('url', {})}")
-                        #await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="url", result=d.get('url'))
+                        await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="url", result=d.get('url'))
                     # Send a job to the workers to test the URL if httpx_data is missing
                     if not d.get('httpx_data'):
                         logger.info(f"TRIGGERED JOB: test_http : {d.get('url')}")
