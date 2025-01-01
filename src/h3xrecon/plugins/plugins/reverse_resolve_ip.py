@@ -27,16 +27,6 @@ class ReverseResolveIP(ReconPlugin):
             try:
                 while True:
                     try:
-                        # Check if the task is being cancelled
-                        if asyncio.current_task().cancelled():
-                            logger.info(f"Task cancelled, terminating {self.name}")
-                            if process:
-                                process.terminate()
-                                try:
-                                    await asyncio.wait_for(process.wait(), timeout=5.0)
-                                except asyncio.TimeoutError:
-                                    process.kill()
-                            return
                             
                         line = await asyncio.wait_for(process.stdout.readline(), timeout=0.1)
                         if not line:
@@ -50,14 +40,7 @@ class ReverseResolveIP(ReconPlugin):
                     except asyncio.TimeoutError:
                         continue
                         
-            except asyncio.CancelledError:
-                logger.info(f"Task cancelled, terminating {self.name}")
-                if process:
-                    process.terminate()
-                    try:
-                        await asyncio.wait_for(process.wait(), timeout=5.0)
-                    except asyncio.TimeoutError:
-                        process.kill()
+            except Exception as e:
                 raise
                 
             await process.wait()

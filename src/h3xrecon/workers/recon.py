@@ -269,7 +269,7 @@ class ReconWorker(ReconComponent):
                 
                 result_count += 1
                 logger.debug(f"Execution {msg_data.execution_id}: Result #{result_count}: {result}")
-                
+            logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
             # Log successful completion
             await self.db.log_reconworker_operation(
                 execution_id=msg_data.execution_id,
@@ -284,7 +284,6 @@ class ReconWorker(ReconComponent):
                 
         except asyncio.CancelledError:
             logger.warning(f"JOB CANCELLED: {msg_data.execution_id}:{msg_data.function_name} : {msg_data.params.get('target')}")
-            # Handle cancellation without affecting the message processing loop
             return
         except Exception as e:
             logger.error(f"Error executing function {msg_data.execution_id}: {e}")
@@ -300,8 +299,7 @@ class ReconWorker(ReconComponent):
                 completed_at=datetime.now(timezone.utc)
             )
             raise
-        finally:
-            logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
+            
 
     def load_plugins(self):
         """Dynamically load all recon plugins."""
@@ -454,9 +452,9 @@ class ReconWorker(ReconComponent):
             if self.current_task:
                 self.current_task.cancel()
                 await self._send_control_response(command="killjob", status="task killed", success=True)
-                logger.info("Cancelled the current running task")
+                logger.debug("Cancelled the current running task")
             else:
-                logger.warning("No running task to cancel")
+                logger.debug("No running task to cancel")
                 await self._send_control_response(command="killjob", status="no running task", success=True)
         except Exception as e:
             logger.error(f"Error handling killjob command: {e}")
