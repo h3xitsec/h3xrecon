@@ -32,35 +32,12 @@ class PortScan(ReconPlugin):
             try:
                 while True:
                     try:
-                        # Check if the task is being cancelled
-                        if asyncio.current_task().cancelled():
-                            logger.info(f"Task cancelled, terminating {self.name}")
-                            if process:
-                                process.terminate()
-                                try:
-                                    await asyncio.wait_for(process.wait(), timeout=5.0)
-                                except asyncio.TimeoutError:
-                                    process.kill()
-                            return
-
-                        # Wait for process to complete with timeout
-                        try:
-                            await asyncio.wait_for(process.wait(), timeout=0.1)
-                            break  # Process completed
-                        except asyncio.TimeoutError:
-                            continue  # Keep checking for cancellation
-
+                        await asyncio.wait_for(process.wait(), timeout=0.1)
+                        break  # Process completed
                     except asyncio.TimeoutError:
                         continue
                         
-            except asyncio.CancelledError:
-                logger.info(f"Task cancelled, terminating {self.name}")
-                if process:
-                    process.terminate()
-                    try:
-                        await asyncio.wait_for(process.wait(), timeout=5.0)
-                    except asyncio.TimeoutError:
-                        process.kill()
+            except Exception as e:
                 raise
 
             # Parse the XML output
