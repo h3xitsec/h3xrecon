@@ -12,8 +12,6 @@ import re
 import shutil
 from os.path import basename
 
-SCREENSHOT_BASE_STORAGE_PATH = "/app/screenshots"
-
 class Screenshot(ReconPlugin):
     @property
     def name(self) -> str:
@@ -67,7 +65,7 @@ class Screenshot(ReconPlugin):
             raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        SCREENSHOT_STORAGE_PATH = os.path.join(SCREENSHOT_BASE_STORAGE_PATH, str(output_msg.get('program_id', {})))
+        SCREENSHOT_STORAGE_PATH = os.path.join(os.getenv('H3XRECON_SCREENSHOT_PATH', '/app/screenshots'), str(output_msg.get('program_id', {})))
         if not os.path.exists(SCREENSHOT_STORAGE_PATH):
             os.makedirs(SCREENSHOT_STORAGE_PATH)
         base64_archive = output_msg.get('output', {}).get('data')

@@ -430,7 +430,19 @@ class DatabaseManager():
             logger.debug(f"URL ID: {url_id}")
             result = await self._write_records(
                 '''INSERT INTO screenshots (program_id, filepath, md5_hash, url_id) VALUES ($1, $2, $3, $4) 
-                ON CONFLICT (program_id, filepath) DO UPDATE SET md5_hash = $3, updated_at = CURRENT_TIMESTAMP, url_id = $4
+                ON CONFLICT (program_id, filepath) DO UPDATE 
+                SET md5_hash = CASE 
+                    WHEN screenshots.md5_hash <> $3 THEN $3 
+                    ELSE screenshots.md5_hash 
+                END,
+                updated_at = CASE 
+                    WHEN screenshots.md5_hash <> $3 THEN CURRENT_TIMESTAMP 
+                    ELSE screenshots.updated_at 
+                END,
+                url_id = CASE 
+                    WHEN screenshots.md5_hash <> $3 THEN $4 
+                    ELSE screenshots.url_id 
+                END
                 RETURNING (xmax = 0) AS inserted, id''',
                 program_id, filepath, md5_hash, url_id.data
             )
