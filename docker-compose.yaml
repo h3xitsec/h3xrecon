@@ -178,6 +178,8 @@ services:
     environment:
       - H3XRECON_LOG_LEVEL
       - H3XRECON_ROLE=parsing
+    volumes:
+      - ../screenshots:/app/screenshots
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -193,6 +195,8 @@ services:
     environment:
       - H3XRECON_LOG_LEVEL
       - H3XRECON_ROLE=data
+    volumes:
+      - ../screenshots:/app/screenshots
     depends_on:
       msgbroker:
         condition: service_healthy
@@ -207,6 +211,9 @@ services:
       - .env.compose
     environment:
       - H3XRECON_LOG_LEVEL
+      - H3XRECON_ROLE=recon
+    volumes:
+      - ../screenshots:/app/screenshots
     depends_on:
       msgbroker:
         condition: service_healthy
