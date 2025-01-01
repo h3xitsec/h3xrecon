@@ -30,6 +30,9 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
     "ip": [
         JobConfig(function="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
         JobConfig(function="port_scan", param_map=lambda result: {"target": result.lower()})
+    ],
+    "url": [
+        JobConfig(function="screenshot", param_map=lambda result: {"target": result.lower()})
     ]
 }
 
@@ -426,7 +429,7 @@ class DataWorker(ReconComponent):
                         logger.success(f"INSERTED URL: {d.get('url', {})}")
                     else:
                         logger.info(f"UPDATED URL: {d.get('url', {})}")
-                        #await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="url", result=d.get('url'))
+                        await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="url", result=d.get('url'))
                     # Send a job to the workers to test the URL if httpx_data is missing
                     if not d.get('httpx_data'):
                         logger.info(f"TRIGGERED JOB: test_http : {d.get('url')}")
