@@ -17,12 +17,12 @@ The Job Processor is a critical component in the H3XRecon system that handles th
 - Provides execution timestamps for deduplication
 ## Architecture
 ### Message Flow
-1. Workers execute reconnaissance functions and publish results to function.output
+1. Workers execute reconnaissance functions and publish results to parsing.input
 2. Job Processor subscribes to the output stream
 3. Results are processed through appropriate plugins
 4. Processed data is stored and logged
 Reference:
-python:src/h3xrecon/server/jobprocessor.py async def start(self): logger.info(f"Starting Job Processor (ID: {self.worker_id})...") await self.qm.connect() await self.qm.subscribe( subject="function.output", stream="FUNCTION_OUTPUT", durable_name="MY_CONSUMER", message_handler=self.message_handler, batch_size=1 )
+python:src/h3xrecon/server/jobprocessor.py async def start(self): logger.info(f"Starting Job Processor (ID: {self.worker_id})...") await self.qm.connect() await self.qm.subscribe( subject="parsing.input", stream="PARSING_INPUT", durable_name="MY_CONSUMER", message_handler=self.message_handler, batch_size=1 )
 ### Plugin System
 The Job Processor uses a dynamic plugin system that:
 - Automatically discovers output processing plugins
@@ -49,7 +49,7 @@ The Job Processor uses a dynamic plugin system that:
 - Detailed error reporting with file and line information
 ## Integration Points
 ### Message Queue
-- Subscribes to the function.output stream
+- Subscribes to the parsing.input stream
 - Processes messages in real-time
 - Handles message batching and queueing
 ### Storage

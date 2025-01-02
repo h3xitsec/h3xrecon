@@ -44,7 +44,7 @@ endLine: 17
 
 1. **Initialization**
    - Worker starts and connects to the message queue
-   - Subscribes to the "function.execute" subject
+   - Subscribes to the "recon.input" subject
    - Loads all available plugins
 
 2. **Message Processing**

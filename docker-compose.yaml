@@ -169,7 +169,7 @@ services:
       - source: msgbroker-config
         target: /etc/nats/nats-server.conf
     healthcheck:
-      test: ["CMD-SHELL", "nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_EXECUTE' && nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_OUTPUT' && nats stream ls --server=nats://localhost:4222 | grep -q 'RECON_DATA'"]
+      test: ["CMD-SHELL", "nats stream ls --server=nats://localhost:4222 | grep -q 'RECON_INPUT' && nats stream ls --server=nats://localhost:4222 | grep -q 'PARSING_INPUT' && nats stream ls --server=nats://localhost:4222 | grep -q 'DATA_INPUT'"]
       interval: 2s
       timeout: 2s
       retries: 5

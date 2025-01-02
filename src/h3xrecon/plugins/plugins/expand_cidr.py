@@ -36,8 +36,8 @@ class ExpandCIDR(ReconPlugin):
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         logger.debug(f"Processing output: {output_msg}")
         await qm.publish_message(
-            subject="function.execute",
-            stream="FUNCTION_EXECUTE",
+            subject="recon.input",
+            stream="RECON_INPUT",
             message={
                 "function": output_msg.get("output").get("function_name"),
                 "program_id": output_msg.get("program_id"),

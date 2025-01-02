@@ -53,8 +53,8 @@ class ReconWorker(ReconComponent):
                 await self._cleanup_subscriptions()
 
                 subscription = await self.qm.subscribe(
-                    subject="function.execute",
-                    stream="FUNCTION_EXECUTE",
+                    subject="recon.input",
+                    stream="RECON_INPUT",
                     durable_name="RECON_EXECUTE",
                     message_handler=self.message_handler,
                     batch_size=1,
@@ -70,13 +70,13 @@ class ReconWorker(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"FUNCTION_EXECUTE:function.execute:RECON_EXECUTE"
+                self._sub_key = f"RECON_INPUT:recon.input:RECON_EXECUTE"
                 logger.debug(f"Subscribed to execute channel : {self._sub_key}")
 
                 # Setup control subscriptions
                 await self.qm.subscribe(
-                    subject="function.control.all",
-                    stream="FUNCTION_CONTROL",
+                    subject="worker.control.all",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_ALL_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
@@ -89,8 +89,8 @@ class ReconWorker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject="function.control.all_recon",
-                    stream="FUNCTION_CONTROL",
+                    subject="worker.control.all_recon",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_ALL_RECON_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
@@ -103,8 +103,8 @@ class ReconWorker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.{self.component_id}",
-                    stream="FUNCTION_CONTROL",
+                    subject=f"worker.control.{self.component_id}",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
@@ -372,8 +372,8 @@ class ReconWorker(ReconComponent):
                     # Then attempt to publish it
                     try:
                         await self.qm.publish_message(
-                            subject="function.output",
-                            stream="FUNCTION_OUTPUT",
+                            subject="parsing.input",
+                            stream="PARSING_INPUT",
                             message=output_data
                         )
                         logger.info(f"SENT JOB OUTPUT: {function_name} : {params.get('target')}")

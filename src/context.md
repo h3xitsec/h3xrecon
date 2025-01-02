@@ -21,9 +21,9 @@ H3xRecon is a bug bounty reconnaissance automation system that provides a custom
    - Client Database: Handles local data storage
 
 ## Message Flow
-1. Client sends job requests to FUNCTION_EXECUTE stream
-2. Recon Worker executes the function and sends output to FUNCTION_OUTPUT stream
-3. Parsing Worker parses output and sends to RECON_DATA stream
+1. Client sends job requests to RECON_INPUT stream
+2. Recon Worker executes the function and sends output to PARSING_INPUT stream
+3. Parsing Worker parses output and sends to DATA_INPUT stream
 4. Data Worker validates and stores data, triggers new jobs as needed
 
 ## Technical Stack
@@ -50,9 +50,9 @@ H3xRecon is a bug bounty reconnaissance automation system that provides a custom
 
 ### Recon Worker
 
-- Recon Worker receives a message from the FUNCTION_EXECUTE stream
+- Recon Worker receives a message from the RECON_INPUT stream
 - Recon Worker validates the message and executes the function
-- Recon Worker sends the result to the FUNCTION_OUTPUT stream
+- Recon Worker sends the result to the PARSING_INPUT stream
 - The Recon Worker should only run one function at a time
 - The Recon Worker should not receive any other messages while processing a function
 - The Recon Worker should not hold any messages while processing a function

@@ -9,15 +9,9 @@ stream_exists() {
     return $?
 }
 
-for stream in FUNCTION_EXECUTE FUNCTION_CONTROL FUNCTION_CONTROL_RESPONSE FUNCTION_OUTPUT RECON_DATA LOGS_GENERAL; do
-    if stream_exists "$stream"; then
-        nats stream rm "$stream" --server=nats://localhost:4222 --force
-    fi
-done
-
-if ! stream_exists "FUNCTION_EXECUTE"; then
-    nats stream add FUNCTION_EXECUTE \
-        --subjects "function.execute" \
+if ! stream_exists "RECON_INPUT"; then
+    nats stream add RECON_INPUT \
+        --subjects "recon.input" \
         --retention limits \
         --max-age 24h \
         --storage file \
@@ -32,14 +26,12 @@ if ! stream_exists "FUNCTION_EXECUTE"; then
         --no-deny-delete \
         --no-deny-purge \
         --server=nats://localhost:4222
-    echo "Created FUNCTION_EXECUTE stream"
-else
-    echo "FUNCTION_EXECUTE stream already exists"
+    echo "Created RECON_INPUT stream"
 fi
 
-if ! stream_exists "FUNCTION_CONTROL"; then
-    nats stream add FUNCTION_CONTROL \
-        --subjects "function.control.>" \
+if ! stream_exists "WORKER_CONTROL"; then
+    nats stream add WORKER_CONTROL \
+        --subjects "worker.control.>" \
         --retention interest \
         --max-age 1h \
         --storage file \
@@ -54,12 +46,12 @@ if ! stream_exists "FUNCTION_CONTROL"; then
         --no-deny-delete \
         --no-deny-purge \
         --server=nats://localhost:4222
-    echo "Created FUNCTION_CONTROL stream"
+    echo "Created WORKER_CONTROL stream"
 fi
 
-if ! stream_exists "FUNCTION_CONTROL_RESPONSE"; then
-    nats stream add FUNCTION_CONTROL_RESPONSE \
-        --subjects "function.control.response" \
+if ! stream_exists "WORKER_CONTROL_RESPONSE"; then
+    nats stream add WORKER_CONTROL_RESPONSE \
+        --subjects "worker.control.response" \
         --retention limits \
         --max-age 1h \
         --storage file \
@@ -74,16 +66,12 @@ if ! stream_exists "FUNCTION_CONTROL_RESPONSE"; then
         --no-deny-delete \
         --no-deny-purge \
         --server=nats://localhost:4222
-    echo "Created FUNCTION_CONTROL_RESPONSE stream"
-else
-    # Purge existing messages from the stream
-    nats stream purge FUNCTION_CONTROL_RESPONSE --server=nats://localhost:4222 --force
-    echo "Purged existing FUNCTION_CONTROL_RESPONSE stream"
+    echo "Created WORKER_CONTROL_RESPONSE stream"
 fi
 
-if ! stream_exists "FUNCTION_OUTPUT"; then
-    nats stream add FUNCTION_OUTPUT \
-        --subjects "function.output" \
+if ! stream_exists "PARSING_INPUT"; then
+    nats stream add PARSING_INPUT \
+        --subjects "parsing.input" \
         --retention limits \
         --max-age 24h \
         --storage file \
@@ -98,39 +86,12 @@ if ! stream_exists "FUNCTION_OUTPUT"; then
         --no-deny-delete \
         --no-deny-purge \
         --server=nats://localhost:4222
-    echo "Created FUNCTION_OUTPUT stream"
-else
-    # Optionally purge existing messages from the stream
-    nats stream purge FUNCTION_OUTPUT --server=nats://localhost:4222 --force
-    echo "Purged existing FUNCTION_OUTPUT stream"
+    echo "Created PARSING_INPUT stream"
 fi
 
-# # Create RECON_DATA stream if it doesn't exist
-# if ! stream_exists "RECON_DATA"; then
-#     nats stream add RECON_DATA \
-#         --subjects "recon.data" \
-#         --retention limits \
-#         --max-age 24h \
-#         --storage file \
-#         --replicas 1 \
-#         --discard old \
-#         --max-msgs=-1 \
-#         --max-msgs-per-subject=-1 \
-#         --max-bytes=-1 \
-#         --max-msg-size=-1 \
-#         --dupe-window 2m \
-#         --no-allow-rollup \
-#         --no-deny-delete \
-#         --no-deny-purge \
-#         --server=nats://localhost:4222
-#     echo "Created RECON_DATA stream"
-# else
-#     echo "RECON_DATA stream already exists"
-# fi
-
-if ! stream_exists "RECON_DATA"; then
-    nats stream add RECON_DATA \
-        --subjects "recon.data" \
+if ! stream_exists "DATA_INPUT"; then
+    nats stream add DATA_INPUT \
+        --subjects "data.input" \
         --retention limits \
         --max-age 24h \
         --storage file \
@@ -145,30 +106,7 @@ if ! stream_exists "RECON_DATA"; then
         --no-deny-delete \
         --no-deny-purge \
         --server=nats://localhost:4222
-    echo "Created RECON_DATA stream"
+    echo "Created DATA_INPUT stream"
 else
-    echo "RECON_DATA stream already exists"
-fi
-
-# Create LOGS_GENERAL stream if it doesn't exist
-if ! stream_exists "LOGS_GENERAL"; then
-    nats stream add LOGS_GENERAL \
-        --subjects "logs.general" \
-        --retention limits \
-        --max-age 24h \
-        --storage file \
-        --replicas 1 \
-        --discard old \
-        --max-msgs=-1 \
-        --max-msgs-per-subject=-1 \
-        --max-bytes=-1 \
-        --max-msg-size=-1 \
-        --dupe-window 2m \
-        --no-allow-rollup \
-        --no-deny-delete \
-        --no-deny-purge \
-        --server=nats://localhost:4222
-    echo "Created LOGS_GENERAL stream"
-else
-    echo "LOGS_GENERAL stream already exists"
+    echo "DATA_INPUT stream already exists"
 fi

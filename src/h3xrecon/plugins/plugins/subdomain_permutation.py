@@ -53,8 +53,8 @@ class SubdomainPermutation(ReconPlugin):
             await send_domain_data(qm=qm, data=output_msg.get("output").get("target"), program_id=output_msg.get("program_id"))
             await asyncio.sleep(5)
             await qm.publish_message(
-                subject="function.execute",
-                stream="FUNCTION_EXECUTE",
+                subject="recon.input",
+                stream="RECON_INPUT",
                 message={
                     "function": "subdomain_permutation",
                     "program_id": output_msg.get("program_id"),
@@ -70,8 +70,8 @@ class SubdomainPermutation(ReconPlugin):
                 logger.info(f"Failed to check if target {output_msg.get('output').get('target')} is a dns catchall domain. Requesting a new check.")
                 logger.debug("Publishing test_domain_catchall message")
                 await qm.publish_message(
-                    subject="function.execute",
-                    stream="FUNCTION_EXECUTE",
+                    subject="recon.input",
+                    stream="RECON_INPUT",
                     message=[{
                         "function": "test_domain_catchall",
                         "program_id": output_msg.get("program_id"),
@@ -88,8 +88,8 @@ class SubdomainPermutation(ReconPlugin):
             else:
                 for t in output_msg.get("output").get("to_test"):
                     await qm.publish_message(
-                        subject="function.execute",
-                        stream="FUNCTION_EXECUTE",
+                        subject="recon.input",
+                        stream="RECON_INPUT",
                         message={
                             "function": "resolve_domain",
                             "program_id": output_msg.get("program_id"),

@@ -62,8 +62,8 @@ class DataWorker(ReconComponent):
                 await self._cleanup_subscriptions()
 
                 subscription = await self.qm.subscribe(
-                    subject="recon.data",
-                    stream="RECON_DATA",
+                    subject="data.input",
+                    stream="DATA_INPUT",
                     durable_name="DATA_WORKERS",
                     message_handler=self.message_handler,
                     batch_size=1,
@@ -79,13 +79,13 @@ class DataWorker(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"RECON_DATA:recon.data:DATA_WORKERS"
+                self._sub_key = f"DATA_INPUT:data.input:DATA_WORKERS"
                 logger.debug(f"Subscribed to data channel: {self._sub_key}")
 
                 # Setup control subscriptions
                 await self.qm.subscribe(
-                    subject="function.control.all",
-                    stream="FUNCTION_CONTROL",
+                    subject="worker.control.all",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_ALL_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
@@ -98,8 +98,8 @@ class DataWorker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject="function.control.all_data",
-                    stream="FUNCTION_CONTROL",
+                    subject="worker.control.all_data",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_ALL_DATA_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
@@ -112,8 +112,8 @@ class DataWorker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.{self.component_id}",
-                    stream="FUNCTION_CONTROL",
+                    subject=f"worker.control.{self.component_id}",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
@@ -231,8 +231,8 @@ class DataWorker(ReconComponent):
                     logger.info(f"JOB TRIGGERED: {job.function} : {result}")
                     try:
                         await self.qm.publish_message(
-                            subject="function.execute",
-                            stream="FUNCTION_EXECUTE",
+                            subject="recon.input",
+                            stream="RECON_INPUT",
                             message=new_job
                         )
                         triggered_jobs.append(job.function)
@@ -310,7 +310,7 @@ class DataWorker(ReconComponent):
             "program_id": program_id,
             "params": job.param_map(result)
         }
-        await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message=new_job)
+        await self.qm.publish_message(subject="recon.input", stream="RECON_INPUT", message=new_job)
         
         # Schedule next job if there are more
         if next_job_index < len(JOB_MAPPING[data_type]) - 1:
@@ -455,7 +455,7 @@ class DataWorker(ReconComponent):
                     # Send a job to the workers to test the URL if httpx_data is missing
                     if not d.get('httpx_data'):
                         logger.info(f"TRIGGERED JOB: test_http : {d.get('url')}")
-                        await self.qm.publish_message(subject="function.execute", stream="FUNCTION_EXECUTE", message={"function": "test_http", "program_id": msg.get('program_id'), "params": {"target": d.get('url')}})
+                        await self.qm.publish_message(subject="recon.input", stream="RECON_INPUT", message={"function": "test_http", "program_id": msg.get('program_id'), "params": {"target": d.get('url')}})
             
                 except Exception as e:
                     logger.error(f"Failed to process URL in program {msg.get('program_id')}: {e}")
