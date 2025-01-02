@@ -14,7 +14,7 @@ class PortScan(ReconPlugin):
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         cloud_provider = await db.get_cloud_provider(params.get("target", {}))
         if cloud_provider:
-            logger.info(f"Skipping port scan for cloud provider {cloud_provider}")
+            logger.info(f"JOB SKIPPED: not running port scan for cloud provider {cloud_provider}")
             return
         
         logger.info(f"Scanning top 1000 ports on {params.get('target', {})}")

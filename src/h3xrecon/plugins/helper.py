@@ -2,71 +2,58 @@ from typing import Dict, Any
 import ipaddress
 from ipwhois import IPWhois
 import requests
+from loguru import logger
 
+def log_sent_data(func):
+    async def wrapper(qm, data: str, program_id: int, *args, **kwargs):
+        # Extract data_type from function name
+        data_type = func.__name__.replace('send_', '').replace('_data', '')
+        
+        # Build message
+        msg = {
+            "program_id": program_id,
+            "data_type": data_type,
+            "data": [data]
+        }
+        
+        # Add attributes if provided
+        if kwargs.get('attributes'):
+            msg["attributes"] = kwargs['attributes']
+        
+        # Publish message
+        await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+        logger.info(f"SENT JOB OUTPUT: {data_type} : {data}")
+        return msg
+    return wrapper
+
+
+@log_sent_data
 async def send_nuclei_data(qm, data: str, program_id: int):
-    
-    msg = {
-        "program_id": program_id,
-        "data_type": "nuclei",
-        "data": [data]
-    }
-    await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+    pass
 
+@log_sent_data
 async def send_domain_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None):
-    
-    msg = {
-        "program_id": program_id,
-        "data_type": "domain",
-        "data": [data],
-        "attributes": attributes
-    }
-    await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+    pass
 
+@log_sent_data
 async def send_ip_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None):
-    
-    msg = {
-        "program_id": program_id,
-        "data_type": "ip",
-        "data": [data],
-        "attributes": attributes
-    }
-    await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+    pass
 
+@log_sent_data
 async def send_service_data(qm, data: str, program_id: int):
+    pass
 
-    msg = {
-        "program_id": program_id,
-        "data_type": "service",
-        "data": [data]
-    }
-    await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
-
+@log_sent_data
 async def send_url_data(qm, data: str, program_id: int):
-    
-    msg = {
-        "program_id": program_id,
-        "data_type": "url",
-        "data": [data]
-    }
-    await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+    pass
 
+@log_sent_data
 async def send_certificate_data(qm, data: str, program_id: int):
-    
-    msg = {
-        "program_id": program_id,
-        "data_type": "certificate",
-        "data": [data]
-    }
-    await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+    pass
 
+@log_sent_data
 async def send_screenshot_data(qm, data: str, program_id: int):
-    
-    msg = {
-        "program_id": program_id,
-        "data_type": "screenshot",
-        "data": [data]
-    }
-    await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+    pass
 
 def fetch_aws_cidr():
     url = 'https://ip-ranges.amazonaws.com/ip-ranges.json'

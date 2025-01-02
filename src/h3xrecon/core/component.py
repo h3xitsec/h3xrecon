@@ -325,7 +325,7 @@ class ReconComponent:
                 await raw_msg.ack()
                 return
 
-            logger.debug(f"Processing control command: {command}")
+            logger.info(f"RECEIVED CONTROL COMMAND: {command}")
             if command == "pause":
                 await self._handle_pause_command(msg)
             elif command == "unpause":
@@ -352,11 +352,9 @@ class ReconComponent:
         self.state = ProcessorState.PAUSED
         await self.set_status("paused")
         await self._send_control_response("pause", "paused", True)
-        if self.role == "recon":
-            if self.current_task:
-                logger.debug(f"Cancelling current task: {self.current_task}")
-                self.current_task.cancel()
-            
+        if self.current_task and not self.current_task.done():
+            logger.debug(f"Cancelling current task: {self.current_task}")
+            self.current_task.cancel()
 
     async def _handle_unpause_command(self, msg: Dict[str, Any]):
         """Handle unpause command."""
