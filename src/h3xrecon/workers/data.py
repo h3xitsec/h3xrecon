@@ -4,7 +4,7 @@ from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List, Callable, Optional
 from loguru import logger
 from urllib.parse import urlparse 
 import os
@@ -48,6 +48,7 @@ class DataWorker(ReconComponent):
             "certificate": self.process_certificate,
             "screenshot": self.process_screenshot
         }
+        self.current_task: Optional[asyncio.Task] = None
 
     async def setup_subscriptions(self):
         """Setup NATS subscriptions for the data processor."""
@@ -128,31 +129,12 @@ class DataWorker(ReconComponent):
             logger.error(f"Error setting up data processor subscriptions: {e}")
             raise
 
-    async def message_handler(self, raw_msg):
-        """Handle incoming data messages."""
-        msg = json.loads(raw_msg.data.decode())
-        if self.state == ProcessorState.PAUSED:
-            await raw_msg.nak()
-            return
-        self._last_message_time = datetime.now(timezone.utc)
-        logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
+    async def _process_data(self, msg, processor, raw_msg):
+        """Internal method to process data with the appropriate processor."""
         try:
             self.set_status("busy")
-            if isinstance(msg.get("data"), list):
-                data_item = msg.get("data")[0]
-            else:
-                data_item = msg.get("data")
-            if isinstance(data_item, dict) and data_item.get("data_type") == "url":
-                data_item = data_item.get("data").get("url")
-            processor = self.data_type_processors.get(msg.get("data_type"))
-            if processor:
-                await processor(msg)
-                await raw_msg.ack()
-            else:
-                logger.error(f"No processor found for data type: {msg.get('data_type')}")
-                await raw_msg.nak()
-                return
-
+            await processor(msg)
+            await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error processing message: {e}")
         finally:
@@ -160,10 +142,49 @@ class DataWorker(ReconComponent):
                 await raw_msg.ack()
             await self.set_status("idle")
 
+    async def message_handler(self, raw_msg):
+        """Handle incoming data messages."""
+        msg = json.loads(raw_msg.data.decode())
+        if self.state == ProcessorState.PAUSED:
+            logger.debug("Data processor is paused, skipping message processing")
+            await raw_msg.nak()
+            return
+        self._last_message_time = datetime.now(timezone.utc)
+        logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
+        
+        try:
+            if isinstance(msg.get("data"), list):
+                data_item = msg.get("data")[0]
+            else:
+                data_item = msg.get("data")
+            if isinstance(data_item, dict) and data_item.get("data_type") == "url":
+                data_item = data_item.get("data").get("url")
+            processor = self.data_type_processors.get(msg.get("data_type"))
+            
+            if processor:
+                # Create a cancellable task for data processing
+                self.current_task = asyncio.create_task(
+                    self._process_data(msg, processor, raw_msg)
+                )
+                await self.current_task
+            else:
+                logger.error(f"No processor found for data type: {msg.get('data_type')}")
+                await raw_msg.nak()
+                return
+        except asyncio.CancelledError:
+            logger.warning(f"DATA PROCESSING CANCELLED: {msg.get('data_type')} : {msg.get('data')}")
+            if not raw_msg._ackd:
+                await raw_msg.nak()
+        except Exception as e:
+            logger.error(f"Error in message handler: {e}")
+            if not raw_msg._ackd:
+                await raw_msg.ack()
+
     async def trigger_new_jobs(self, program_id: int, data_type: str, result: Any):
         """Trigger new jobs based on processed data."""
         # Check if processor is paused before triggering new jobs
         if self.state == ProcessorState.PAUSED:
+            logger.debug("Data processor is paused, skipping new job trigger")
             return
 
         if os.getenv("H3XRECON_NO_NEW_JOBS", "false").lower() == "true":
@@ -279,6 +300,7 @@ class DataWorker(ReconComponent):
         """Helper method to handle delayed job triggering."""
         # Check state before proceeding with delayed job
         if self.state == ProcessorState.PAUSED:
+            logger.debug("Data processor is paused, skipping delayed job trigger")
             return
 
         await asyncio.sleep(5)

@@ -4,7 +4,7 @@ from h3xrecon.__about__ import __version__
 from h3xrecon.core import Config
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from datetime import datetime, timezone
-from typing import Dict, Any, Callable, List
+from typing import Dict, Any, Callable, List, Optional
 from loguru import logger
 from dataclasses import dataclass
 import importlib
@@ -61,6 +61,7 @@ class ParsingWorker(ReconComponent):
         super().__init__("parsing", config)
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
         self._load_plugins()
+        self.current_task: Optional[asyncio.Task] = None
 
     def _load_plugins(self):
         """Load all available plugins."""
@@ -218,7 +219,8 @@ class ParsingWorker(ReconComponent):
                 processing_result = {}
                 actions_taken = []
                 try:
-                    await self.process_function_output(msg)
+                    self.current_task = asyncio.create_task(self.process_function_output(msg))
+                    await self.current_task
                     processing_result['status'] = 'success'
                     actions_taken.append(f"Processed output from {function_name}")
                     # Log successful processing
@@ -264,7 +266,10 @@ class ParsingWorker(ReconComponent):
                     processed_at=datetime.now(timezone.utc)
                 )
                 await raw_msg.nak()
-            
+        except asyncio.CancelledError:
+            logger.warning(f"PARSING CANCELLED: {msg.get('source', {}).get('function')} : {msg.get('source', {}).get('params', {}).get('target')}")
+            if not raw_msg._ackd:
+                await raw_msg.nak()
         except (KeyError, ValueError, TypeError) as e:
             error_location = traceback.extract_tb(e.__traceback__)[-1]
             file_name = error_location.filename.split('/')[-1]
