@@ -3,7 +3,6 @@ from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_screenshot_data, send_url_data
 from loguru import logger
 import asyncio
-import json
 import os
 import base64
 import tarfile
@@ -49,8 +48,11 @@ class Screenshot(ReconPlugin):
             stdout, stderr = await process.communicate()
             
             if stdout:
+                # Calculate size of base64 data in KB
+                data_size_kb = len(stdout) / 1024
+                logger.debug(f"Screenshot data size: {data_size_kb:.2f} KB")
                 # Yield the entire base64 encoded data
-                yield {"data": stdout.decode().strip()}
+                yield {"data": stdout.decode().strip(), "size": float(f"{data_size_kb:.2f}")}
             
             if stderr:
                 logger.error(f"Screenshot stderr: {stderr.decode()}")
