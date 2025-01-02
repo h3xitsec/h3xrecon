@@ -17,6 +17,8 @@ configs:
     file: ./docker/msgbroker/init.sh
   msgbroker-entrypoint:
     file: ./docker/msgbroker/entrypoint.sh
+  msgbroker-config:
+    file: ./docker/msgbroker/nats-server.conf
 name: h3xrecon
 
 services:
@@ -155,7 +157,7 @@ services:
     ports:
       - "4222:4222"
       - "8222:8222"
-    command: "--http_port 8222 -DVV"
+    command: "-c /etc/nats/nats.conf"
     entrypoint:
       - /bin/sh
       - /entrypoint.sh
@@ -164,6 +166,8 @@ services:
         target: /init.sh
       - source: msgbroker-entrypoint
         target: /entrypoint.sh
+      - source: msgbroker-config
+        target: /etc/nats/nats-server.conf
     healthcheck:
       test: ["CMD-SHELL", "nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_EXECUTE' && nats stream ls --server=nats://localhost:4222 | grep -q 'FUNCTION_OUTPUT' && nats stream ls --server=nats://localhost:4222 | grep -q 'RECON_DATA'"]
       interval: 2s

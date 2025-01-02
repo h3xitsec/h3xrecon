@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Start NATS server in the background
-nats-server -js --store_dir=/data -m 8222 &
+nats-server -js --store_dir=/data -m 8222 -c /etc/nats/nats-server.conf &
 
 if [ -z $(which nats) ]; then
     echo "installing nats cli"
