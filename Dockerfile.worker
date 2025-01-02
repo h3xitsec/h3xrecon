@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     prips \
     nmap \
     wget \
+    chromium \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -25,12 +26,6 @@ RUN ARCH=$(dpkg --print-architecture) && \
     wget "https://go.dev/dl/go1.23.4.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
-
-RUN apt update && apt-get install -y libappindicator1 fonts-liberation && \
-    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O /tmp/googlechrome.deb && \
-    dpkg -i /tmp/googlechrome.deb || apt --fix-broken install -y && \
-    dpkg -i /tmp/googlechrome.deb
-    #rm -f /tmp/googlechrome.deb
 
 ENV PATH="$PATH:/usr/local/go/bin"
 
