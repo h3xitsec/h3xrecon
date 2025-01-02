@@ -226,7 +226,7 @@ class ReconWorker(ReconComponent):
                 await raw_msg.ack()
             if self.state != ProcessorState.PAUSED:
                 await self.set_status("idle")
-            self.state = ProcessorState.RUNNING
+                self.state = ProcessorState.RUNNING
             self._processing_lock.release()
 
     async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
@@ -268,7 +268,7 @@ class ReconWorker(ReconComponent):
                     return  # Exit the function to prevent further processing
                 
                 result_count += 1
-                logger.debug(f"Execution {msg_data.execution_id}: Result #{result_count}: {result}")
+                #logger.debug(f"Execution {msg_data.execution_id}: Result #{result_count}: {result}")
             logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
             # Log successful completion
             await self.db.log_reconworker_operation(
@@ -376,6 +376,7 @@ class ReconWorker(ReconComponent):
                             stream="FUNCTION_OUTPUT",
                             message=output_data
                         )
+                        logger.info(f"SENT JOB OUTPUT: {function_name} : {params.get('target')}")
                     except StreamUnavailableError as e:
                         logger.warning(f"Stream locked, dropping message: {str(e)}")
                         continue  # Continue with the next result
