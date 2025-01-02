@@ -13,7 +13,7 @@ configs:
   msgbroker-init:
     file: ./msgbroker/init.sh
   msgbroker-nats-config:
-    file: ./msgbroker/nats.conf
+    file: ./msgbroker/nats-server.conf
   msgbroker-entrypoint:
     file: ./msgbroker/entrypoint.sh
 
@@ -156,7 +156,7 @@ services:
       - source: msgbroker-entrypoint
         target: /entrypoint.sh
       - source: msgbroker-nats-config
-        target: /etc/nats/nats.conf
+        target: /etc/nats/nats-server.conf
     deploy:
       placement:
         constraints:

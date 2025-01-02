@@ -345,10 +345,6 @@ class ReconComponent:
 
     async def _handle_pause_command(self, msg: Dict[str, Any]):
         """Handle pause command."""
-        if self.state == ProcessorState.PAUSED:
-            await self._send_control_response("pause", "paused", True)
-            return
-
         self.state = ProcessorState.PAUSED
         await self.set_status("paused")
         await self._send_control_response("pause", "paused", True)
