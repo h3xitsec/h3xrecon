@@ -12,6 +12,8 @@ configs:
     file: ./grafana/provisioning/promtail/config.yml
   msgbroker-init:
     file: ./msgbroker/init.sh
+  msgbroker-nats-config:
+    file: ./msgbroker/nats.conf
   msgbroker-entrypoint:
     file: ./msgbroker/entrypoint.sh
 
@@ -153,6 +155,8 @@ services:
         target: /init.sh
       - source: msgbroker-entrypoint
         target: /entrypoint.sh
+      - source: msgbroker-nats-config
+        target: /etc/nats/nats.conf
     deploy:
       placement:
         constraints:
