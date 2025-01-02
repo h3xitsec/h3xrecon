@@ -177,31 +177,31 @@ class ReconComponent:
             # Delete existing consumers if they exist
             if hasattr(self, 'qm') and self.qm and self.qm.js:
                 try:
-                    # Clean up consumers in FUNCTION_EXECUTE stream
+                    # Clean up consumers in RECON_INPUT stream
                     try:
-                        consumers = await self.qm.js.consumers_info("FUNCTION_EXECUTE")
+                        consumers = await self.qm.js.consumers_info("RECON_INPUT")
                         for consumer in consumers:
                             if consumer.config.durable_name and consumer.config.durable_name.endswith(self.component_id):
                                 try:
-                                    await self.qm.js.delete_consumer("FUNCTION_EXECUTE", consumer.config.durable_name)
-                                    logger.debug(f"Deleted consumer from FUNCTION_EXECUTE: {consumer.config.durable_name}")
+                                    await self.qm.js.delete_consumer("RECON_INPUT", consumer.config.durable_name)
+                                    logger.debug(f"Deleted consumer from RECON_INPUT: {consumer.config.durable_name}")
                                 except Exception as e:
                                     logger.warning(f"Error deleting consumer {consumer.config.durable_name}: {e}")
                     except Exception as e:
-                        logger.warning(f"Error cleaning up FUNCTION_EXECUTE consumers: {e}")
+                        logger.warning(f"Error cleaning up RECON_INPUT consumers: {e}")
 
-                    # Clean up consumers in FUNCTION_CONTROL stream
+                    # Clean up consumers in WORKER_CONTROL stream
                     try:
-                        consumers = await self.qm.js.consumers_info("FUNCTION_CONTROL")
+                        consumers = await self.qm.js.consumers_info("WORKER_CONTROL")
                         for consumer in consumers:
                             if consumer.config.durable_name and consumer.config.durable_name.endswith(self.component_id):
                                 try:
-                                    await self.qm.js.delete_consumer("FUNCTION_CONTROL", consumer.config.durable_name)
-                                    logger.debug(f"Deleted consumer from FUNCTION_CONTROL: {consumer.config.durable_name}")
+                                    await self.qm.js.delete_consumer("WORKER_CONTROL", consumer.config.durable_name)
+                                    logger.debug(f"Deleted consumer from WORKER_CONTROL: {consumer.config.durable_name}")
                                 except Exception as e:
                                     logger.warning(f"Error deleting consumer {consumer.config.durable_name}: {e}")
                     except Exception as e:
-                        logger.warning(f"Error cleaning up FUNCTION_CONTROL consumers: {e}")
+                        logger.warning(f"Error cleaning up WORKER_CONTROL consumers: {e}")
 
                     # Add a small delay to ensure cleanup is complete
                     await asyncio.sleep(1)

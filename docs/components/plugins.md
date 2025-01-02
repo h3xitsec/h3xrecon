@@ -82,7 +82,7 @@ class CustomPlugin(ReconPlugin):
             "data_type": "custom_data",
             "data": output_msg.get('output', {})
         }
-        await self.qm.publish_message("recon.data", "RECON_DATA", message)
+        await self.qm.publish_message("data.input", "DATA_INPUT", message)
 ```
 
 ### 2. Best Practices

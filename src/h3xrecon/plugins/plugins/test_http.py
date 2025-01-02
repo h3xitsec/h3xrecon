@@ -92,8 +92,8 @@ class TestHTTP(ReconPlugin):
                 "httpx_data": output_msg.get('output', {})
             }]
         }
-        await qm.publish_message(subject="recon.data", stream="RECON_DATA", message=url_msg)
-        # await self.nc.publish(output_msg.get('recon_data_queue', "recon.data"), json.dumps(url_msg).encode())
+        await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=url_msg)
+        # await self.nc.publish(output_msg.get('recon_data_queue', "data.input"), json.dumps(url_msg).encode())
         domains_to_add = (output_msg.get('output', {}).get('body_domains', []) + 
                             output_msg.get('output', {}).get('body_fqdn', []) + 
                             output_msg.get('output', {}).get('tls', {}).get('subject_an', []))

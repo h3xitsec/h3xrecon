@@ -23,7 +23,7 @@ The Data Processor is a core component of the H3XRecon system responsible for pr
 - Ensures data compliance with program boundaries
 ## Architecture
 ### Data Flow
-1. Receives data through the recon.data message stream
+1. Receives data through the data.input message stream
 2. Identifies data type and routes to appropriate processor
 3. Validates and stores data
 4. Triggers relevant follow-up jobs
@@ -65,8 +65,8 @@ Reference:
 - Service identification
 ## Integration Points
 ### Message Queue
-- Subscribes to recon.data stream
-- Publishes new jobs to function.execute stream
+- Subscribes to data.input stream
+- Publishes new jobs to recon.input stream
 - Handles message processing asynchronously
 ### Database
 - Stores all processed reconnaissance data

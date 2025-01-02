@@ -60,7 +60,7 @@ class TestDomainCatchall(ReconPlugin):
         #         "is_catchall": output_msg.get('output', {}).get('is_catchall')
         #     }
         # }
-        # await self.qm.publish_message(subject="recon.data", stream="RECON_DATA", message=msg)
+        # await self.qm.publish_message(subject="data.input", stream="DATA_INPUT", message=msg)
 
         # else:
         #     logger.info(f"Domain {output_msg.get('source', {}).get('params',{}).get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")

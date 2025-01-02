@@ -116,8 +116,8 @@ class ParsingWorker(ReconComponent):
                 await self._cleanup_subscriptions()
 
                 subscription = await self.qm.subscribe(
-                    subject="function.output",
-                    stream="FUNCTION_OUTPUT",
+                    subject="parsing.input",
+                    stream="PARSING_INPUT",
                     durable_name="PARSING_WORKERS",
                     message_handler=self.message_handler,
                     batch_size=1,
@@ -134,13 +134,13 @@ class ParsingWorker(ReconComponent):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"FUNCTION_OUTPUT:function.output:parsing"
+                self._sub_key = f"PARSING_INPUT:parsing.input:parsing"
                 logger.debug(f"Subscribed to output channel: {self._sub_key}")
 
                 # Setup control subscriptions
                 await self.qm.subscribe(
-                    subject="function.control.all",
-                    stream="FUNCTION_CONTROL",
+                    subject="worker.control.all",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_ALL_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
@@ -153,8 +153,8 @@ class ParsingWorker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject="function.control.all_parsing",
-                    stream="FUNCTION_CONTROL",
+                    subject="worker.control.all_parsing",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_ALL_PARSING_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
@@ -167,8 +167,8 @@ class ParsingWorker(ReconComponent):
                 )
 
                 await self.qm.subscribe(
-                    subject=f"function.control.{self.component_id}",
-                    stream="FUNCTION_CONTROL",
+                    subject=f"worker.control.{self.component_id}",
+                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_{self.component_id}",
                     message_handler=self.control_message_handler,
                     batch_size=1,
