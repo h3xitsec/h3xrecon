@@ -1,4 +1,4 @@
-from h3xrecon.core.component import ReconComponent, ProcessorState
+from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.__about__ import __version__
 from h3xrecon.core import Config
@@ -56,7 +56,7 @@ class FunctionExecution:
             logger.error("output must be a list")
             raise TypeError("output must be a list")
 
-class ParsingWorker(ReconComponent):
+class ParsingWorker(Worker):
     def __init__(self, config: Config):
         super().__init__("parsing", config)
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
@@ -108,7 +108,7 @@ class ParsingWorker(ReconComponent):
         """Setup NATS subscriptions for the job processor."""
         try:
             async with self._subscription_lock:
-                if self.state == ProcessorState.PAUSED:
+                if self.state == WorkerState.PAUSED:
                     logger.debug("Job processor is paused, skipping subscription setup")
                     return
 
@@ -187,7 +187,7 @@ class ParsingWorker(ReconComponent):
     async def message_handler(self, raw_msg):
         """Handle incoming function output messages."""
         msg = json.loads(raw_msg.data.decode())
-        if self.state == ProcessorState.PAUSED:
+        if self.state == WorkerState.PAUSED:
             await raw_msg.nak()
             return
 

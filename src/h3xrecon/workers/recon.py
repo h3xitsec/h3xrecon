@@ -1,7 +1,7 @@
 import asyncio
 import sys
 from loguru import logger
-from h3xrecon.core.component import ReconComponent, ProcessorState
+from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.plugins import ReconPlugin
@@ -28,7 +28,7 @@ class FunctionExecutionRequest:
         if self.execution_id is None:
             self.execution_id = str(uuid.uuid4())
 
-class ReconWorker(ReconComponent):
+class ReconWorker(Worker):
     def __init__(self, config: Config):
         super().__init__("recon", config)
         self.execution_threshold = timedelta(hours=24)
@@ -45,7 +45,7 @@ class ReconWorker(ReconComponent):
         logger.debug("Setting up worker subscriptions...")
         try:
             async with self._subscription_lock:
-                if self.state == ProcessorState.PAUSED:
+                if self.state == WorkerState.PAUSED:
                     logger.debug("Worker is paused, skipping subscription setup")
                     return
 
@@ -127,7 +127,7 @@ class ReconWorker(ReconComponent):
     async def message_handler(self, raw_msg):
         """Handle incoming function execution messages."""
         # First check if we're already processing or paused
-        if self.state == ProcessorState.PAUSED:
+        if self.state == WorkerState.PAUSED:
             await raw_msg.nak()
             return
 
@@ -138,14 +138,14 @@ class ReconWorker(ReconComponent):
 
         try:
             # Double check state after acquiring lock
-            if self.state != ProcessorState.RUNNING:
+            if self.state != WorkerState.IDLE:
                 await raw_msg.nak()
                 return
 
             logger.debug(f"{self.component_id} received message: {raw_msg.data}")
             
             # Set state to busy before processing
-            self.state = ProcessorState.BUSY
+            self.state = WorkerState.BUSY
             msg = json.loads(raw_msg.data.decode())
             self._last_message_time = datetime.now(timezone.utc)
 
@@ -224,9 +224,9 @@ class ReconWorker(ReconComponent):
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
-            if self.state != ProcessorState.PAUSED:
+            if self.state != WorkerState.PAUSED:
                 await self.set_status("idle")
-                self.state = ProcessorState.RUNNING
+                self.state = WorkerState.IDLE
             self._processing_lock.release()
 
     async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:

@@ -1,4 +1,4 @@
-from h3xrecon.core.component import ReconComponent, ProcessorState
+from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.__about__ import __version__
@@ -36,7 +36,7 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
     ]
 }
 
-class DataWorker(ReconComponent):
+class DataWorker(Worker):
     def __init__(self, config: Config):
         super().__init__("data", config)
         self.data_type_processors = {
@@ -54,7 +54,7 @@ class DataWorker(ReconComponent):
         """Setup NATS subscriptions for the data processor."""
         try:
             async with self._subscription_lock:
-                if self.state == ProcessorState.PAUSED:
+                if self.state == WorkerState.PAUSED:
                     logger.debug("Data processor is paused, skipping subscription setup")
                     return
 
@@ -145,7 +145,7 @@ class DataWorker(ReconComponent):
     async def message_handler(self, raw_msg):
         """Handle incoming data messages."""
         msg = json.loads(raw_msg.data.decode())
-        if self.state == ProcessorState.PAUSED:
+        if self.state == WorkerState.PAUSED:
             logger.debug("Data processor is paused, skipping message processing")
             await raw_msg.nak()
             return
@@ -183,7 +183,7 @@ class DataWorker(ReconComponent):
     async def trigger_new_jobs(self, program_id: int, data_type: str, result: Any):
         """Trigger new jobs based on processed data."""
         # Check if processor is paused before triggering new jobs
-        if self.state == ProcessorState.PAUSED:
+        if self.state == WorkerState.PAUSED:
             logger.debug("Data processor is paused, skipping new job trigger")
             return
 
@@ -299,7 +299,7 @@ class DataWorker(ReconComponent):
     async def _delay_next_job(self, program_id: int, data_type: str, result: Any, next_job_index: int):
         """Helper method to handle delayed job triggering."""
         # Check state before proceeding with delayed job
-        if self.state == ProcessorState.PAUSED:
+        if self.state == WorkerState.PAUSED:
             logger.debug("Data processor is paused, skipping delayed job trigger")
             return
 
