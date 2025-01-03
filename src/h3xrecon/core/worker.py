@@ -15,18 +15,18 @@ from typing import Dict, Any
 from h3xrecon.core import QueueManager, DatabaseManager, PreflightCheck
 from h3xrecon.__about__ import __version__
 
-class ProcessorState(Enum):
-    RUNNING = "idle"
+class WorkerState(Enum):
+    IDLE = "idle"
     PAUSED = "paused"
     BUSY = "busy"
 
-class ReconComponent:
+class Worker:
     def __init__(self, role: str, config: Config):
         self.role = role
         self.component_id = f"{self.role}-{socket.gethostname()}-{random.randint(1000, 9999)}"
         self.config = config
         self.config.setup_logging()
-        self.state = ProcessorState.RUNNING
+        self.state = WorkerState.IDLE
         self.qm = QueueManager(client_name=self.component_id, config=config.nats)
         self.db = DatabaseManager()
         self.redis_status = None
@@ -223,7 +223,7 @@ class ReconComponent:
         """Process messages from the pull-based subscription."""
         logger.debug(f"{self.component_id}: Starting pull message processing loop")
         while True:
-            if self.state == ProcessorState.PAUSED:
+            if self.state == WorkerState.PAUSED:
                 await asyncio.sleep(1)
                 continue
 
@@ -269,7 +269,7 @@ class ReconComponent:
         logger.info("STARTED HEALTH CHECK")
         while True:
             try:
-                if self.state == ProcessorState.PAUSED:
+                if self.state == WorkerState.PAUSED:
                     await asyncio.sleep(30)
                     continue
 
@@ -345,7 +345,7 @@ class ReconComponent:
 
     async def _handle_pause_command(self, msg: Dict[str, Any]):
         """Handle pause command."""
-        self.state = ProcessorState.PAUSED
+        self.state = WorkerState.PAUSED
         await self.set_status("paused")
         await self._send_control_response("pause", "paused", True)
         if self.current_task and not self.current_task.done():
@@ -355,7 +355,7 @@ class ReconComponent:
     async def _handle_unpause_command(self, msg: Dict[str, Any]):
         """Handle unpause command."""
         try:
-            self.state = ProcessorState.RUNNING
+            self.state = WorkerState.IDLE
             self.running.set()
             await self.set_status("idle")
             await self._send_control_response("unpause", "running", True)
