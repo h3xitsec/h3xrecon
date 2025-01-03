@@ -5,7 +5,6 @@ from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
 from h3xrecon.core.utils import debug_trace
@@ -70,7 +69,7 @@ class ReconWorker(Worker):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"RECON_INPUT:recon.input:RECON_EXECUTE"
+                self._sub_key = "RECON_INPUT:recon.input:RECON_EXECUTE"
                 logger.debug(f"Subscribed to execute channel : {self._sub_key}")
 
                 # Setup control subscriptions

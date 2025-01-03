@@ -9,7 +9,6 @@ import tarfile
 import tempfile
 import re
 import shutil
-from os.path import basename
 
 class Screenshot(ReconPlugin):
     @property

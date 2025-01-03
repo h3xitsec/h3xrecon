@@ -66,7 +66,7 @@ class PreflightCheck:
             "NATS": self.check_nats,
             "Database": self.check_database
         }
-        logger.debug(f"STARTING PREFLIGHT CHECKS")
+        logger.debug("STARTING PREFLIGHT CHECKS")
         while max_attempts is None or attempt <= max_attempts:
             logger.debug(f"PREFLIGHT CHECK ATTEMPT {attempt}")
             

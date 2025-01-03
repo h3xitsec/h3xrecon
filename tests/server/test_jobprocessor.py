@@ -1,8 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from h3xrecon.server.jobprocessor import JobProcessor, FunctionExecution
+from h3xrecon.server.jobprocessor import JobProcessor
 from h3xrecon.core import Config
-import asyncio
 from datetime import datetime
 from uuid import uuid4
 import importlib

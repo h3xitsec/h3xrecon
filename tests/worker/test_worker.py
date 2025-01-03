@@ -1,7 +1,5 @@
 import pytest
-import asyncio
-from datetime import datetime, timezone
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock
 from h3xrecon.worker.worker import Worker
 from h3xrecon.core import Config
 

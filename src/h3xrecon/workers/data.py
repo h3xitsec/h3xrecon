@@ -1,7 +1,6 @@
 from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
-from h3xrecon.__about__ import __version__
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable, Optional
@@ -79,7 +78,7 @@ class DataWorker(Worker):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"DATA_INPUT:data.input:DATA_WORKERS"
+                self._sub_key = "DATA_INPUT:data.input:DATA_WORKERS"
                 logger.debug(f"Subscribed to data channel: {self._sub_key}")
 
                 # Setup control subscriptions

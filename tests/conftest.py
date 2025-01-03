@@ -2,7 +2,7 @@ import pytest
 import asyncio
 import sys
 from h3xrecon.core import Config
-from typing import AsyncGenerator, Dict, Any
+from typing import Dict, Any
 from unittest.mock import MagicMock, patch, AsyncMock
 
 @pytest.fixture

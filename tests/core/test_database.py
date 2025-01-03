@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock
 from h3xrecon.core import DatabaseManager
 from h3xrecon.core.database import DbResult
 

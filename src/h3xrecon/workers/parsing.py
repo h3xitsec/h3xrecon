@@ -1,6 +1,5 @@
 from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.__about__ import __version__
 from h3xrecon.core import Config
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from datetime import datetime, timezone
@@ -134,7 +133,7 @@ class ParsingWorker(Worker):
                     pull_based=True
                 )
                 self._subscription = subscription
-                self._sub_key = f"PARSING_INPUT:parsing.input:parsing"
+                self._sub_key = "PARSING_INPUT:parsing.input:parsing"
                 logger.debug(f"Subscribed to output channel: {self._sub_key}")
 
                 # Setup control subscriptions

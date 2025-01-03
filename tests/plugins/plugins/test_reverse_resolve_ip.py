@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from h3xrecon.plugins.plugins.reverse_resolve_ip import ReverseResolveIP
-import asyncio
 import json
 @pytest.fixture
 def mock_nats_connect():

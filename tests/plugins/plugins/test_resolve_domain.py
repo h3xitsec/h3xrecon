@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from h3xrecon.plugins.plugins.resolve_domain import ResolveDomain
-import asyncio
 import json
 @pytest.fixture
 def mock_nats_connect():
@@ -55,9 +54,9 @@ class TestResolveDomainPlugin:
         
         # Verify the result matches expected output
         result = results[0]
-        assert str(result['host']) == f"www.example.com"
-        assert str(result['a_records']) == f"['3.161.213.94']"
-        assert str(result['cnames']) == f"[]"
+        assert str(result['host']) == "www.example.com"
+        assert str(result['a_records']) == "['3.161.213.94']"
+        assert str(result['cnames']) == "[]"
     
     # Test that resolve_domain execute method correctly parses output with cnames
     async def test_resolve_domain_execute_with_cnames(self, resolve_domain_plugin, mock_process_factory, sample_resolve_domain_execute_output_with_cnames):
@@ -90,9 +89,9 @@ class TestResolveDomainPlugin:
         
         # Verify the result matches expected output
         result = results[0]
-        assert str(result['host']) == f"www.example.com"
-        assert str(result['a_records']) == f"['3.161.213.94']"
-        assert str(result['cnames']) == f"['cname.example.com']"
+        assert str(result['host']) == "www.example.com"
+        assert str(result['a_records']) == "['3.161.213.94']"
+        assert str(result['cnames']) == "['cname.example.com']"
 
     # Test that process_output correctly calls helper functions with valid output_msg that doesnt have cnames.
     @patch('h3xrecon.plugins.plugins.resolve_domain.send_domain_data', new_callable=AsyncMock)
