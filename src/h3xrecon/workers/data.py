@@ -132,7 +132,7 @@ class DataWorker(Worker):
     async def _process_data(self, msg, processor, raw_msg):
         """Internal method to process data with the appropriate processor."""
         try:
-            self.set_status("busy")
+            await self.set_state(WorkerState.BUSY, f"processing:{msg.get('data_type')}")
             await processor(msg)
             await raw_msg.ack()
         except Exception as e:
@@ -140,7 +140,7 @@ class DataWorker(Worker):
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
-            await self.set_status("idle")
+            await self.set_state(WorkerState.IDLE)
 
     async def message_handler(self, raw_msg):
         """Handle incoming data messages."""
@@ -306,7 +306,7 @@ class DataWorker(Worker):
         await asyncio.sleep(5)
         job = JOB_MAPPING[data_type][next_job_index]
         new_job = {
-            "function_name": job.function,
+            "function_name": job.function_name,
             "program_id": program_id,
             "params": job.param_map(result)
         }

@@ -66,29 +66,34 @@ class Worker:
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             raise
+    
     @debug_trace
-    async def set_status(self, status: str):
+    async def set_state(self, state: WorkerState, busy_message: str = None):
         """Set component status in Redis."""
+        self.state = state
         if not self.redis_status:
             return
         try:
             old_status = self.redis_status.get(self.component_id).decode()
         except Exception as e:
             old_status = None
-        if old_status == status:
+        if old_status == state.value:
             return
-        self.redis_status.set(self.component_id, status)
+        state_str = state.value
+        if state == WorkerState.BUSY and busy_message:
+            state_str = f"{state.value}:{busy_message}"
+        self.redis_status.set(self.component_id, state_str)
         for attempt in range(5):
             current_status = self.redis_status.get(self.component_id).decode()
-            logger.debug(f"Current status: {current_status}, Target status: {status}")
-            if current_status != status:
-                logger.error(f"Failed to set status for {self.component_id} to {status} (attempt {attempt + 1}/5)")
+            logger.debug(f"Current status: {current_status}, Target status: {state_str}")
+            if current_status != state_str:
+                logger.error(f"Failed to set status for {self.component_id} to {state_str} (attempt {attempt + 1}/5)")
                 if attempt < 4:  # Don't sleep on last attempt
                     await asyncio.sleep(1)
             else:
-                logger.success(f"STATUS CHANGE: {old_status} -> {status}")
+                logger.success(f"STATE CHANGED: {old_status} -> {state_str}")
                 break
-
+    
     async def start_pull_processor(self):
         """Start the pull message processor task."""
         if self._pull_processor_task and not self._pull_processor_task.done():
@@ -138,7 +143,7 @@ class Worker:
             if self.role == "parsing":
                 self._load_plugins()
             await self.start_pull_processor()
-            await self.set_status("idle")
+            await self.set_state(WorkerState.IDLE)
             logger.success(f"STARTED {self.role.upper()}: {self.component_id}")
 
         except Exception as e:
@@ -345,8 +350,7 @@ class Worker:
 
     async def _handle_pause_command(self, msg: Dict[str, Any]):
         """Handle pause command."""
-        self.state = WorkerState.PAUSED
-        await self.set_status("paused")
+        await self.set_state(WorkerState.PAUSED)
         await self._send_control_response("pause", "paused", True)
         if self.current_task and not self.current_task.done():
             logger.debug(f"Cancelling current task: {self.current_task}")
@@ -355,9 +359,8 @@ class Worker:
     async def _handle_unpause_command(self, msg: Dict[str, Any]):
         """Handle unpause command."""
         try:
-            self.state = WorkerState.IDLE
             self.running.set()
-            await self.set_status("idle")
+            await self.set_state(WorkerState.IDLE)
             await self._send_control_response("unpause", "running", True)
         except Exception as e:
             logger.error(f"Error during unpause: {e}")

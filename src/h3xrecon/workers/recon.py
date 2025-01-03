@@ -145,7 +145,7 @@ class ReconWorker(Worker):
             logger.debug(f"{self.component_id} received message: {raw_msg.data}")
             
             # Set state to busy before processing
-            self.state = WorkerState.BUSY
+            await self.set_state(WorkerState.BUSY, "parsing_incoming_job")
             msg = json.loads(raw_msg.data.decode())
             self._last_message_time = datetime.now(timezone.utc)
 
@@ -197,7 +197,7 @@ class ReconWorker(Worker):
                 await raw_msg.ack()
                 return
 
-            await self.set_status(f"busy:{function_execution_request.function_name}:{function_execution_request.params.get('target')}")
+            await self.set_state(WorkerState.BUSY, f"{function_execution_request.function_name}:{function_execution_request.params.get('target')}:{function_execution_request.execution_id}")
             # Execution
             logger.info(f"STARTING JOB: {function_execution_request.function_name} : {function_execution_request.params.get('target')} : {function_execution_request.execution_id}")
             self.current_task = asyncio.create_task(
@@ -225,8 +225,7 @@ class ReconWorker(Worker):
             if not raw_msg._ackd:
                 await raw_msg.ack()
             if self.state != WorkerState.PAUSED:
-                await self.set_status("idle")
-                self.state = WorkerState.IDLE
+                await self.set_state(WorkerState.IDLE)
             self._processing_lock.release()
 
     async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
