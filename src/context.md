@@ -4,7 +4,7 @@
 H3xRecon is a bug bounty reconnaissance automation system that provides a customizable all-in-one automated reconnaissance infrastructure. It is designed to help security researchers and bug bounty hunters efficiently gather and process information about target systems.
 
 ## Architecture
-1. Server Components
+1. Workers: there are 3 types or roles of workers:
    - Parsing Worker: Processes function outputs and generates asset information
    - Data Worker: Handles data validation and storage, triggers new reconnaissance jobs
    - Recon Worker: Executes reconnaissance functions and tools
@@ -36,8 +36,6 @@ H3xRecon is a bug bounty reconnaissance automation system that provides a custom
 ## Development Guidelines
 - Follow established database schema
 - Maintain component consistency
-- Write comprehensive tests
-- Document new features and changes
 - Follow secure coding practices
 
 ## Infrastructure

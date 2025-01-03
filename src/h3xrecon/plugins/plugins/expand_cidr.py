@@ -39,7 +39,7 @@ class ExpandCIDR(ReconPlugin):
             subject="recon.input",
             stream="RECON_INPUT",
             message={
-                "function": output_msg.get("output").get("function_name"),
+                "function_name": output_msg.get("output").get("function_name"),
                 "program_id": output_msg.get("program_id"),
                 "params": {"target": output_msg.get("output").get("target")},
                 "force": False

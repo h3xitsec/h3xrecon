@@ -213,7 +213,7 @@ class ParsingWorker(Worker):
             )
             # Log or update function execution in database
             await self.log_or_update_function_execution(msg, function_execution.execution_id, function_execution.timestamp)
-            function_name = function_execution.source.get("function")
+            function_name = function_execution.source.get("function_name")
             
             if function_name:
                 processing_result = {}
@@ -267,7 +267,7 @@ class ParsingWorker(Worker):
                 )
                 await raw_msg.nak()
         except asyncio.CancelledError:
-            logger.warning(f"PARSING CANCELLED: {msg.get('source', {}).get('function')} : {msg.get('source', {}).get('params', {}).get('target')}")
+            logger.warning(f"PARSING CANCELLED: {msg.get('source', {}).get('function_name')} : {msg.get('source', {}).get('params', {}).get('target')}")
             if not raw_msg._ackd:
                 await raw_msg.nak()
         except (KeyError, ValueError, TypeError) as e:
@@ -298,7 +298,7 @@ class ParsingWorker(Worker):
         try:
             # Extract function parameters
             params = message_data.get("source", {}).get("params", {})
-            function_name = message_data.get("source", {}).get("function", "unknown")
+            function_name = message_data.get("source", {}).get("function_name", "unknown")
             target = params.get("target", "unknown")
             
             logger.debug(f"Original params in parsing worker: {params}")
@@ -340,7 +340,7 @@ class ParsingWorker(Worker):
 
     async def process_function_output(self, msg_data: Dict[str, Any]):
         """Process the output from a function execution."""
-        function_name = msg_data.get("source", {}).get("function")
+        function_name = msg_data.get("source", {}).get("function_name")
         if function_name in self.processor_map:
             logger.info(f"PROCESSING OUTPUT: '{function_name}':'{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:

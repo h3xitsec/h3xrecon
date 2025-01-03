@@ -16,7 +16,7 @@ class CIDRIntel(ReconPlugin):
             "program_id": 1,
             "execution_id": "123",
             "source": {
-                "function": "cidr_intel",
+                "function_name": "cidr_intel",
                 "target": "1.1.0.0/16",
                 "force": False
             },

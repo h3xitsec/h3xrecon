@@ -56,7 +56,7 @@ class SubdomainPermutation(ReconPlugin):
                 subject="recon.input",
                 stream="RECON_INPUT",
                 message={
-                    "function": "subdomain_permutation",
+                    "function_name": "subdomain_permutation",
                     "program_id": output_msg.get("program_id"),
                     "params": {"target": output_msg.get("output").get("target")},
                     "force": True
@@ -73,12 +73,12 @@ class SubdomainPermutation(ReconPlugin):
                     subject="recon.input",
                     stream="RECON_INPUT",
                     message=[{
-                        "function": "test_domain_catchall",
+                        "function_name": "test_domain_catchall",
                         "program_id": output_msg.get("program_id"),
                         "params": {"target": output_msg.get("output").get("target")},
                         "force": True
                     },{
-                        "function": "subdomain_permutation",
+                        "function_name": "subdomain_permutation",
                         "program_id": output_msg.get("program_id"),
                         "params": {"target": output_msg.get("output").get("target")},
                         "force": True
@@ -91,7 +91,7 @@ class SubdomainPermutation(ReconPlugin):
                         subject="recon.input",
                         stream="RECON_INPUT",
                         message={
-                            "function": "resolve_domain",
+                            "function_name": "resolve_domain",
                             "program_id": output_msg.get("program_id"),
                             "params": {"target": t},
                             "force": False

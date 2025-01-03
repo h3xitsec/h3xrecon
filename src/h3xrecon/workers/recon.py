@@ -152,7 +152,7 @@ class ReconWorker(Worker):
             # Parse message
             function_execution_request = FunctionExecutionRequest(
                 program_id=msg.get('program_id'),
-                function_name=msg.get('function'),
+                function_name=msg.get('function_name'),
                 params=msg.get('params'),
                 force=msg.get("force", False)
             )
@@ -359,7 +359,7 @@ class ReconWorker(Worker):
                         "program_id": program_id,
                         "execution_id": execution_id,
                         "source": {
-                            "function": function_name,
+                            "function_name": function_name,
                             "params": params
                         },
                         "output": result,

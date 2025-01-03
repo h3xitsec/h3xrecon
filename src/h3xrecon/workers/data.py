@@ -16,23 +16,23 @@ from datetime import datetime, timezone
 
 @dataclass
 class JobConfig:
-    function: str
+    function_name: str
     param_map: Callable[[Any], Dict[str, Any]]
 
 # Job mapping configuration
 JOB_MAPPING: Dict[str, List[JobConfig]] = {
     "domain": [
-        JobConfig(function="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function="resolve_domain", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function="test_http", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
+        JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
+        JobConfig(function_name="resolve_domain", param_map=lambda result: {"target": result.lower()}),
+        JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
+        JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
     ],
     "ip": [
-        JobConfig(function="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function="port_scan", param_map=lambda result: {"target": result.lower()})
+        JobConfig(function_name="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
+        JobConfig(function_name="port_scan", param_map=lambda result: {"target": result.lower()})
     ],
     "url": [
-        JobConfig(function="screenshot", param_map=lambda result: {"target": result.lower()})
+        JobConfig(function_name="screenshot", param_map=lambda result: {"target": result.lower()})
     ]
 }
 
@@ -224,18 +224,18 @@ class DataWorker(Worker):
             if data_type in JOB_MAPPING:
                 for job in JOB_MAPPING[data_type]:
                     new_job = {
-                        "function": job.function,
+                        "function_name": job.function_name,
                         "program_id": program_id,
                         "params": job.param_map(result)
                     }
-                    logger.info(f"JOB TRIGGERED: {job.function} : {result}")
+                    logger.info(f"JOB TRIGGERED: {job.function_name} : {result}")
                     try:
                         await self.qm.publish_message(
                             subject="recon.input",
                             stream="RECON_INPUT",
                             message=new_job
                         )
-                        triggered_jobs.append(job.function)
+                        triggered_jobs.append(job.function_name)
                     except StreamUnavailableError as e:
                         logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
                         await self.db.log_dataworker_operation(
@@ -306,7 +306,7 @@ class DataWorker(Worker):
         await asyncio.sleep(5)
         job = JOB_MAPPING[data_type][next_job_index]
         new_job = {
-            "function": job.function,
+            "function_name": job.function,
             "program_id": program_id,
             "params": job.param_map(result)
         }
@@ -455,7 +455,7 @@ class DataWorker(Worker):
                     # Send a job to the workers to test the URL if httpx_data is missing
                     if not d.get('httpx_data'):
                         logger.info(f"TRIGGERED JOB: test_http : {d.get('url')}")
-                        await self.qm.publish_message(subject="recon.input", stream="RECON_INPUT", message={"function": "test_http", "program_id": msg.get('program_id'), "params": {"target": d.get('url')}})
+                        await self.qm.publish_message(subject="recon.input", stream="RECON_INPUT", message={"function_name": "test_http", "program_id": msg.get('program_id'), "params": {"target": d.get('url')}})
             
                 except Exception as e:
                     logger.error(f"Failed to process URL in program {msg.get('program_id')}: {e}")
