@@ -16,7 +16,10 @@ configs:
     file: ./msgbroker/nats-server.conf
   msgbroker-entrypoint:
     file: ./msgbroker/entrypoint.sh
-
+  pgbouncer-config:
+    file: ./pgbouncer/pgbouncer.ini
+  pgbouncer-userlist:
+    file: ./pgbouncer/userlist.txt
 services:
   loki:
     image: grafana/loki:latest
@@ -133,6 +136,36 @@ services:
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == processor
+  
+  pgbouncer:
+    image: bitnami/pgbouncer:latest
+    environment:
+      - PGBOUNCER_DATABASE=h3xrecon
+      - POSTGRESQL_HOST=database
+      - POSTGRESQL_PORT=5432
+      - POSTGRESQL_DATABASE=h3xrecon
+      - POSTGRESQL_USERNAME=h3xrecon
+      - POSTGRESQL_PASSWORD=h3xrecon
+      - PGBOUNCER_AUTH_TYPE=md5
+    configs:
+      - source: pgbouncer-config
+        target: /etc/pgbouncer/pgbouncer.ini
+      - source: pgbouncer-userlist
+        target: /etc/pgbouncer/userlist.txt
+    ports:
+      - "6432:6432"
+    depends_on:
+      - database:service_healthy
+    deploy:
+      placement:
+        constraints:
+          - node.labels.H3XRECON_SWARM_ROLE == processor
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
 
   msgbroker:
     image: nats:2.10.21-alpine
@@ -178,14 +211,18 @@ services:
       - H3XRECON_DB_USER
       - H3XRECON_DB_NAME
       - H3XRECON_DB_HOST
-      - H3XRECON_DB_PASS
+      - H3XRECON_DB_PORT
+      - H3XRECON_DB_PASS  
       - H3XRECON_REDIS_HOST
       - H3XRECON_REDIS_PORT
+      - H3XRECON_REDIS_PASS
       - H3XRECON_NATS_HOST
       - H3XRECON_NATS_PORT
       - H3XRECON_LOG_LEVEL
       - H3XRECON_LOG_FILE_PATH
       - H3XRECON_ROLE=parsing
+    volumes:
+      - /home/h3x/h3xrecon/screenshots:/app/screenshots
     deploy:
       mode: replicated
       replicas: 1
@@ -209,14 +246,18 @@ services:
       - H3XRECON_DB_USER
       - H3XRECON_DB_NAME
       - H3XRECON_DB_HOST
+      - H3XRECON_DB_PORT
       - H3XRECON_DB_PASS
       - H3XRECON_REDIS_HOST
       - H3XRECON_REDIS_PORT
+      - H3XRECON_REDIS_PASS
       - H3XRECON_NATS_HOST
       - H3XRECON_NATS_PORT
       - H3XRECON_LOG_LEVEL
       - H3XRECON_LOG_FILE_PATH
       - H3XRECON_ROLE=data
+    volumes:
+      - /home/h3x/h3xrecon/screenshots:/app/screenshots
     deploy:
       mode: replicated
       replicas: 1
@@ -240,9 +281,11 @@ services:
       - H3XRECON_DB_USER
       - H3XRECON_DB_NAME
       - H3XRECON_DB_HOST
+      - H3XRECON_DB_PORT
       - H3XRECON_DB_PASS
       - H3XRECON_REDIS_HOST
       - H3XRECON_REDIS_PORT
+      - H3XRECON_REDIS_PASS
       - H3XRECON_NATS_HOST
       - H3XRECON_NATS_PORT
       - H3XRECON_LOG_LEVEL
@@ -250,7 +293,7 @@ services:
       - H3XRECON_ROLE=recon
     deploy:
       mode: replicated
-      replicas: 5
+      replicas: 8
       placement:
         constraints:
           - node.labels.H3XRECON_SWARM_ROLE == worker
