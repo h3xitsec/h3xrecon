@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS websites (
     scheme VARCHAR(50) DEFAULT NULL,
     techs TEXT[] DEFAULT NULL,
     program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL,
+    favicon_hash VARCHAR(255) DEFAULT NULL,
     discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP 
 );
 
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS websites_paths (
     website_id INTEGER REFERENCES websites(id) ON DELETE CASCADE NOT NULL,
     path character varying(1024) DEFAULT NULL::character varying,
     final_path character varying(1024) DEFAULT NULL::character varying,
-    tech text[],
+    techs text[],
     response_time character varying(50) DEFAULT NULL::character varying,
     lines integer,
     title character varying(1024) DEFAULT NULL::character varying,
@@ -40,12 +41,14 @@ CREATE TABLE IF NOT EXISTS websites_paths (
     chain_status_codes integer[],
     page_type character varying(50),
     body_preview text,
-    response_hash character varying(255)
+    resp_header_hash character varying(255),
+    resp_body_hash character varying(255),
+    program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL
 );
 
 ALTER TABLE websites_paths ADD CONSTRAINT unique_websites_paths_website_id_path UNIQUE (website_id, path);
 
-INSERT INTO websites_paths (website_id, path, final_path, tech, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, chain_status_codes, page_type, body_preview)
+INSERT INTO websites_paths (website_id, path, final_path, techs, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, chain_status_codes, page_type, body_preview, program_id)
 SELECT 
     w.id as website_id,
     CASE 
@@ -65,11 +68,12 @@ SELECT
     u.content_length,
     u.chain_status_codes,
     u.page_type,
-    u.body_preview
+    u.body_preview,
+    w.program_id
 FROM urls u
 JOIN websites w ON u.url = w.url;
 
-INSERT INTO websites_paths (website_id, path, tech, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, page_type, body_preview)
+INSERT INTO websites_paths (website_id, path, techs, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, page_type, body_preview, program_id)
 SELECT 
     w.id as website_id,
     CASE 
@@ -87,7 +91,12 @@ SELECT
     u.content_type,
     u.content_length,
     u.page_type,
-    u.body_preview
+    u.body_preview,
+    w.program_id
 FROM urls u
 JOIN websites w ON u.url = w.url
 ON CONFLICT (website_id, path) DO NOTHING;
+
+ALTER TABLE certificates RENAME COLUMN url_id TO website_id;
+
+DELETE FROM websites_paths WHERE path IS NULL;
