@@ -84,15 +84,42 @@ class TestHTTP(ReconPlugin):
         #if not await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params', {}).get('target'), output_msg.get('program_id')):
         #    logger.info(f"Domain {output_msg.get('source', {}).get('params', {}).get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
         #else:
-        url_msg = {
+        website_msg = {
             "program_id": output_msg.get('program_id'),
-            "data_type": "url",
+            "data_type": "website",
             "data": [{
                 "url": output_msg.get('output', {}).get('url'),
-                "httpx_data": output_msg.get('output', {})
+                "host": output_msg.get('output', {}).get('host'),
+                "port": output_msg.get('output', {}).get('port'),
+                "scheme": output_msg.get('output', {}).get('scheme'),
+                "techs": output_msg.get('output', {}).get('tech', []),
             }]
         }
-        await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=url_msg)
+        logger.debug(output_msg)
+        await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=website_msg)
+        website_path_msg = {
+            "program_id": output_msg.get('program_id'),
+            "data_type": "website_path",
+            "data": [{
+                "url": output_msg.get('output', {}).get('url'),
+                "path": output_msg.get('output', {}).get('path'),
+                "final_path": output_msg.get('output', {}).get('final_url'),
+                "techs": output_msg.get('output', {}).get('tech', []),
+                "response_time": output_msg.get('output', {}).get('response_time'),
+                "lines": output_msg.get('output', {}).get('lines'),
+                "title": output_msg.get('output', {}).get('title'),
+                "words": output_msg.get('output', {}).get('words'),
+                "method": output_msg.get('output', {}).get('method'),
+                "scheme": output_msg.get('output', {}).get('scheme'),
+                "status_code": output_msg.get('output', {}).get('status_code'),
+                "content_type": output_msg.get('output', {}).get('content_type'),
+                "content_length": output_msg.get('output', {}).get('content_length'),
+                "chain_status_codes": output_msg.get('output', {}).get('chain_status_codes'),
+                "page_type": output_msg.get('output', {}).get('page_type'),
+                "body_preview": output_msg.get('output', {}).get('body_preview'),
+            }]
+        }
+        await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=website_path_msg)
         # await self.nc.publish(output_msg.get('recon_data_queue', "data.input"), json.dumps(url_msg).encode())
         domains_to_add = (output_msg.get('output', {}).get('body_domains', []) + 
                             output_msg.get('output', {}).get('body_fqdn', []) + 

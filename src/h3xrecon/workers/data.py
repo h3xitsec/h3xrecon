@@ -45,7 +45,9 @@ class DataWorker(Worker):
             "service": self.process_service,
             "nuclei": self.process_nuclei,
             "certificate": self.process_certificate,
-            "screenshot": self.process_screenshot
+            "screenshot": self.process_screenshot,
+            "website": self.process_website,
+            "website_path": self.process_website_path
         }
         self.current_task: Optional[asyncio.Task] = None
 
@@ -423,6 +425,93 @@ class DataWorker(Worker):
                     await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
                 else:
                     logger.info(f"UPDATED DOMAIN: {domain}")
+    
+    async def process_website(self, msg: Dict[str, Any]):
+        """Process website data."""
+        if msg:
+            msg_data = msg.get('data', {})
+            # Extract hostname from the URL
+            for d in msg_data:
+                try:
+                    parsed_url = urlparse(d.get('url'))
+                    hostname = parsed_url.hostname
+                    if not hostname:
+                        logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
+                        return
+                    # Check if the hostname matches the scope regex
+                    is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
+                    if not is_in_scope:
+                        return
+                    # Construct base URL with just scheme, hostname and port
+                    base_url = f"{parsed_url.scheme}://{parsed_url.hostname}"
+                    if parsed_url.port:
+                        base_url += f":{parsed_url.port}"
+                    logger.info(f"PROCESSING WEBSITE: {base_url}")
+                    result = await self.db.insert_website(
+                        url=base_url,
+                        host=parsed_url.hostname,
+                        port=parsed_url.port,
+                        scheme=parsed_url.scheme,
+                        techs=d.get('techs', []),
+                        program_id=msg.get('program_id')
+                    )
+                    if result.get('inserted'):
+                        logger.success(f"INSERTED WEBSITE: {base_url}")
+                    else:
+                        logger.info(f"UPDATED WEBSITE: {base_url}")
+
+                except Exception as e:
+                    logger.error(f"Failed to process website in program {msg.get('program_id')}: {e}")
+                    logger.exception(e)
+    
+    async def process_website_path(self, msg: Dict[str, Any]):
+        """Process website path data."""
+        if msg:
+            msg_data = msg.get('data', {})
+            # Extract hostname from the URL
+            for d in msg_data:
+                try:
+                    parsed_url = urlparse(d.get('url'))
+                    hostname = parsed_url.hostname
+                    if not hostname:
+                        logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
+                        return
+                    # Check if the hostname matches the scope regex
+                    is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
+                    if not is_in_scope:
+                        return
+                    # Construct base URL with just scheme, hostname and port
+                    base_url = f"{parsed_url.scheme}://{parsed_url.hostname}"
+                    if parsed_url.port:
+                        base_url += f":{parsed_url.port}"
+                    website_id = await self.db._fetch_value(f"SELECT id FROM websites WHERE url = '{base_url}'")
+                    logger.info(f"PROCESSING WEBSITE PATH: {d.get('url')}")
+                    result = await self.db.insert_website_path(
+                        website_id=website_id.data,
+                        path=parsed_url.path if parsed_url.path else "/",
+                        final_path=d.get('final_url'),
+                        techs=d.get('techs', []),
+                        response_time=d.get('response_time'),
+                        lines=d.get('lines'),
+                        title=d.get('title'),
+                        words=d.get('words'),
+                        method=d.get('method'),
+                        scheme=d.get('scheme'),
+                        status_code=d.get('status_code'),
+                        content_type=d.get('content_type'),
+                        content_length=d.get('content_length'),
+                        chain_status_codes=d.get('chain_status_codes'),
+                        page_type=d.get('page_type'),
+                        body_preview=d.get('body_preview')
+                    )
+                    if result.get('inserted'):
+                        logger.success(f"INSERTED WEBSITE PATH: {d.get('url')}")
+                    else:
+                        logger.info(f"UPDATED WEBSITE PATH: {d.get('url')}")
+
+                except Exception as e:
+                    logger.error(f"Failed to process website in program {msg.get('program_id')}: {e}")
+                    logger.exception(e)
     
     async def process_url(self, msg: Dict[str, Any]):
         """Process URL data."""

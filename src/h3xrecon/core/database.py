@@ -715,6 +715,143 @@ class DatabaseManager():
             logger.exception(e)
             return False
     
+    async def insert_website(self, url: str, host: str, port: int, scheme: str, techs: List[str], program_id: int):
+        await self.ensure_connected()
+        try:
+            # Validate URL
+            import re
+            url_pattern = re.compile(
+                r'^https?://'  # http:// or https://
+                r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
+                r'localhost|'  # localhost...
+                r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+                r'(?::\d+)?'  # optional port
+                r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+            
+            if not url_pattern.match(url):
+                logger.error(f"Invalid URL format: {url}")
+                return False
+
+            if self.pool is None:
+                raise Exception("Database connection pool is not initialized")
+            
+            result = await self._write_records(
+                '''
+                INSERT INTO websites (
+                        url, program_id, host, port, scheme, techs
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6
+                    )
+                    ON CONFLICT (url) DO UPDATE SET
+                        host = EXCLUDED.host,
+                        port = EXCLUDED.port,
+                        scheme = EXCLUDED.scheme,
+                        techs = EXCLUDED.techs,
+                        program_id = EXCLUDED.program_id,
+                        discovered_at = EXCLUDED.discovered_at
+                    RETURNING (xmax = 0) AS inserted
+                ''',
+                url.lower(),
+                program_id,
+                host,
+                port,
+                scheme,
+                techs
+            )
+            
+            # Handle nested DbResult objects
+            if result.success and isinstance(result.data, DbResult):
+                data = result.data.data
+            else:
+                data = result.data
+            if data and isinstance(data, list) and len(data) > 0:
+                return data[0]
+            return False
+        except Exception as e:
+            logger.error(f"Error inserting or updating website in database: {e}")
+            logger.exception(e)
+            return False
+
+    async def insert_website_path(
+            self, 
+            website_id: int, 
+            path: str, 
+            final_path: str, 
+            techs: List[str], 
+            response_time: str, 
+            lines: int, 
+            title: str, 
+            words: int, 
+            method: str, 
+            scheme: str, 
+            status_code: int, 
+            content_type: str, 
+            content_length: int, 
+            chain_status_codes: List[int], 
+            page_type: str, 
+            body_preview: str):
+        await self.ensure_connected()
+        try:
+            if self.pool is None:
+                raise Exception("Database connection pool is not initialized")
+            
+            result = await self._write_records(
+                '''
+                INSERT INTO websites_paths (
+                        website_id, path, final_path, tech, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, chain_status_codes, page_type, body_preview
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+                    )
+                    ON CONFLICT (website_id, path) DO UPDATE SET
+                        final_path = EXCLUDED.final_path,
+                        tech = EXCLUDED.tech,
+                        response_time = EXCLUDED.response_time,
+                        lines = EXCLUDED.lines,
+                        title = EXCLUDED.title,
+                        words = EXCLUDED.words,
+                        method = EXCLUDED.method,
+                        scheme = EXCLUDED.scheme,
+                        status_code = EXCLUDED.status_code,
+                        content_type = EXCLUDED.content_type,
+                        content_length = EXCLUDED.content_length,
+                        chain_status_codes = EXCLUDED.chain_status_codes,
+                        page_type = EXCLUDED.page_type,
+                        body_preview = EXCLUDED.body_preview
+                    RETURNING (xmax = 0) AS inserted
+                ''',
+                website_id,
+                path,
+                final_path,
+                techs,
+                response_time,
+                lines,
+                title,
+                words,
+                method,
+                scheme,
+                status_code,
+                content_type,
+                content_length,
+                chain_status_codes,
+                page_type,
+                body_preview
+            )
+            
+            # Handle nested DbResult objects
+            if result.success and isinstance(result.data, DbResult):
+                data = result.data.data
+            else:
+                data = result.data
+            if data and isinstance(data, list) and len(data) > 0:
+                return data[0]
+            return False
+        except Exception as e:
+            logger.error(f"Error inserting or updating website path in database: {e}")
+            logger.exception(e)
+            return False
+
     async def insert_certificate(self, program_id: int, data: Dict[str, Any]):
         await self.ensure_connected()
         logger.debug(f"Entering insert_certificate for program {program_id}: {data}")
