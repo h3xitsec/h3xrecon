@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS websites (
     techs TEXT[] DEFAULT NULL,
     program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL,
     favicon_hash VARCHAR(255) DEFAULT NULL,
+    favicon_url VARCHAR(1024) DEFAULT NULL,
     discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP 
 );
 
@@ -97,6 +98,6 @@ FROM urls u
 JOIN websites w ON u.url = w.url
 ON CONFLICT (website_id, path) DO NOTHING;
 
-ALTER TABLE certificates RENAME COLUMN url_id TO website_id;
+--ALTER TABLE certificates RENAME COLUMN url_id TO website_id;
 
 DELETE FROM websites_paths WHERE path IS NULL;
