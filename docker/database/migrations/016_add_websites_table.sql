@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS websites_paths (
     website_id INTEGER REFERENCES websites(id) ON DELETE CASCADE NOT NULL,
     path character varying(1024) DEFAULT NULL::character varying,
     final_path character varying(1024) DEFAULT NULL::character varying,
-    port integer,
     tech text[],
     response_time character varying(50) DEFAULT NULL::character varying,
     lines integer,
@@ -44,11 +43,9 @@ CREATE TABLE IF NOT EXISTS websites_paths (
     response_hash character varying(255)
 );
 
-
 ALTER TABLE websites_paths ADD CONSTRAINT unique_websites_paths_website_id_path UNIQUE (website_id, path);
 
-
-INSERT INTO websites_paths (website_id, path, final_path, port, tech, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, chain_status_codes, page_type, body_preview)
+INSERT INTO websites_paths (website_id, path, final_path, tech, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, chain_status_codes, page_type, body_preview)
 SELECT 
     w.id as website_id,
     CASE 
@@ -56,7 +53,6 @@ SELECT
         ELSE REGEXP_REPLACE(u.url, '^https?://[^/]+', '')
     END as path,
     REGEXP_REPLACE(u.final_url, '^https?://[^/]+', '') as final_path,
-    u.port,
     u.tech,
     u.response_time,
     u.lines,
@@ -73,14 +69,13 @@ SELECT
 FROM urls u
 JOIN websites w ON u.url = w.url;
 
-INSERT INTO websites_paths (website_id, path, port, tech, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, page_type, body_preview)
+INSERT INTO websites_paths (website_id, path, tech, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, page_type, body_preview)
 SELECT 
     w.id as website_id,
     CASE 
         WHEN u.final_url ~ '^https?://[^/]+/?$' THEN '/'
         ELSE REGEXP_REPLACE(u.final_url, '^https?://[^/]+', '')
     END as path,
-    u.port,
     u.tech,
     u.response_time,
     u.lines,
