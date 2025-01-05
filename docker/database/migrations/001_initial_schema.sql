@@ -87,16 +87,6 @@ CREATE TABLE IF NOT EXISTS urls (
     id SERIAL PRIMARY KEY,
     url VARCHAR(1024) UNIQUE NOT NULL,
     httpx_data JSONB,
-    -- title VARCHAR(1024) DEFAULT NULL,
-    -- chain_status_codes INTEGER[] DEFAULT NULL,
-    -- status_code INTEGER DEFAULT NULL,
-    -- final_url VARCHAR(1024) DEFAULT NULL,
-    -- scheme VARCHAR(50) DEFAULT NULL,
-    -- port INTEGER DEFAULT NULL,
-    -- webserver VARCHAR(255) DEFAULT NULL,
-    -- content_type VARCHAR(255) DEFAULT NULL,
-    -- content_length INTEGER DEFAULT NULL,
-    -- tech VARCHAR(1024)[] DEFAULT NULL,
     program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE NOT NULL,
     discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
