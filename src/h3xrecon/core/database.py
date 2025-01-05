@@ -600,7 +600,7 @@ class DatabaseManager():
             logger.exception(e)
             return DbResult(success=False, error=f"Error inserting or updating domain in database: {str(e)}")
         
-    async def insert_website(self, url: str, host: str, port: int, scheme: str, techs: List[str], program_id: int):
+    async def insert_website(self, url: str, host: str, port: int, scheme: str, techs: List[str], favicon_hash: str, favicon_url: str, program_id: int):
         await self.ensure_connected()
         try:
             # Validate URL
@@ -623,10 +623,10 @@ class DatabaseManager():
             result = await self._write_records(
                 '''
                 INSERT INTO websites (
-                        url, program_id, host, port, scheme, techs
+                        url, program_id, host, port, scheme, techs, favicon_hash, favicon_url
                     )
                     VALUES (
-                        $1, $2, $3, $4, $5, $6
+                        $1, $2, $3, $4, $5, $6, $7, $8
                     )
                     ON CONFLICT (url) DO UPDATE SET
                         host = EXCLUDED.host,
@@ -634,7 +634,9 @@ class DatabaseManager():
                         scheme = EXCLUDED.scheme,
                         techs = EXCLUDED.techs,
                         program_id = EXCLUDED.program_id,
-                        discovered_at = EXCLUDED.discovered_at
+                        discovered_at = EXCLUDED.discovered_at,
+                        favicon_hash = EXCLUDED.favicon_hash,
+                        favicon_url = EXCLUDED.favicon_url
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 url.lower(),
@@ -642,7 +644,9 @@ class DatabaseManager():
                 host,
                 port,
                 scheme,
-                techs
+                techs,
+                favicon_hash,
+                favicon_url
             )
             
             # Handle nested DbResult objects
