@@ -317,20 +317,6 @@ class ParsingWorker(Worker):
             # Construct Redis key with extra parameters
             redis_key = f"{function_name}:{target}:{extra_params_str}"
             
-            logger.debug(f"Setting Redis key in parsing worker: {redis_key}")
-            
-            log_entry = {
-                "execution_id": execution_id,
-                "timestamp": timestamp,
-                "function_name": function_name,
-                "target": target,
-                "program_id": message_data.get("program_id"),
-                "results": message_data.get("data", [])
-            }
-            
-            if not message_data.get("nolog", False):
-                await self.db.log_or_update_function_execution(log_entry)
-
             # Update Redis with the last execution timestamp
             logger.debug(f"Setting Redis key: {redis_key} with timestamp: {timestamp}")
             self.redis_cache.set(redis_key, timestamp)
