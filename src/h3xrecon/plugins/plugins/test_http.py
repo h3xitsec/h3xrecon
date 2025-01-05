@@ -39,7 +39,9 @@ class TestHTTP(ReconPlugin):
             "-ip "
             "-cname "
             "-asn "
-            "-random-agent"
+            "-random-agent "
+            "-favicon "
+            "-hash sha256"
         )
         
         process = None
@@ -95,7 +97,6 @@ class TestHTTP(ReconPlugin):
                 "techs": output_msg.get('output', {}).get('tech', []),
             }]
         }
-        logger.debug(output_msg)
         await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=website_msg)
         website_path_msg = {
             "program_id": output_msg.get('program_id'),
@@ -117,6 +118,8 @@ class TestHTTP(ReconPlugin):
                 "chain_status_codes": output_msg.get('output', {}).get('chain_status_codes'),
                 "page_type": output_msg.get('output', {}).get('page_type'),
                 "body_preview": output_msg.get('output', {}).get('body_preview'),
+                "resp_header_hash": output_msg.get('output', {}).get('hash', {}).get('header_sha256', ""),
+                "resp_body_hash": output_msg.get('output', {}).get('hash', {}).get('body_sha256', ""),
             }]
         }
         await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=website_path_msg)
@@ -124,7 +127,7 @@ class TestHTTP(ReconPlugin):
         domains_to_add = (output_msg.get('output', {}).get('body_domains', []) + 
                             output_msg.get('output', {}).get('body_fqdn', []) + 
                             output_msg.get('output', {}).get('tls', {}).get('subject_an', []))
-        logger.debug(domains_to_add)
+        logger.debug(f"Domains to add: {domains_to_add}")
         if len(domains_to_add) > 0:
             for domain in domains_to_add:
                 logger.debug(f"Sending domain data for {domain}")
