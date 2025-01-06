@@ -872,19 +872,8 @@ class DatabaseManager():
                 matcher_name
             )
             
-            # Handle nested DbResult objects
-            if result.success and isinstance(result.data, DbResult):
-                data = result.data.data
-            else:
-                data = result.data
-
-            if data and isinstance(data, list) and len(data) > 0:
-                inserted = data[0]['inserted']
-                if inserted:
-                   logger.info(f"New Nuclei hit inserted: {url}")
-                else:
-                   logger.info(f"Nuclei hit updated: {url}")
-                return DbResult(success=True, data=inserted)
+            if result.success:
+                return DbResult(success=True, data=result.data[0])
             return DbResult(success=False, error=f"Error inserting or updating Nuclei hit in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating Nuclei hit in database: {e}")
