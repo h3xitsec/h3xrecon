@@ -44,7 +44,7 @@ async def send_service_data(qm, data: str, program_id: int):
     pass
 
 @log_sent_data
-async def send_url_data(qm, data: str, program_id: int):
+async def send_website_data(qm, data: str, program_id: int):
     pass
 
 @log_sent_data

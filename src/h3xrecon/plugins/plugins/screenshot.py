@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_screenshot_data, send_url_data
+from h3xrecon.plugins.helper import send_screenshot_data, send_website_data, send_domain_data
 from loguru import logger
 import asyncio
 import os
@@ -82,12 +82,13 @@ class Screenshot(ReconPlugin):
                         tar.extractall(path=temp_dir)
                     os.remove(os.path.join(temp_dir, 'output_parser.tar.gz'))
                     screenshots = [file for file in os.listdir(temp_dir) if re.match(r'.*\.png', file)]
-                    # Make sure the URL is sent to data worker
-                    url_msg = {
+                    # Send website data
+                    website_msg = {
                         "url": output_msg.get('source', {}).get('params', {}).get('target')
                     }
-                    await send_url_data(qm, url_msg, output_msg.get('program_id', {}))
+                    await send_website_data(qm, website_msg, output_msg.get('program_id', {}))
                     await asyncio.sleep(2)
+                    # Send screenshots
                     logger.debug(f"Found {len(screenshots)} screenshots")
                     for file in screenshots:
                         logger.debug(f"Moving {file} to {SCREENSHOT_STORAGE_PATH}")
@@ -98,5 +99,10 @@ class Screenshot(ReconPlugin):
                                 "path": os.path.join(SCREENSHOT_STORAGE_PATH, file),
                             }
                             await send_screenshot_data(qm, screenshot_msg, output_msg.get('program_id', ""))
+                    # Send domain data
+                    domain_msg = {  
+                        "domain": output_msg.get('source', {}).get('params', {}).get('target'),
+                    }
+                    await send_domain_data(qm, domain_msg, output_msg.get('program_id', ""))
                 except Exception as e:
                     logger.error(f"Error extracting screenshots: {str(e)}")
