@@ -10,6 +10,7 @@ import os
 import json
 import asyncio
 import sys
+import urllib.parse
 import hashlib
 from datetime import datetime, timezone
 
@@ -437,7 +438,8 @@ class DataWorker(Worker):
             # Extract hostname from the URL
             for d in msg_data:
                 try:
-                    parsed_url = urlparse(d.get('url'))
+                    url = d.get('url')
+                    parsed_url = urlparse(url)
                     hostname = parsed_url.hostname
                     if not hostname:
                         logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
@@ -446,14 +448,17 @@ class DataWorker(Worker):
                     is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
                     if not is_in_scope:
                         return
-                    # Construct base URL with just scheme, hostname and port
-                    base_url = f"{parsed_url.scheme}://{parsed_url.hostname}"
-                    if parsed_url.port:
-                        base_url += f":{parsed_url.port}"
-                    logger.info(f"PROCESSING WEBSITE: {base_url}")
+                    
+                    if not parsed_url.port:
+                        if parsed_url.scheme == 'https':
+                            url = f"{url}:443"
+                        elif parsed_url.scheme == 'http': 
+                            url = f"{url}:80"
+                    parsed_url = urllib.parse.urlparse(url)
+                    logger.info(f"PROCESSING WEBSITE: {url}")
                     logger.debug(f"Data: {d}")
                     result = await self.db.insert_website(
-                        url=base_url,
+                        url=url,
                         host=parsed_url.hostname,
                         port=parsed_url.port,
                         scheme=parsed_url.scheme,
@@ -464,10 +469,10 @@ class DataWorker(Worker):
                     )
                     if result.success:
                         if result.data.get('inserted'):
-                            logger.success(f"INSERTED WEBSITE: {base_url}")
-                            await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website", result=base_url)
+                            logger.success(f"INSERTED WEBSITE: {url}")
+                            await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website", result=url)
                         else:
-                            logger.info(f"UPDATED WEBSITE: {base_url}")
+                            logger.info(f"UPDATED WEBSITE: {url}")
                     else:
                         logger.error(f"Failed to insert or update website: {result.error}")
 
@@ -482,7 +487,8 @@ class DataWorker(Worker):
             # Extract hostname from the URL
             for d in msg_data:
                 try:
-                    parsed_url = urlparse(d.get('url'))
+                    _url = d.get('url')
+                    parsed_url = urlparse(_url)
                     hostname = parsed_url.hostname
                     if not hostname:
                         logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
@@ -497,6 +503,11 @@ class DataWorker(Worker):
                         base_url += f":{parsed_url.port}"
                     website_id = await self.db._fetch_value(f"SELECT id FROM websites WHERE url = '{base_url}'")
                     logger.info(f"PROCESSING WEBSITE PATH: {d.get('url')}")
+                    logger.debug(f"website_id: {website_id}")
+                    logger.debug(f"parsed_url.path: {parsed_url.path}")
+                    logger.debug(f"parsed_url.hostname: {parsed_url.hostname}")
+                    logger.debug(f"parsed_url.port: {parsed_url.port}")
+                    logger.debug(f"parsed_url.scheme: {parsed_url.scheme}")
                     result = await self.db.insert_website_path(
                         program_id=msg.get('program_id'),
                         website_id=website_id.data if website_id.data else 0,
