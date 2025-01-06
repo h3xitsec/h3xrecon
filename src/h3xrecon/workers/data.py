@@ -20,19 +20,19 @@ class JobConfig:
 
 # Job mapping configuration
 JOB_MAPPING: Dict[str, List[JobConfig]] = {
-    #"domain": [
-    #    JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
-    #    JobConfig(function_name="resolve_domain", param_map=lambda result: {"target": result.lower()}),
-    #    JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
-    #    JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
-    #]#,
-    #"ip": [
-    #    JobConfig(function_name="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
-    #    JobConfig(function_name="port_scan", param_map=lambda result: {"target": result.lower()})
-    #],
-    #"url": [
-    #    JobConfig(function_name="screenshot", param_map=lambda result: {"target": result.lower()})
-    #]
+    "domain": [
+       JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="resolve_domain", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
+    ],
+    "ip": [
+       JobConfig(function_name="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="port_scan", param_map=lambda result: {"target": result.lower()})
+    ],
+    "website": [
+       JobConfig(function_name="screenshot", param_map=lambda result: {"target": result.lower()})
+    ]
 }
 
 class DataWorker(Worker):
@@ -463,6 +463,7 @@ class DataWorker(Worker):
                     if result.success:
                         if result.data.get('inserted'):
                             logger.success(f"INSERTED WEBSITE: {base_url}")
+                            await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website", result=base_url)
                         else:
                             logger.info(f"UPDATED WEBSITE: {base_url}")
                     else:
