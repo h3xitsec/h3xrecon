@@ -123,7 +123,7 @@ class ParsingWorker(Worker):
                     queue_group="parsingworkers",
                     consumer_config={
                         'ack_policy': AckPolicy.EXPLICIT,
-                        'deliver_policy': DeliverPolicy.NEW,
+                        'deliver_policy': DeliverPolicy.ALL,
                         'replay_policy': ReplayPolicy.INSTANT,
                         'max_deliver': 1,
                         'max_ack_pending': 1000,
