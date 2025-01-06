@@ -1,9 +1,10 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_screenshot_data, send_url_data
+from h3xrecon.plugins.helper import send_screenshot_data, send_website_data, send_domain_data, send_website_path_data, parse_url
 from loguru import logger
 import asyncio
 import os
+import urllib.parse
 import base64
 import tarfile
 import tempfile
@@ -76,18 +77,24 @@ class Screenshot(ReconPlugin):
                 logger.debug(f"Extracting screenshots to {temp_dir}")
                 os.makedirs(temp_dir, exist_ok=True)
                 try:
+                    logger.debug(f"Writing archive data to {os.path.join(temp_dir, 'output_parser.tar.gz')}")
                     with open(os.path.join(temp_dir, 'output_parser.tar.gz'), 'wb') as f:
                         f.write(archive_data)
                     with tarfile.open(os.path.join(temp_dir, 'output_parser.tar.gz'), 'r:gz') as tar:
                         tar.extractall(path=temp_dir)
                     os.remove(os.path.join(temp_dir, 'output_parser.tar.gz'))
                     screenshots = [file for file in os.listdir(temp_dir) if re.match(r'.*\.png', file)]
-                    # Make sure the URL is sent to data worker
-                    url_msg = {
-                        "url": output_msg.get('source', {}).get('params', {}).get('target')
-                    }
-                    await send_url_data(qm, url_msg, output_msg.get('program_id', {}))
-                    await asyncio.sleep(2)
+                    parsed_website_and_path = parse_url(output_msg.get('source', {}).get('params', {}).get('target'))
+                    if not parsed_website_and_path:
+                        logger.error(f"Error parsing URL: {output_msg.get('source', {}).get('params', {}).get('target')}")
+                        return
+                    if parsed_website_and_path.get('website'):
+                        logger.debug(f"Sending website data: {parsed_website_and_path.get('website')}")
+                        await send_website_data(qm, parsed_website_and_path.get('website'), output_msg.get('program_id', ""))
+                    if parsed_website_and_path.get('website_path'):
+                        logger.debug(f"Sending website path data: {parsed_website_and_path.get('website_path')}")
+                        await send_website_path_data(qm, parsed_website_and_path.get('website_path'), output_msg.get('program_id', ""))
+                    # Send screenshots
                     logger.debug(f"Found {len(screenshots)} screenshots")
                     for file in screenshots:
                         logger.debug(f"Moving {file} to {SCREENSHOT_STORAGE_PATH}")
@@ -97,6 +104,16 @@ class Screenshot(ReconPlugin):
                                 "url": output_msg.get('source', {}).get('params', {}).get('target'),
                                 "path": os.path.join(SCREENSHOT_STORAGE_PATH, file),
                             }
+                            logger.debug(f"Sending screenshot data: {screenshot_msg}")
                             await send_screenshot_data(qm, screenshot_msg, output_msg.get('program_id', ""))
+                    
+                    # Send domain data
+                    try:
+                        hostname = parsed_url.hostname
+                        domain_msg = hostname
+                        await send_domain_data(qm, domain_msg, output_msg.get('program_id', ""))
+                    except Exception as e:
+                        logger.warning(f"Error extracting domain: {str(e)}")
                 except Exception as e:
                     logger.error(f"Error extracting screenshots: {str(e)}")
+                    #logger.exception(f"Exception details: {str(e)}")

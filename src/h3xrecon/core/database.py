@@ -546,20 +546,15 @@ class DatabaseManager():
             )
             
             # Handle nested DbResult for service record
-            if result.success and isinstance(result.data, DbResult):
-                data = result.data.data
+            if result.success:
+                return DbResult(success=True, data=result.data[0])
             else:
-                data = result.data
-
-            if data and isinstance(data, list) and len(data) > 0:
-                inserted = data[0]['inserted']
-                return inserted
-            return False
+                return DbResult(success=False, error=f"Error inserting or updating service in database: {result.error}")
                 
         except Exception as e:
             logger.error(f"Error inserting or updating service in database: {str(e)}")
             logger.exception(e)
-            return False
+            return DbResult(success=False, error=f"Error inserting or updating service in database: {str(e)}")
     
     async def insert_domain(self, domain: str, program_id: int, ips: List[str] = None, cnames: List[str] = None, is_catchall: bool = False) -> Dict[str, Any]:
         try:
@@ -593,20 +588,19 @@ class DatabaseManager():
                 logger.debug(f"Insert result: {result}")
                 
                 if result.success and isinstance(result.data, list) and len(result.data) > 0:
-                    return {
+                    return DbResult(success=True, data={
                         'inserted': result.data[0]['inserted'],
                         'id': result.data[0]['id']
-                    }
-                return {'inserted': False, 'id': None}
+                    })
+                return DbResult(success=False, error=f"Error inserting or updating domain in database: {result.error}")
             else:
-                return {'inserted': False, 'id': None}
+                return DbResult(success=False, error=f"Error inserting or updating domain in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating domain in database: {str(e)}")
             logger.exception(e)
-            return {'inserted': False, 'id': None}
-    
-    async def insert_url(self, url: str, httpx_data: Dict[str, Any], program_id: int):
-        logger.debug(f"{url}:{httpx_data}")
+            return DbResult(success=False, error=f"Error inserting or updating domain in database: {str(e)}")
+        
+    async def insert_website(self, url: str, host: str, port: int, scheme: str, techs: List[str], favicon_hash: str, favicon_url: str, program_id: int):
         await self.ensure_connected()
         try:
             # Validate URL
@@ -626,95 +620,130 @@ class DatabaseManager():
             if self.pool is None:
                 raise Exception("Database connection pool is not initialized")
             
-            # Convert types before insertion
-            port = int(httpx_data.get('port')) if httpx_data.get('port') else None
-            status_code = int(httpx_data.get('status_code')) if httpx_data.get('status_code') else None
-            content_length = int(httpx_data.get('content_length')) if httpx_data.get('content_length') else None
-            words = int(httpx_data.get('words')) if httpx_data.get('words') else None
-            lines = int(httpx_data.get('lines')) if httpx_data.get('lines') else None
-            timestamp = dateutil.parser.parse(httpx_data.get('timestamp')) if httpx_data.get('timestamp') else None
+            result = await self._write_records(
+                '''
+                INSERT INTO websites (
+                        url, program_id, host, port, scheme, techs, favicon_hash, favicon_url
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8
+                    )
+                    ON CONFLICT (url) DO UPDATE SET
+                        host = EXCLUDED.host,
+                        port = EXCLUDED.port,
+                        scheme = EXCLUDED.scheme,
+                        techs = EXCLUDED.techs,
+                        program_id = EXCLUDED.program_id,
+                        discovered_at = EXCLUDED.discovered_at,
+                        favicon_hash = EXCLUDED.favicon_hash,
+                        favicon_url = EXCLUDED.favicon_url
+                    RETURNING (xmax = 0) AS inserted
+                ''',
+                url.lower(),
+                program_id,
+                host,
+                port,
+                scheme,
+                techs,
+                favicon_hash,
+                favicon_url
+            )
+            
+            # Handle nested DbResult objects
+            if result.success:
+                return DbResult(success=True, data=result.data[0])
+            else:
+                return DbResult(success=False, error=f"Error inserting or updating website in database: {result.error}")
+        except Exception as e:
+            logger.error(f"Error inserting or updating website in database: {e}")
+            logger.exception(e)
+            return DbResult(success=False, error=f"Error inserting or updating website in database: {e}")
+
+    async def insert_website_path(
+            self, 
+            program_id: int,
+            website_id: int, 
+            path: str, 
+            final_path: str, 
+            techs: List[str], 
+            response_time: str, 
+            lines: int, 
+            title: str, 
+            words: int, 
+            method: str, 
+            scheme: str, 
+            status_code: int, 
+            content_type: str, 
+            content_length: int, 
+            chain_status_codes: List[int], 
+            page_type: str, 
+            body_preview: str,
+            resp_header_hash: str,
+            resp_body_hash: str):
+        await self.ensure_connected()
+        try:
+            if self.pool is None:
+                raise Exception("Database connection pool is not initialized")
             
             result = await self._write_records(
                 '''
-                INSERT INTO urls (
-                        url, program_id, a, host, path, port, tech, response_time,
-                        input, lines, title, words, failed, method, scheme,
-                        cdn_name, cdn_type, final_url, timestamp,
-                        webserver, status_code, content_type, content_length,
-                        chain_status_codes, page_type, body_preview
+                INSERT INTO websites_paths (
+                        website_id, path, final_path, techs, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, chain_status_codes, page_type, body_preview, resp_header_hash, resp_body_hash, program_id
                     )
                     VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
                     )
-                    ON CONFLICT (url) DO UPDATE SET
-                        a = EXCLUDED.a,
-                        host = EXCLUDED.host,
-                        path = EXCLUDED.path,
-                        port = EXCLUDED.port,
-                        tech = EXCLUDED.tech,
+                    ON CONFLICT (website_id, path) DO UPDATE SET
+                        final_path = EXCLUDED.final_path,
+                        techs = EXCLUDED.techs,
                         response_time = EXCLUDED.response_time,
-                        input = EXCLUDED.input,
                         lines = EXCLUDED.lines,
                         title = EXCLUDED.title,
                         words = EXCLUDED.words,
-                        failed = EXCLUDED.failed,
                         method = EXCLUDED.method,
                         scheme = EXCLUDED.scheme,
-                        cdn_name = EXCLUDED.cdn_name,
-                        cdn_type = EXCLUDED.cdn_type,
-                        final_url = EXCLUDED.final_url,
-                        timestamp = EXCLUDED.timestamp,
-                        webserver = EXCLUDED.webserver,
                         status_code = EXCLUDED.status_code,
                         content_type = EXCLUDED.content_type,
                         content_length = EXCLUDED.content_length,
                         chain_status_codes = EXCLUDED.chain_status_codes,
                         page_type = EXCLUDED.page_type,
-                        body_preview = EXCLUDED.body_preview
+                        body_preview = EXCLUDED.body_preview,
+                        resp_header_hash = EXCLUDED.resp_header_hash,
+                        resp_body_hash = EXCLUDED.resp_body_hash,
+                        program_id = EXCLUDED.program_id
                     RETURNING (xmax = 0) AS inserted
                 ''',
-                url.lower(),
-                program_id,
-                httpx_data.get('a'),
-                httpx_data.get('host'),
-                httpx_data.get('path'),
-                port,
-                httpx_data.get('tech'),
-                httpx_data.get('time'),  # response_time
-                httpx_data.get('input'),
+                website_id,
+                path,
+                final_path,
+                techs,
+                response_time,
                 lines,
-                httpx_data.get('title'),
+                title,
                 words,
-                httpx_data.get('failed', False),
-                httpx_data.get('method'),
-                httpx_data.get('scheme'),
-                httpx_data.get('cdn_name'),
-                httpx_data.get('cdn_type'),
-                httpx_data.get('final_url'),
-                timestamp,
-                httpx_data.get('webserver'),
+                method,
+                scheme,
                 status_code,
-                httpx_data.get('content_type'),
+                content_type,
                 content_length,
-                httpx_data.get('chain_status_codes'),
-                httpx_data.get('knowledgebase', {}).get('PageType'),
-                httpx_data.get('body_preview')
+                chain_status_codes,
+                page_type,
+                body_preview,
+                resp_header_hash,
+                resp_body_hash,
+                program_id
             )
             
             # Handle nested DbResult objects
-            if result.success and isinstance(result.data, DbResult):
-                data = result.data.data
+            if result.success:
+                return DbResult(success=True, data=result.data[0])
             else:
-                data = result.data
-            if data and isinstance(data, list) and len(data) > 0:
-                return data[0]
-            return False
+                return DbResult(success=False, error=f"Error inserting or updating website path in database: {result.error}")
         except Exception as e:
-            logger.error(f"Error inserting or updating URL in database: {e}")
+            logger.error(f"Error inserting or updating website path in database: {e}")
             logger.exception(e)
-            return False
-    
+            return DbResult(success=False, error=f"Error inserting or updating website path in database: {e}")
+
     async def insert_certificate(self, program_id: int, data: Dict[str, Any]):
         await self.ensure_connected()
         logger.debug(f"Entering insert_certificate for program {program_id}: {data}")
@@ -727,11 +756,11 @@ class DatabaseManager():
             expiry_date = dateutil.parser.parse(data.get('cert', {}).get('expiry_date')).replace(tzinfo=None) if data.get('cert', {}).get('expiry_date') else None
             
             # Convert types before insertion
-            url_id = await self._fetch_value('''
-                SELECT id FROM urls WHERE url = $1
+            website_id = await self._fetch_value('''
+                SELECT id FROM websites WHERE url = $1
             ''', data.get("url"))
-            logger.debug(f"URL ID: {url_id}")
-            url_id = url_id.data
+            logger.debug(f"Website ID: {website_id}")
+            website_id = website_id.data
             subject_dn = data.get("cert", {}).get('subject_dn')
             subject_cn = data.get("cert", {}).get('subject_cn')
             subject_an = data.get("cert", {}).get('subject_an')
@@ -744,19 +773,29 @@ class DatabaseManager():
             result = await self._write_records(
                 '''
                 INSERT INTO certificates (
-                        url_id, subject_dn, subject_cn, subject_an, valid_date, expiry_date, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
+                        website_id, subject_dn, subject_cn, subject_an, valid_date, expiry_date, issuer_dn, issuer_cn, issuer_org, serial, fingerprint_hash, program_id
                     )
                     VALUES (
                         ARRAY[$1]::integer[], $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
                     )
-                    ON CONFLICT (serial) DO UPDATE SET url_id =
-                        CASE 
-                            WHEN $1 = ANY(certificates.url_id) THEN certificates.url_id
-                            ELSE array_append(certificates.url_id, $1)
-                        END
+                    ON CONFLICT (serial) DO UPDATE SET 
+                        website_id = CASE 
+                            WHEN $1 = ANY(certificates.website_id) THEN certificates.website_id
+                            ELSE array_append(certificates.website_id, $1)
+                        END,
+                        subject_dn = EXCLUDED.subject_dn,
+                        subject_cn = EXCLUDED.subject_cn,
+                        subject_an = EXCLUDED.subject_an,
+                        valid_date = EXCLUDED.valid_date,
+                        expiry_date = EXCLUDED.expiry_date,
+                        issuer_dn = EXCLUDED.issuer_dn,
+                        issuer_cn = EXCLUDED.issuer_cn,
+                        issuer_org = EXCLUDED.issuer_org,
+                        fingerprint_hash = EXCLUDED.fingerprint_hash,
+                        program_id = EXCLUDED.program_id
                     RETURNING (xmax = 0) AS inserted
                 ''',
-                url_id,
+                website_id,
                 subject_dn,
                 subject_cn,
                 subject_an,
@@ -771,18 +810,14 @@ class DatabaseManager():
             )
             
             # Handle nested DbResult objects
-            if result.success and isinstance(result.data, DbResult):
-                data = result.data.data
+            if result.success:
+                return DbResult(success=True, data=result.data[0])
             else:
-                data = result.data
-
-            if data and isinstance(data, list) and len(data) > 0:
-                return data[0]['inserted']
-            return False
+                return DbResult(success=False, error=f"Error inserting or updating certificate in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating certificate in database: {e}")
             logger.exception(e)
-            return False
+            return DbResult(success=False, error=f"Error inserting or updating certificate in database: {e}")
 
 
     async def insert_nuclei(self, program_id: int, data: Dict[str, Any]):
@@ -837,62 +872,13 @@ class DatabaseManager():
                 matcher_name
             )
             
-            # Handle nested DbResult objects
-            if result.success and isinstance(result.data, DbResult):
-                data = result.data.data
-            else:
-                data = result.data
-
-            if data and isinstance(data, list) and len(data) > 0:
-                inserted = data[0]['inserted']
-                if inserted:
-                   logger.info(f"New Nuclei hit inserted: {url}")
-                else:
-                   logger.info(f"Nuclei hit updated: {url}")
-                return inserted
-            return False
+            if result.success:
+                return DbResult(success=True, data=result.data[0])
+            return DbResult(success=False, error=f"Error inserting or updating Nuclei hit in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating Nuclei hit in database: {e}")
             logger.exception(e)
-            return False
-
-    async def log_or_update_function_execution(self, log_entry: Dict[str, Any]):
-        await self.ensure_connected()
-        try:
-            # Check if the execution already exists
-            existing = await self._fetch_records('''
-                SELECT * FROM function_logs 
-                WHERE execution_id = $1
-            ''', uuid.UUID(log_entry['execution_id']))
-
-            if existing:
-                # Update existing log entry
-                await self._write_records('''
-                    UPDATE function_logs 
-                    SET timestamp = $1
-                    WHERE execution_id = $2
-                ''',
-                    datetime.fromisoformat(log_entry['timestamp']),
-                    uuid.UUID(log_entry['execution_id'])
-                )
-                #logger.debug(f"Updated log entry: {log_entry['execution_id']}")
-            else:
-                # Insert new log entry
-                await self._write_records('''
-                    INSERT INTO function_logs 
-                    (execution_id, timestamp, function_name, target, program_id) 
-                    VALUES ($1, $2, $3, $4, $5)
-                ''',
-                    uuid.UUID(log_entry['execution_id']),
-                    datetime.fromisoformat(log_entry['timestamp']),
-                    log_entry['function_name'],
-                    log_entry['target'],
-                    log_entry['program_id']
-                )
-                #logger.debug(f"Inserted new log entry: {log_entry['execution_id']}")
-        except Exception as e:
-            logger.error(f"Error logging or updating function execution in database: {e}")
-            logger.exception(e)
+            return DbResult(success=False, error=f"Error inserting or updating Nuclei hit in database: {e}")
 
     async def get_domain(self, domain: str) -> Dict[str, Any]:
         """
@@ -932,10 +918,10 @@ class DatabaseManager():
                 error_message,
                 completed_at
             )
-            return result.success
+            return result
         except Exception as e:
             logger.error(f"Error logging worker execution: {str(e)}")
-            return False
+            return DbResult(success=False, error=f"Error logging worker execution: {str(e)}")
 
     async def log_parsingworker_operation(self, component_id: str, message_id: str, message_type: str, program_id: int, 
                                      message_data: Dict[str, Any], status: str, processing_result: Dict[str, Any] = None, 
@@ -960,10 +946,10 @@ class DatabaseManager():
                 error_message,
                 processed_at
             )
-            return result.success
+            return DbResult(success=result.success, data=result.data)
         except Exception as e:
             logger.error(f"Error logging job processor message: {str(e)}")
-            return False
+            return DbResult(success=False, error=f"Error logging job processor message: {str(e)}")
 
     async def log_dataworker_operation(self, component_id: str, data_type: str, program_id: int, operation_type: str, 
                                         data: Dict[str, Any], status: str, result: Dict[str, Any] = None, 
@@ -987,7 +973,7 @@ class DatabaseManager():
                 error_message,
                 completed_at
             )
-            return result.success
+            return DbResult(success=result.success, data=result.data)
         except Exception as e:
             logger.error(f"Error logging data processor operation: {str(e)}")
-            return False
+            return DbResult(success=False, error=f"Error logging data processor operation: {str(e)}")

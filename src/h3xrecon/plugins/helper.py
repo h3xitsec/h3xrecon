@@ -3,6 +3,50 @@ import ipaddress
 from ipwhois import IPWhois
 import requests
 from loguru import logger
+from urllib.parse import urlparse
+
+
+def parse_url(url: str):
+    _return = {}
+    try:
+        _parsed_url = urlparse(url)
+        if _parsed_url.scheme is None or _parsed_url.hostname is None:
+            raise Exception("Invalid URL")
+        _port = None
+        if _parsed_url.port:
+            _port = _parsed_url.port
+        else:
+            if _parsed_url.scheme == 'https':
+                _port = 443
+            elif _parsed_url.scheme == 'http': 
+                _port = 80
+        _base_url = f"{_parsed_url.scheme}://{_parsed_url.hostname}:{_port}"
+    except Exception as e:
+        logger.error(f"Error parsing website url from {url}: {str(e)}")
+        raise
+    
+    try:
+        if _parsed_url.path:
+            _path = _parsed_url.path
+        else:
+            _path = "/"
+        _fixed_url = f"{_base_url}{_path}"
+        _parsed_fixed_url = urlparse(_fixed_url)
+    except Exception as e:
+        logger.error(f"Error fixing url {url}: {str(e)}")
+        raise
+    
+    _return['website'] = {
+        "url": _base_url,
+        "host": _parsed_fixed_url.hostname,
+        "port": _parsed_fixed_url.port,
+        "scheme": _parsed_fixed_url.scheme,
+    }
+    _return['website_path'] = {
+        "url": _fixed_url,
+        "path": _parsed_fixed_url.path,
+    }
+    return _return
 
 def log_sent_data(func):
     async def wrapper(qm, data: str, program_id: int, *args, **kwargs):
@@ -44,7 +88,11 @@ async def send_service_data(qm, data: str, program_id: int):
     pass
 
 @log_sent_data
-async def send_url_data(qm, data: str, program_id: int):
+async def send_website_data(qm, data: str, program_id: int):
+    pass
+
+@log_sent_data
+async def send_website_path_data(qm, data: str, program_id: int):
     pass
 
 @log_sent_data

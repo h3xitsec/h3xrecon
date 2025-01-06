@@ -10,6 +10,7 @@ import os
 import json
 import asyncio
 import sys
+import urllib.parse
 import hashlib
 from datetime import datetime, timezone
 
@@ -21,17 +22,19 @@ class JobConfig:
 # Job mapping configuration
 JOB_MAPPING: Dict[str, List[JobConfig]] = {
     "domain": [
-        JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function_name="resolve_domain", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
+       JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="resolve_domain", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
     ],
     "ip": [
-        JobConfig(function_name="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
-        JobConfig(function_name="port_scan", param_map=lambda result: {"target": result.lower()})
+       JobConfig(function_name="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="port_scan", param_map=lambda result: {"target": result.lower()})
     ],
-    "url": [
-        JobConfig(function_name="screenshot", param_map=lambda result: {"target": result.lower()})
+    "website": [
+       JobConfig(function_name="screenshot", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
     ]
 }
 
@@ -41,11 +44,12 @@ class DataWorker(Worker):
         self.data_type_processors = {
             "ip": self.process_ip,
             "domain": self.process_domain,
-            "url": self.process_url,
             "service": self.process_service,
             "nuclei": self.process_nuclei,
             "certificate": self.process_certificate,
-            "screenshot": self.process_screenshot
+            "screenshot": self.process_screenshot,
+            "website": self.process_website,
+            "website_path": self.process_website_path
         }
         self.current_task: Optional[asyncio.Task] = None
 
@@ -183,11 +187,11 @@ class DataWorker(Worker):
         """Trigger new jobs based on processed data."""
         # Check if processor is paused before triggering new jobs
         if self.state == WorkerState.PAUSED:
-            logger.debug("Data processor is paused, skipping new job trigger")
+            logger.info("JOB TRIGGERING DISABLED: data worker is paused")
             return
 
         if os.getenv("H3XRECON_NO_NEW_JOBS", "false").lower() == "true":
-            logger.debug("H3XRECON_NO_NEW_JOBS is set. Skipping triggering new jobs.")
+            logger.info("JOB TRIGGERING DISABLED: H3XRECON_NO_NEW_JOBS is set")
             return
 
         try:
@@ -199,7 +203,7 @@ class DataWorker(Worker):
                 data={'result': result},
                 status='started'
             )
-
+            # TODO: Parse urls and check if host is in scope
             # Check if the data is in the program scope, if it is a domain
             if data_type == "domain":
                 is_in_scope = await self.db.check_domain_regex_match(result, program_id)
@@ -418,20 +422,24 @@ class DataWorker(Worker):
                     is_catchall=is_catchall,
                     program_id=msg_data.get('program_id')
                 )
-                if result.get('inserted'):
-                    logger.success(f"INSERTED DOMAIN: {domain}")
-                    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
+                if result.success:
+                    if result.data.get('inserted'):
+                        logger.success(f"INSERTED DOMAIN: {domain}")
+                        await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
+                    else:
+                        logger.info(f"UPDATED DOMAIN: {domain}")
                 else:
-                    logger.info(f"UPDATED DOMAIN: {domain}")
+                    logger.error(f"Failed to insert or update domain: {result.error}")
     
-    async def process_url(self, msg: Dict[str, Any]):
-        """Process URL data."""
+    async def process_website(self, msg: Dict[str, Any]):
+        """Process website data."""
         if msg:
             msg_data = msg.get('data', {})
             # Extract hostname from the URL
             for d in msg_data:
                 try:
-                    parsed_url = urlparse(d.get('url'))
+                    url = d.get('url')
+                    parsed_url = urlparse(url)
                     hostname = parsed_url.hostname
                     if not hostname:
                         logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
@@ -440,24 +448,97 @@ class DataWorker(Worker):
                     is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
                     if not is_in_scope:
                         return
-                    logger.info(f"PROCESSING URL: {d.get('url', {})}")
-                    result = await self.db.insert_url(
-                        url=d.get('url'),
-                        httpx_data=d.get('httpx_data', {}),
+                    
+                    if not parsed_url.port:
+                        if parsed_url.scheme == 'https':
+                            url = f"{url}:443"
+                        elif parsed_url.scheme == 'http': 
+                            url = f"{url}:80"
+                    parsed_url = urllib.parse.urlparse(url)
+                    logger.info(f"PROCESSING WEBSITE: {url}")
+                    logger.debug(f"Data: {d}")
+                    result = await self.db.insert_website(
+                        url=url,
+                        host=parsed_url.hostname,
+                        port=parsed_url.port,
+                        scheme=parsed_url.scheme,
+                        techs=d.get('techs', []),
+                        favicon_hash=d.get('favicon_hash', ""),
+                        favicon_url=d.get('favicon_url', ""),
                         program_id=msg.get('program_id')
                     )
-                    if result.get('inserted'):
-                        logger.success(f"INSERTED URL: {d.get('url', {})}")
+                    if result.success:
+                        if result.data.get('inserted'):
+                            logger.success(f"INSERTED WEBSITE: {url}")
+                            await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website", result=url)
+                        else:
+                            logger.info(f"UPDATED WEBSITE: {url}")
                     else:
-                        logger.info(f"UPDATED URL: {d.get('url', {})}")
-                        await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="url", result=d.get('url'))
-                    # Send a job to the workers to test the URL if httpx_data is missing
-                    if not d.get('httpx_data'):
-                        logger.info(f"TRIGGERED JOB: test_http : {d.get('url')}")
-                        await self.qm.publish_message(subject="recon.input", stream="RECON_INPUT", message={"function_name": "test_http", "program_id": msg.get('program_id'), "params": {"target": d.get('url')}})
-            
+                        logger.error(f"Failed to insert or update website: {result.error}")
+
                 except Exception as e:
-                    logger.error(f"Failed to process URL in program {msg.get('program_id')}: {e}")
+                    logger.error(f"Failed to process website in program {msg.get('program_id')}: {e}")
+                    logger.exception(e)
+    
+    async def process_website_path(self, msg: Dict[str, Any]):
+        """Process website path data."""
+        if msg:
+            msg_data = msg.get('data', {})
+            # Extract hostname from the URL
+            for d in msg_data:
+                try:
+                    _url = d.get('url')
+                    parsed_url = urlparse(_url)
+                    hostname = parsed_url.hostname
+                    if not hostname:
+                        logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
+                        return
+                    # Check if the hostname matches the scope regex
+                    is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
+                    if not is_in_scope:
+                        return
+                    # Construct base URL with just scheme, hostname and port
+                    base_url = f"{parsed_url.scheme}://{parsed_url.hostname}"
+                    if parsed_url.port:
+                        base_url += f":{parsed_url.port}"
+                    website_id = await self.db._fetch_value(f"SELECT id FROM websites WHERE url = '{base_url}'")
+                    logger.info(f"PROCESSING WEBSITE PATH: {d.get('url')}")
+                    logger.debug(f"website_id: {website_id}")
+                    logger.debug(f"parsed_url.path: {parsed_url.path}")
+                    logger.debug(f"parsed_url.hostname: {parsed_url.hostname}")
+                    logger.debug(f"parsed_url.port: {parsed_url.port}")
+                    logger.debug(f"parsed_url.scheme: {parsed_url.scheme}")
+                    result = await self.db.insert_website_path(
+                        program_id=msg.get('program_id'),
+                        website_id=website_id.data if website_id.data else 0,
+                        path=parsed_url.path if parsed_url.path else "/",
+                        final_path=d.get('final_url'),
+                        techs=d.get('techs', []),
+                        response_time=d.get('response_time'),
+                        lines=d.get('lines'),
+                        title=d.get('title'),
+                        words=d.get('words'),
+                        method=d.get('method'),
+                        scheme=d.get('scheme'),
+                        status_code=d.get('status_code'),
+                        content_type=d.get('content_type'),
+                        content_length=d.get('content_length'),
+                        chain_status_codes=d.get('chain_status_codes'),
+                        page_type=d.get('page_type'),
+                        body_preview=d.get('body_preview'),
+                        resp_header_hash=d.get('resp_header_hash'),
+                        resp_body_hash=d.get('resp_body_hash')
+                    )
+                    if result.success:
+                        if result.data.get('inserted'):
+                            logger.success(f"INSERTED WEBSITE PATH: {d.get('url')}")
+                        else:
+                            logger.info(f"UPDATED WEBSITE PATH: {d.get('url')}")
+                    else:
+                        logger.error(f"Failed to insert or update website path: {result.error}")
+
+                except Exception as e:
+                    logger.error(f"Failed to process website path in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
     
     async def process_nuclei(self, msg: Dict[str, Any]):
@@ -478,14 +559,17 @@ class DataWorker(Worker):
                         is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
                         if is_in_scope:
                             logger.info(f"PROCESSING NUCLEI: {d.get('matched_at', {})}")
-                            inserted = await self.db.insert_nuclei(
+                            result = await self.db.insert_nuclei(
                                 program_id=msg.get('program_id'),
                                 data=d
                             )
-                            if inserted:
-                                logger.success(f"INSERTED NUCLEI: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
+                            if result.success:
+                                if result.data.get('inserted') is True:
+                                    logger.success(f"INSERTED NUCLEI: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
+                                else:
+                                    logger.info(f"UPDATED NUCLEI: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
                             else:
-                                logger.info(f"UPDATED NUCLEI: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
+                                logger.error(f"Failed to insert or update Nuclei hit: {result.error}")
                         else:
                             logger.debug(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
                 except Exception as e:
@@ -499,14 +583,17 @@ class DataWorker(Worker):
             msg_data = msg.get('data', {})
             for d in msg_data:
                 try:
-                    inserted = await self.db.insert_certificate(
+                    result = await self.db.insert_certificate(
                         program_id=msg.get('program_id'),
                         data=d
                     )
-                    if inserted:
-                        logger.success(f"INSERTED CERTIFICATE: {d.get('cert', {}).get('serial', {})}")
+                    if result.success:
+                        if result.data.get('inserted'):
+                            logger.success(f"INSERTED CERTIFICATE: {d.get('cert', {}).get('serial', {})}")
+                        else:
+                            logger.info(f"UPDATED CERTIFICATE: {d.get('cert', {}).get('serial', {})}")
                     else:
-                        logger.info(f"UPDATED CERTIFICATE: {d.get('cert', {}).get('serial', {})}")
+                        logger.error(f"Failed to insert or update certificate: {result.error}")
                 except Exception as e:
                     logger.error(f"Failed to process certificate in program {msg.get('program_id')}: {e}")
                     logger.exception(e)
@@ -517,15 +604,20 @@ class DataWorker(Worker):
             msg_data['data'] = [msg_data.get('data')]
         for i in msg_data.get('data'):
             logger.info(f"PROCESSING SERVICE: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
-            inserted = await self.db.insert_service(
+            result = await self.db.insert_service(
                 ip=i.get("ip"), 
                 port=i.get("port"), 
                 protocol=i.get("protocol"), 
                 program_id=msg_data.get('program_id'), 
                 service=i.get("service")
             )
-            if inserted:
-                logger.success(f"INSERTED SERVICE: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
+            if result.success:
+                if result.data.get('inserted'):
+                    logger.success(f"INSERTED SERVICE: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
+                else:
+                    logger.info(f"UPDATED SERVICE: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
+            else:
+                logger.error(f"Failed to insert or update service: {result.error}")
     async def _handle_killjob_command(self, msg: Dict[str, Any]):
         """Handle killjob command to cancel the running task."""
         pass
