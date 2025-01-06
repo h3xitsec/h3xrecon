@@ -125,36 +125,35 @@ class TestHTTP(ReconPlugin):
             }]
         }
         await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=website_path_msg)
-        # await self.nc.publish(output_msg.get('recon_data_queue', "data.input"), json.dumps(url_msg).encode())
-        # domains_to_add = (output_msg.get('output', {}).get('body_domains', []) + 
-        #                     output_msg.get('output', {}).get('body_fqdn', []) + 
-        #                     output_msg.get('output', {}).get('tls', {}).get('subject_an', []))
-        # logger.debug(f"Domains to add: {domains_to_add}")
-        # if len(domains_to_add) > 0:
-        #     for domain in domains_to_add:
-        #         logger.debug(f"Sending domain data for {domain}")
-        #         await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
+        domains_to_add = (output_msg.get('output', {}).get('body_domains', []) + 
+                            output_msg.get('output', {}).get('body_fqdn', []) + 
+                            output_msg.get('output', {}).get('tls', {}).get('subject_an', []))
+        logger.debug(f"Domains to add: {domains_to_add}")
+        if len(domains_to_add) > 0:
+            for domain in domains_to_add:
+                logger.debug(f"Sending domain data for {domain}")
+                await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
 
-        # await send_service_data(qm=qm, data={
-        #         "ip": output_msg.get('output').get('host'), 
-        #         "port": int(output_msg.get('output').get('port')), 
-        #         "protocol": "tcp",
-        #         "scheme": output_msg.get('output').get('scheme', "")
-        #     }, program_id=output_msg.get('program_id'))
+        await send_service_data(qm=qm, data={
+                "ip": output_msg.get('output').get('host'), 
+                "port": int(output_msg.get('output').get('port')), 
+                "protocol": "tcp",
+                "scheme": output_msg.get('output').get('scheme', "")
+            }, program_id=output_msg.get('program_id'))
 
-        # if output_msg.get('output').get('tls', {}).get('subject_dn', "") != "":
-        #     await send_certificate_data(qm=qm,data={
-        #         "url": output_msg.get('output', {}).get('url', ""),
-        #         "cert": {   
-        #             "subject_dn": output_msg.get('output').get('tls', {}).get('subject_dn', ""),
-        #             "subject_cn": output_msg.get('output').get('tls', {}).get('subject_cn', ""),
-        #             "subject_an": output_msg.get('output').get('tls', {}).get('subject_an', ""),
-        #             "valid_date": output_msg.get('output').get('tls', {}).get('not_before', ""),
-        #             "expiry_date": output_msg.get('output').get('tls', {}).get('not_after', ""),
-        #             "issuer_dn": output_msg.get('output').get('tls', {}).get('issuer_dn', ""),
-        #             "issuer_cn": output_msg.get('output').get('tls', {}).get('issuer_cn', ""),
-        #             "issuer_org": output_msg.get('output').get('tls', {}).get('issuer_org', ""),
-        #             "serial": output_msg.get('output').get('tls', {}).get('serial', ""),
-        #             "fingerprint_hash": output_msg.get('output').get('tls', {}).get('fingerprint_hash', {}).get('sha256', "")
-        #         }
-        #     }, program_id=output_msg.get('program_id'))
+        if output_msg.get('output').get('tls', {}).get('subject_dn', "") != "":
+            await send_certificate_data(qm=qm,data={
+                "url": output_msg.get('output', {}).get('url', ""),
+                "cert": {   
+                    "subject_dn": output_msg.get('output').get('tls', {}).get('subject_dn', ""),
+                    "subject_cn": output_msg.get('output').get('tls', {}).get('subject_cn', ""),
+                    "subject_an": output_msg.get('output').get('tls', {}).get('subject_an', ""),
+                    "valid_date": output_msg.get('output').get('tls', {}).get('not_before', ""),
+                    "expiry_date": output_msg.get('output').get('tls', {}).get('not_after', ""),
+                    "issuer_dn": output_msg.get('output').get('tls', {}).get('issuer_dn', ""),
+                    "issuer_cn": output_msg.get('output').get('tls', {}).get('issuer_cn', ""),
+                    "issuer_org": output_msg.get('output').get('tls', {}).get('issuer_org', ""),
+                    "serial": output_msg.get('output').get('tls', {}).get('serial', ""),
+                    "fingerprint_hash": output_msg.get('output').get('tls', {}).get('fingerprint_hash', {}).get('sha256', "")
+                }
+            }, program_id=output_msg.get('program_id'))
