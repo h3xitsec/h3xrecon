@@ -31,7 +31,9 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
        JobConfig(function_name="port_scan", param_map=lambda result: {"target": result.lower()})
     ],
     "website": [
-       JobConfig(function_name="screenshot", param_map=lambda result: {"target": result.lower()})
+       JobConfig(function_name="screenshot", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
     ]
 }
 
@@ -184,11 +186,11 @@ class DataWorker(Worker):
         """Trigger new jobs based on processed data."""
         # Check if processor is paused before triggering new jobs
         if self.state == WorkerState.PAUSED:
-            logger.debug("Data processor is paused, skipping new job trigger")
+            logger.info("JOB TRIGGERING DISABLED: data worker is paused")
             return
 
         if os.getenv("H3XRECON_NO_NEW_JOBS", "false").lower() == "true":
-            logger.debug("H3XRECON_NO_NEW_JOBS is set. Skipping triggering new jobs.")
+            logger.info("JOB TRIGGERING DISABLED: H3XRECON_NO_NEW_JOBS is set")
             return
 
         try:
@@ -200,7 +202,7 @@ class DataWorker(Worker):
                 data={'result': result},
                 status='started'
             )
-
+            # TODO: Parse urls and check if host is in scope
             # Check if the data is in the program scope, if it is a domain
             if data_type == "domain":
                 is_in_scope = await self.db.check_domain_regex_match(result, program_id)
