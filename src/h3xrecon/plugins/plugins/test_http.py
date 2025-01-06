@@ -1,10 +1,11 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_domain_data, send_service_data, send_certificate_data
+from h3xrecon.plugins.helper import send_domain_data, send_service_data, send_certificate_data, parse_url, send_website_data, send_website_path_data
 from loguru import logger
 import asyncio
 import json
 import os
+import urllib.parse
 
 class TestHTTP(ReconPlugin):
     @property
@@ -83,57 +84,48 @@ class TestHTTP(ReconPlugin):
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         logger.debug(f"Incoming message:\nObject Type: {type(output_msg)} : {json.dumps(output_msg)}")
-        #if not await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params', {}).get('target'), output_msg.get('program_id')):
-        #    logger.info(f"Domain {output_msg.get('source', {}).get('params', {}).get('target')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
-        #else:
-        website_msg = {
-            "program_id": output_msg.get('program_id'),
-            "data_type": "website",
-            "data": [{
-                "url": output_msg.get('output', {}).get('url'),
-                "host": output_msg.get('output', {}).get('host'),
-                "port": output_msg.get('output', {}).get('port'),
-                "scheme": output_msg.get('output', {}).get('scheme'),
-                "techs": output_msg.get('output', {}).get('tech', []),
-                "favicon_hash": output_msg.get('output', {}).get('favicon', ""),
-                "favicon_url": output_msg.get('output', {}).get('favicon_url', ""),
-            }]
-        }
-        await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=website_msg)
-        website_path_msg = {
-            "program_id": output_msg.get('program_id'),
-            "data_type": "website_path",
-            "data": [{
-                "url": output_msg.get('output', {}).get('url'),
-                "path": output_msg.get('output', {}).get('path'),
-                "final_path": output_msg.get('output', {}).get('final_url'),
-                "techs": output_msg.get('output', {}).get('tech', []),
-                "response_time": output_msg.get('output', {}).get('response_time'),
-                "lines": output_msg.get('output', {}).get('lines'),
-                "title": output_msg.get('output', {}).get('title'),
-                "words": output_msg.get('output', {}).get('words'),
-                "method": output_msg.get('output', {}).get('method'),
-                "scheme": output_msg.get('output', {}).get('scheme'),
-                "status_code": output_msg.get('output', {}).get('status_code'),
-                "content_type": output_msg.get('output', {}).get('content_type'),
-                "content_length": output_msg.get('output', {}).get('content_length'),
-                "chain_status_codes": output_msg.get('output', {}).get('chain_status_codes'),
-                "page_type": output_msg.get('output', {}).get('page_type'),
-                "body_preview": output_msg.get('output', {}).get('body_preview'),
-                "resp_header_hash": output_msg.get('output', {}).get('hash', {}).get('header_sha256', ""),
-                "resp_body_hash": output_msg.get('output', {}).get('hash', {}).get('body_sha256', ""),
-            }]
-        }
-        await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=website_path_msg)
+        # Parse full URL to extract host, port and path
+        logger.debug(f"Parsing URL: {output_msg.get('output', {}).get('url', '')}")
+        parsed_website_and_path = parse_url(output_msg.get('output', {}).get('url', ""))
+        if not parsed_website_and_path:
+            logger.error(f"Error parsing URL: {output_msg.get('output', {}).get('url', '')}")
+            return
+        website_msg = parsed_website_and_path.get('website')
+        website_msg['techs'] = output_msg.get('output', {}).get('tech', [])
+        website_msg['favicon_hash'] = output_msg.get('output', {}).get('favicon', "")
+        website_msg['favicon_url'] = output_msg.get('output', {}).get('favicon_url', "")
+        await send_website_data(qm, website_msg, output_msg.get('program_id', ""))
+
+        # Send website path data with full URL
+        website_path_msg = parsed_website_and_path.get('website_path')
+        website_path_msg['techs'] = output_msg.get('output', {}).get('tech', [])
+        website_path_msg['response_time'] = output_msg.get('output', {}).get('response_time')
+        website_path_msg['lines'] = output_msg.get('output', {}).get('lines')
+        website_path_msg['title'] = output_msg.get('output', {}).get('title')
+        website_path_msg['words'] = output_msg.get('output', {}).get('words')
+        website_path_msg['method'] = output_msg.get('output', {}).get('method')
+        website_path_msg['status_code'] = output_msg.get('output', {}).get('status_code')
+        website_path_msg['content_type'] = output_msg.get('output', {}).get('content_type')
+        website_path_msg['content_length'] = output_msg.get('output', {}).get('content_length')
+        website_path_msg['chain_status_codes'] = output_msg.get('output', {}).get('chain_status_codes')
+        website_path_msg['page_type'] = output_msg.get('output', {}).get('page_type')
+        website_path_msg['body_preview'] = output_msg.get('output', {}).get('body_preview')
+        website_path_msg['resp_header_hash'] = output_msg.get('output', {}).get('hash', {}).get('header_sha256', "")
+        website_path_msg['resp_body_hash'] = output_msg.get('output', {}).get('hash', {}).get('body_sha256', "")
+        await send_website_path_data(qm, website_path_msg, output_msg.get('program_id', ""))
+        # Extract domain names from the httpx output to send to data worker
+        # All domains specified in response body, all FQDNs and all subject alternative names
         domains_to_add = (output_msg.get('output', {}).get('body_domains', []) + 
                             output_msg.get('output', {}).get('body_fqdn', []) + 
                             output_msg.get('output', {}).get('tls', {}).get('subject_an', []))
+        
         logger.debug(f"Domains to add: {domains_to_add}")
         if len(domains_to_add) > 0:
             for domain in domains_to_add:
                 logger.debug(f"Sending domain data for {domain}")
                 await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'))
-
+        
+        # Parse and send service data
         await send_service_data(qm=qm, data={
                 "ip": output_msg.get('output').get('host'), 
                 "port": int(output_msg.get('output').get('port')), 
@@ -141,6 +133,7 @@ class TestHTTP(ReconPlugin):
                 "scheme": output_msg.get('output').get('scheme', "")
             }, program_id=output_msg.get('program_id'))
 
+        # If a HTTPS response is parsed, send certificate data
         if output_msg.get('output').get('tls', {}).get('subject_dn', "") != "":
             await send_certificate_data(qm=qm,data={
                 "url": output_msg.get('output', {}).get('url', ""),
