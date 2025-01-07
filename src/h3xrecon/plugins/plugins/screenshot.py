@@ -110,7 +110,7 @@ class Screenshot(ReconPlugin):
                     
                     # Send domain data
                     try:
-                        hostname = parsed_url.hostname
+                        hostname = parsed_website_and_path.get('website').get('url')
                         domain_msg = hostname
                         await send_domain_data(qm, domain_msg, output_msg.get('program_id', ""))
                     except Exception as e:
