@@ -4,6 +4,7 @@ from loguru import logger
 from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
+from h3xrecon.core.utils import check_last_execution
 from h3xrecon.plugins import ReconPlugin
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
@@ -412,32 +413,7 @@ class ReconWorker(Worker):
         Returns True if the function should be executed, False otherwise.
         """
         try:
-            # Handle extra_params specially if it exists as a list
-            params = request.params
-            if 'extra_params' in params and isinstance(params['extra_params'], list):
-                extra_params_str = f"extra_params={sorted(params['extra_params'])}"
-            else:
-                # Create a sorted, filtered copy of params excluding certain keys
-                extra_params = {k: v for k, v in sorted(params.items()) 
-                              if k not in ['target', 'force'] and not k.startswith('--')}
-                # Convert extra_params to a string representation
-                extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
-
-            # Construct Redis key
-            redis_key = f"{request.function_name}:{params.get('target', 'unknown')}:{extra_params_str}"
-            
-            # Get last execution time from Redis
-            last_execution_time = self.redis_cache.get(redis_key)
-            if not last_execution_time:
-                return True
-
-            # Parse the timestamp and ensure it's timezone-aware
-            last_execution_time = datetime.fromisoformat(last_execution_time.decode().replace('Z', '+00:00'))
-            if last_execution_time.tzinfo is None:
-                last_execution_time = last_execution_time.replace(tzinfo=timezone.utc)
-            
-            current_time = datetime.now(timezone.utc)
-            time_since_last = current_time - last_execution_time
+            time_since_last = check_last_execution(request.function_name, request.params, self.redis_cache)
             return time_since_last > self.execution_threshold
 
         except Exception as e:
