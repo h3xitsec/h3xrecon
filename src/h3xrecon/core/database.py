@@ -11,6 +11,7 @@ import dateutil.parser
 from dataclasses import dataclass
 from typing import Optional
 from h3xrecon.__about__ import __version__
+from h3xrecon.core.utils import parse_url
 import json
 
 @dataclass
@@ -424,12 +425,16 @@ class DatabaseManager():
 
     async def insert_screenshot(self, program_id: int, url: str, filepath: str, md5_hash: str) -> bool:
         try:
-            url_id = await self._fetch_value('''
-                SELECT id FROM urls WHERE url = $1
-            ''', url)
-            logger.debug(f"URL ID: {url_id}")
+            parsed_url = parse_url(url)
+            if parsed_url.get('website', None) is None:
+                logger.error(f"Website not found for URL: {url}")
+                raise Exception(f"Website not found for URL: {url}")
+            website_id = await self._fetch_value('''
+                SELECT id FROM websites WHERE url = $1
+            ''', parsed_url.get('website').get('url')) 
+            logger.debug(f"Website ID: {website_id}")
             result = await self._write_records(
-                '''INSERT INTO screenshots (program_id, filepath, md5_hash, url_id) VALUES ($1, $2, $3, $4) 
+                '''INSERT INTO screenshots (program_id, filepath, md5_hash, website_id) VALUES ($1, $2, $3, $4) 
                 ON CONFLICT (program_id, filepath) DO UPDATE 
                 SET md5_hash = CASE 
                     WHEN screenshots.md5_hash <> $3 THEN $3 
@@ -439,12 +444,12 @@ class DatabaseManager():
                     WHEN screenshots.md5_hash <> $3 THEN CURRENT_TIMESTAMP 
                     ELSE screenshots.updated_at 
                 END,
-                url_id = CASE 
+                website_id = CASE 
                     WHEN screenshots.md5_hash <> $3 THEN $4 
-                    ELSE screenshots.url_id 
+                    ELSE screenshots.website_id 
                 END
                 RETURNING (xmax = 0) AS inserted, id''',
-                program_id, filepath, md5_hash, url_id.data
+                program_id, filepath, md5_hash, website_id.data
             )
             logger.debug(f"Insert result: {result}")
             if result.success and isinstance(result.data, list) and len(result.data) > 0:

@@ -108,7 +108,7 @@ services:
       - POSTGRES_DB=${H3XRECON_DB_NAME}
       - POSTGRES_HOST_AUTH_METHOD=md5
     volumes:
-      - pgsql_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
@@ -130,12 +130,12 @@ services:
     env_file:
       - .env.compose
     environment:
-      - PGBOUNCER_DATABASE=h3xrecon
+      - PGBOUNCER_DATABASE=${H3XRECON_DB_NAME}
       - POSTGRESQL_HOST=database
       - POSTGRESQL_PORT=5432
-      - POSTGRESQL_DATABASE=h3xrecon
-      - POSTGRESQL_USERNAME=h3xrecon
-      - POSTGRESQL_PASSWORD=h3xrecon
+      - POSTGRESQL_DATABASE=${H3XRECON_DB_NAME}
+      - POSTGRESQL_USERNAME=${H3XRECON_DB_USER}
+      - POSTGRESQL_PASSWORD=${H3XRECON_DB_PASS}
       - PGBOUNCER_AUTH_TYPE=md5
     volumes:
       - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
@@ -230,5 +230,6 @@ services:
 
 volumes:
   pgsql_data:
+  db_data:
   redis_data:
   nats_data:

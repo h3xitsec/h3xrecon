@@ -1,6 +1,7 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_domain_data, send_service_data, send_certificate_data, parse_url, send_website_data, send_website_path_data
+from h3xrecon.plugins.helper import send_domain_data, send_service_data, send_certificate_data, send_website_data, send_website_path_data
+from h3xrecon.core.utils import parse_url
 from loguru import logger
 import asyncio
 import json

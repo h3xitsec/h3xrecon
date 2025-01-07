@@ -1,6 +1,7 @@
 from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
+from h3xrecon.core.utils import check_last_execution
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable, Optional
@@ -12,7 +13,7 @@ import asyncio
 import sys
 import urllib.parse
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 @dataclass
 class JobConfig:
@@ -41,6 +42,7 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
 class DataWorker(Worker):
     def __init__(self, config: Config):
         super().__init__("data", config)
+        self.trigger_threshold = timedelta(hours=24)
         self.data_type_processors = {
             "ip": self.process_ip,
             "domain": self.process_domain,
@@ -231,40 +233,44 @@ class DataWorker(Worker):
                         "program_id": program_id,
                         "params": job.param_map(result)
                     }
-                    logger.info(f"JOB TRIGGERED: {job.function_name} : {result}")
-                    try:
-                        await self.qm.publish_message(
-                            subject="recon.input",
-                            stream="RECON_INPUT",
-                            message=new_job
-                        )
-                        triggered_jobs.append(job.function_name)
-                    except StreamUnavailableError as e:
-                        logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
-                        await self.db.log_dataworker_operation(
-                            component_id=self.component_id,
-                            data_type=data_type,
-                            program_id=program_id,
-                            operation_type='trigger_job',
-                            data={'result': result},
-                            status='failed',
-                            error_message=str(e),
-                            completed_at=datetime.now(timezone.utc)
-                        )
-                        break
-                    except Exception as e:
-                        logger.error(f"Failed to trigger job: {str(e)}")
-                        await self.db.log_dataworker_operation(
-                            component_id=self.component_id,
-                            data_type=data_type,
-                            program_id=program_id,
-                            operation_type='trigger_job',
-                            data={'result': result},
-                            status='failed',
-                            error_message=str(e),
-                            completed_at=datetime.now(timezone.utc)
-                        )
-                        raise
+                    #new_job['params']['extra_params'] = []
+                    if await self._should_trigger_job(job.function_name, new_job.get('params', {})):
+                        try:
+                            logger.info(f"JOB TRIGGERED: {job.function_name}")
+                            await self.qm.publish_message(
+                                subject="recon.input",
+                                stream="RECON_INPUT",
+                                message=new_job
+                            )
+                            triggered_jobs.append(job.function_name)
+                        except StreamUnavailableError as e:
+                            logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
+                            await self.db.log_dataworker_operation(
+                                component_id=self.component_id,
+                                data_type=data_type,
+                                program_id=program_id,
+                                operation_type='trigger_job',
+                                data={'result': result},
+                                status='failed',
+                                error_message=str(e),
+                                completed_at=datetime.now(timezone.utc)
+                            )
+                            break
+                        except Exception as e:
+                            logger.error(f"Failed to trigger job: {str(e)}")
+                            await self.db.log_dataworker_operation(
+                                component_id=self.component_id,
+                                data_type=data_type,
+                                program_id=program_id,
+                                operation_type='trigger_job',
+                                data={'result': result},
+                                status='failed',
+                                error_message=str(e),
+                                completed_at=datetime.now(timezone.utc)
+                            )
+                            raise
+                    else:
+                        logger.debug(f"Job {job.function_name} not triggered for {result}: already executed recently")
 
                     # Schedule next job if there are more
                     current_job_index = JOB_MAPPING[data_type].index(job)
@@ -313,13 +319,31 @@ class DataWorker(Worker):
             "program_id": program_id,
             "params": job.param_map(result)
         }
-        await self.qm.publish_message(subject="recon.input", stream="RECON_INPUT", message=new_job)
+        logger.debug(f"New job: {new_job}")
+        if await self._should_trigger_job(new_job.get('function_name'), new_job.get('params', {})):
+            await self.qm.publish_message(subject="recon.input", stream="RECON_INPUT", message=new_job)
+        else:
+            logger.debug(f"Job {job.function_name} not triggered for {result}: already executed recently")
         
         # Schedule next job if there are more
         if next_job_index < len(JOB_MAPPING[data_type]) - 1:
             logger.debug("scheduling next job trigger in 10 seconds")
             asyncio.create_task(self._delay_next_job(program_id, data_type, result, next_job_index + 1))
+    
+    async def _should_trigger_job(self, function_name: str, params: Dict[str, Any]) -> bool:
+        """
+        Check if a function should be executed based on its last execution time.
+        Returns True if the function should be executed, False otherwise.
+        """
+        try:
+            time_since_last = check_last_execution(function_name, params, self.redis_cache)
+            return time_since_last > self.trigger_threshold if time_since_last else True
 
+        except Exception as e:
+            logger.error(f"Error checking execution history: {e}")
+            # If there's an error checking history, allow execution
+            return True
+    
     ################################
     ## Data processing functions ##
     ################################
