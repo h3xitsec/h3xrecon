@@ -10,7 +10,6 @@ END
 $do$;
 
 -- Grant necessary permissions to h3xrecon role
-GRANT ALL PRIVILEGES ON DATABASE h3xrecon TO h3xrecon;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO h3xrecon;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO h3xrecon;
 

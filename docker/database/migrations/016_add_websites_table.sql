@@ -98,6 +98,7 @@ FROM urls u
 JOIN websites w ON u.url = w.url
 ON CONFLICT (website_id, path) DO NOTHING;
 
---ALTER TABLE certificates RENAME COLUMN url_id TO website_id;
+ALTER TABLE certificates RENAME COLUMN url_id TO website_id;
+ALTER TABLE screenshots RENAME COLUMN url_id TO website_id;
 
 DELETE FROM websites_paths WHERE path IS NULL;
