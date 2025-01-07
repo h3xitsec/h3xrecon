@@ -1,6 +1,90 @@
 import functools
 from loguru import logger
 import asyncio
+from typing import Dict, Any
+from datetime import datetime, timezone, timedelta
+from redis import Redis
+from urllib.parse import urlparse
+
+def parse_url(url: str):
+    _return = {}
+    try:
+        _parsed_url = urlparse(url)
+        if _parsed_url.scheme is None or _parsed_url.hostname is None:
+            raise Exception("Invalid URL")
+        _port = None
+        if _parsed_url.port:
+            _port = _parsed_url.port
+        else:
+            if _parsed_url.scheme == 'https':
+                _port = 443
+            elif _parsed_url.scheme == 'http': 
+                _port = 80
+        _base_url = f"{_parsed_url.scheme}://{_parsed_url.hostname}:{_port}"
+    except Exception as e:
+        logger.error(f"Error parsing website url from {url}: {str(e)}")
+        raise
+    
+    try:
+        if _parsed_url.path:
+            _path = _parsed_url.path
+        else:
+            _path = "/"
+        _fixed_url = f"{_base_url}{_path}"
+        _parsed_fixed_url = urlparse(_fixed_url)
+    except Exception as e:
+        logger.error(f"Error fixing url {url}: {str(e)}")
+        raise
+    
+    _return['website'] = {
+        "url": _base_url,
+        "host": _parsed_fixed_url.hostname,
+        "port": _parsed_fixed_url.port,
+        "scheme": _parsed_fixed_url.scheme,
+    }
+    _return['website_path'] = {
+        "url": _fixed_url,
+        "path": _parsed_fixed_url.path,
+    }
+    return _return
+
+
+def check_last_execution(function_name: str, params: Dict[str, Any], redis_cache: Redis) -> timedelta:
+    """
+    Check the last execution date/time of a function against the cache redis server
+    Return the time since the last execution
+    """
+    try:
+        # Handle extra_params specially if it exists as a list
+        if 'extra_params' in params and isinstance(params['extra_params'], list):
+            extra_params_str = f"extra_params={sorted(params['extra_params'])}"
+        else:
+            # Create a sorted, filtered copy of params excluding certain keys
+            extra_params = []
+            # Convert extra_params to a string representation
+            extra_params_str = f'extra_params={extra_params}'
+
+        # Construct Redis key
+        redis_key = f"{function_name}:{params.get('target', 'unknown')}:{extra_params_str}"
+        logger.debug(f"Redis key: {redis_key}")
+        # Get last execution time from Redis
+        last_execution_time = redis_cache.get(redis_key)
+        if not last_execution_time:
+            return
+
+        # Parse the timestamp and ensure it's timezone-aware
+        last_execution_time = datetime.fromisoformat(last_execution_time.decode().replace('Z', '+00:00'))
+        if last_execution_time.tzinfo is None:
+            last_execution_time = last_execution_time.replace(tzinfo=timezone.utc)
+        
+        current_time = datetime.now(timezone.utc)
+        time_since_last = current_time - last_execution_time
+        return time_since_last
+
+    except Exception as e:
+        logger.error(f"Error checking execution history: {e}")
+        # If there's an error checking history, allow execution
+        raise e
 
 def _truncate_value(value, max_length=200):
     """
