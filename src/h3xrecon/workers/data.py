@@ -336,8 +336,8 @@ class DataWorker(Worker):
         Returns True if the function should be executed, False otherwise.
         """
         try:
-            time_since_last = check_last_execution(function_name, params, self.redis_cache, self.trigger_threshold)
-            return time_since_last > self.trigger_threshold
+            time_since_last = check_last_execution(function_name, params, self.redis_cache)
+            return time_since_last > self.trigger_threshold if time_since_last else True
 
         except Exception as e:
             logger.error(f"Error checking execution history: {e}")

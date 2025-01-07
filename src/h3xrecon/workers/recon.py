@@ -414,7 +414,7 @@ class ReconWorker(Worker):
         """
         try:
             time_since_last = check_last_execution(request.function_name, request.params, self.redis_cache)
-            return time_since_last > self.execution_threshold
+            return time_since_last > self.execution_threshold if time_since_last else True
 
         except Exception as e:
             logger.error(f"Error checking execution history: {e}")
