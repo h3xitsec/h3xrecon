@@ -1,7 +1,7 @@
 from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
-from h3xrecon.core.utils import check_last_execution
+from h3xrecon.core.utils import check_last_execution, parse_url
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable, Optional
@@ -512,26 +512,12 @@ class DataWorker(Worker):
             for d in msg_data:
                 try:
                     _url = d.get('url')
-                    parsed_url = urlparse(_url)
-                    hostname = parsed_url.hostname
-                    if not hostname:
-                        logger.error(f"Failed to extract hostname from URL: {d.get('url')}")
-                        return
-                    # Check if the hostname matches the scope regex
-                    is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))
-                    if not is_in_scope:
-                        return
-                    # Construct base URL with just scheme, hostname and port
-                    base_url = f"{parsed_url.scheme}://{parsed_url.hostname}"
-                    if parsed_url.port:
-                        base_url += f":{parsed_url.port}"
+                    parsed_website_and_path = parse_url(_url)
+                    base_url = parsed_website_and_path.get('website', {}).get('url')
+                    full_url = parsed_website_and_path.get('website_path', {}).get('url')
+                    parsed_url = urlparse(full_url)
                     website_id = await self.db._fetch_value(f"SELECT id FROM websites WHERE url = '{base_url}'")
                     logger.info(f"PROCESSING WEBSITE PATH: {d.get('url')}")
-                    logger.debug(f"website_id: {website_id}")
-                    logger.debug(f"parsed_url.path: {parsed_url.path}")
-                    logger.debug(f"parsed_url.hostname: {parsed_url.hostname}")
-                    logger.debug(f"parsed_url.port: {parsed_url.port}")
-                    logger.debug(f"parsed_url.scheme: {parsed_url.scheme}")
                     result = await self.db.insert_website_path(
                         program_id=msg.get('program_id'),
                         website_id=website_id.data if website_id.data else 0,
