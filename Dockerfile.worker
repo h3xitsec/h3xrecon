@@ -45,9 +45,13 @@ RUN go install -v github.com/owasp-amass/amass/v4/...@master
 
 RUN go install -v github.com/sensepost/gowitness@latest
 
+RUN go install github.com/ffuf/ffuf/v2@latest
+
 COPY ./docker/worker/permutations.txt /app/Worker/files/permutations.txt
 
 COPY ./docker/worker/permutation_test.txt /app/Worker/files/permutation_test.txt
+
+COPY ./docker/worker/webcontent_test.txt /app/Worker/files/webcontent_test.txt
 
 COPY ./src/h3xrecon/__about__.py /app/
 
