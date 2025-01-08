@@ -1,11 +1,10 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_screenshot_data, send_website_data, send_domain_data, send_website_path_data
-from h3xrecon.core.utils import parse_url
+from h3xrecon.core.utils import parse_url, is_valid_url, get_domain_from_url
 from loguru import logger
 import asyncio
 import os
-import urllib.parse
 import base64
 import tarfile
 import tempfile
@@ -17,6 +16,10 @@ class Screenshot(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
+    async def is_input_valid(self, params: Dict[str, Any]) -> bool:
+        return is_valid_url(params.get("target", {}))
+    
+    
     @property
     def timeout(self) -> int:
         return 300  # 5 minutes timeout

@@ -14,6 +14,10 @@ from typing import Union, Optional
 class FunctionParams():
     target: str
     extra_params: list = field(default_factory=list)
+    def __init__(self, **kwargs):
+        self.target = kwargs.pop('target')
+        self.extra_params = kwargs.pop('extra_params', [])
+        # Ignore any extra properties
 
 class FunctionOutput(BaseModel):
     url: Optional[Union[AnyHttpUrl, str]] = Field(default=None, pattern=r'^(https?://[^\s]+|\d+\.\d+\.\d+\.\d+:\d+|[a-zA-Z0-9.-]+:\d+)?$')

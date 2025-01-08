@@ -19,6 +19,14 @@ class ReconPlugin(ABC):
     async def execute(self, params: dict) -> AsyncGenerator[Dict[str, Any], None]:
         """Execute the recon function on the target."""
         pass
+    
+    async def is_valid_input(self, params: dict) -> bool:
+        """Check if the input is valid for the plugin."""
+        return True
+
+    async def format_input(self, params: dict) -> dict:
+        """Format the input for the plugin."""
+        return params
 
     async def _read_subprocess_output(self, process: asyncio.subprocess.Process) -> AsyncGenerator[str, None]:
         """Helper method to read and process subprocess output."""

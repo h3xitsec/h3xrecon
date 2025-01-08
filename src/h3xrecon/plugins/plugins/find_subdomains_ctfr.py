@@ -1,13 +1,25 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from loguru import logger
+from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 import asyncio
 import os
 class FindSubdomainsCTFR(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
-
+    
+    async def is_input_valid(self, params: Dict[str, Any]) -> bool:
+        return is_valid_hostname(params.get("target", {}))
+    
+    async def format_input(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        if not is_valid_hostname(params.get("target", {})):
+            if params.get("target", {}).startswith("https://") or params.get("target", {}).startswith("http://"):
+                params["target"] = get_domain_from_url(params.get("target", {}))
+            else:
+                params["target"] = params.get("target", {})
+        return params
+    
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get('target', {})}")
         command = f"python /opt/ctfr/ctfr.py -d {params.get('target', {})} -o /tmp/ctfr.log > /dev/null 2>&1 && cat /tmp/ctfr.log | grep -Ev '.*\\*.*' | sort -u && rm /tmp/ctfr.log"
