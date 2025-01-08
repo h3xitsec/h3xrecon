@@ -5,7 +5,7 @@ from typing import Dict, Any
 from datetime import datetime, timezone, timedelta
 from redis import Redis
 from urllib.parse import urlparse
-
+import ipaddress
 
 def get_domain_from_url(url: str) -> str:
     try:
@@ -33,10 +33,25 @@ def is_valid_hostname(hostname: str) -> bool:
         return False
     return True
 
+def is_valid_ip(ip: str) -> bool:
+    try:
+        ipaddress.ip_address(ip)
+        return True
+    except ValueError:
+        return False
+
+def is_valid_cidr(cidr: str) -> bool:
+    try:
+        ipaddress.ip_network(cidr)
+        return True
+    except ValueError:
+        return False
+
 def is_valid_url(url: str) -> bool:
     try:
-        parse_url(url)
-        return True
+        if parse_url(url):
+            return True
+        return False
     except Exception as e:
         return False
 
@@ -56,8 +71,7 @@ def parse_url(url: str):
                 _port = 80
         _base_url = f"{_parsed_url.scheme}://{_parsed_url.hostname}:{_port}"
     except Exception as e:
-        logger.error(f"Error parsing website url from {url}: {str(e)}")
-        raise
+        return False
     
     try:
         if _parsed_url.path:
@@ -68,7 +82,7 @@ def parse_url(url: str):
         _parsed_fixed_url = urlparse(_fixed_url)
     except Exception as e:
         logger.error(f"Error fixing url {url}: {str(e)}")
-        raise
+        return False
     
     _return['website'] = {
         "url": _base_url,

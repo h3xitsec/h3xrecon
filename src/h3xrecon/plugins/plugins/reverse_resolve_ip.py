@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_ip_data, send_domain_data, is_waf_cdn_ip, WAF_CDN_PROVIDERS
 from loguru import logger
@@ -10,7 +10,11 @@ class ReverseResolveIP(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
-
+    
+    @property
+    def target_types(self) -> List[str]:
+        return ["ip"]
+    
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get('target', {})}")
         command = f"echo \"{params.get('target', {})}\" | ~/.pdtm/go/bin/dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'"

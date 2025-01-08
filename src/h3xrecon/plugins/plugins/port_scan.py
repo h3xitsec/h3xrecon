@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_service_data
 from loguru import logger
@@ -10,6 +10,11 @@ class PortScan(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
+    
+    @property
+    def target_types(self) -> List[str]:
+        return ["ip", "domain"]
+
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         cloud_provider = await db.get_cloud_provider(params.get("target", {}))

@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_ip_data, send_domain_data
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
@@ -11,21 +11,13 @@ class ResolveDomain(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
-
-    async def is_input_valid(self, params: Dict[str, Any]) -> bool:
-        logger.debug(is_valid_hostname(params.get("target", {})))
-        return is_valid_hostname(params.get("target", {}))
     
-    async def format_input(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        logger.debug(f"format_input {params.get('target', {})}")
-        if not is_valid_hostname(params.get("target", {})):
-            logger.debug(f"format_input {params.get('target', {})}")
-            if params.get("target", {}).startswith("https://") or params.get("target", {}).startswith("http://"):
-                params["target"] = get_domain_from_url(params.get("target", {}))
-            else:
-                params["target"] = params.get("target", {})
-        logger.debug(f"format_input {params.get('target', {})}")
-        return params
+    @property
+    def target_types(self) -> List[str]:
+        return ["domain"]
+    
+    async def is_input_valid(self, params: Dict[str, Any]) -> bool:
+        return is_valid_hostname(params.get("target", {}))
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get("target", {})}")

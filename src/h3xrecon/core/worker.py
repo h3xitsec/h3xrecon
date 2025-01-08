@@ -220,6 +220,37 @@ class Worker:
         """Setup NATS subscriptions. Should be implemented by child classes."""
         raise NotImplementedError("Subclasses must implement setup_subscriptions")
 
+    async def log_or_update_function_execution(self, output_msg: Dict[str, Any]):
+        """Log or update function execution in the database."""
+        try:
+            # Extract function parameters
+            params = output_msg.get("source", {}).get("params", {})
+            function_name = output_msg.get("source", {}).get("function_name", "unknown")
+            target = params.get("target", "unknown")
+            timestamp = datetime.now(timezone.utc).isoformat()
+            logger.debug(f"Original params in parsing worker: {params}")
+            
+            # Handle extra_params specially if it exists as a list
+            if 'extra_params' in params and isinstance(params['extra_params'], list):
+                extra_params_str = f"extra_params={sorted(params['extra_params'])}"
+                logger.debug(f"Using list extra_params in parsing worker: {extra_params_str}")
+            else:
+                # Create a sorted, filtered copy of params excluding certain keys
+                extra_params = {k: v for k, v in sorted(params.items()) 
+                               if k not in ['target', 'force'] and not k.startswith('--')}
+                # Convert extra_params to a string representation
+                extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
+            logger.debug(f"Using dict extra_params in parsing worker: {extra_params_str}")
+            
+            # Construct Redis key with extra parameters
+            redis_key = f"{function_name}:{target}:{extra_params_str}"
+            
+            # Update Redis with the last execution timestamp
+            logger.debug(f"Setting Redis key: {redis_key} with timestamp: {timestamp}")
+            self.redis_cache.set(redis_key, timestamp)
+        except Exception as e:
+            logger.error(f"Error logging or updating function execution: {e}")
+    
     async def message_handler(self, raw_msg):
         """Handle incoming messages. Should be implemented by child classes."""
         raise NotImplementedError("Subclasses must implement message_handler")

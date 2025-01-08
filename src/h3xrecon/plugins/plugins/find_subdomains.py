@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, AsyncGenerator
+from typing import Dict, Any, AsyncGenerator, List
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import Config, QueueManager
 from loguru import logger
@@ -14,6 +14,11 @@ class FindSubdomainsPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
+    
+    @property
+    def target_types(self) -> List[str]:
+        return ["domain"]
+
 
     async def is_input_valid(self, params: Dict[str, Any]) -> bool:
         return is_valid_hostname(params.get("target", {}))

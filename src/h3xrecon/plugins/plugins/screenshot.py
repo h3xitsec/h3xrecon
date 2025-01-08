@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_screenshot_data, send_website_data, send_domain_data, send_website_path_data
 from h3xrecon.core.utils import parse_url, is_valid_url, get_domain_from_url
@@ -15,6 +15,10 @@ class Screenshot(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
+    
+    @property
+    def target_types(self) -> List[str]:
+        return ["url"]
 
     async def is_input_valid(self, params: Dict[str, Any]) -> bool:
         return is_valid_url(params.get("target", {}))
@@ -89,6 +93,7 @@ class Screenshot(ReconPlugin):
                     os.remove(os.path.join(temp_dir, 'output_parser.tar.gz'))
                     screenshots = [file for file in os.listdir(temp_dir) if re.match(r'.*\.png', file)]
                     parsed_website_and_path = parse_url(output_msg.get('source', {}).get('params', {}).get('target'))
+                    logger.debug(f"PARSED WEBSITE AND PATH: {parsed_website_and_path}")
                     if not parsed_website_and_path:
                         logger.error(f"Error parsing URL: {output_msg.get('source', {}).get('params', {}).get('target')}")
                         return

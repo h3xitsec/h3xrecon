@@ -56,7 +56,7 @@ class FunctionExecution:
             raise TypeError("output must be a list")
 
 class ParsingWorker(Worker):
-    def __init__(self, config: Config):
+    def __init__(self, config: Config = Config()):
         super().__init__("parsing", config)
         self.processor_map: Dict[str, Callable[[Dict[str, Any]], Any]] = {}
         self._load_plugins()
@@ -211,7 +211,7 @@ class ParsingWorker(Worker):
                 output=msg.get('data', [])
             )
             # Log or update function execution in database
-            await self.log_or_update_function_execution(msg, function_execution.execution_id, function_execution.timestamp)
+            await self.log_or_update_function_execution(msg)
             function_name = function_execution.source.get("function_name")
             
             if function_name:
@@ -292,36 +292,36 @@ class ParsingWorker(Worker):
                 await raw_msg.ack()
             await self.set_state(WorkerState.IDLE)
 
-    async def log_or_update_function_execution(self, message_data: Dict[str, Any], execution_id: str, timestamp: str):
-        """Log or update function execution in the database."""
-        try:
-            # Extract function parameters
-            params = message_data.get("source", {}).get("params", {})
-            function_name = message_data.get("source", {}).get("function_name", "unknown")
-            target = params.get("target", "unknown")
+    # async def log_or_update_function_execution(self, message_data: Dict[str, Any], execution_id: str, timestamp: str):
+    #     """Log or update function execution in the database."""
+    #     try:
+    #         # Extract function parameters
+    #         params = message_data.get("source", {}).get("params", {})
+    #         function_name = message_data.get("source", {}).get("function_name", "unknown")
+    #         target = params.get("target", "unknown")
             
-            logger.debug(f"Original params in parsing worker: {params}")
+    #         logger.debug(f"Original params in parsing worker: {params}")
             
-            # Handle extra_params specially if it exists as a list
-            if 'extra_params' in params and isinstance(params['extra_params'], list):
-                extra_params_str = f"extra_params={sorted(params['extra_params'])}"
-                logger.debug(f"Using list extra_params in parsing worker: {extra_params_str}")
-            else:
-                # Create a sorted, filtered copy of params excluding certain keys
-                extra_params = {k: v for k, v in sorted(params.items()) 
-                               if k not in ['target', 'force'] and not k.startswith('--')}
-                # Convert extra_params to a string representation
-                extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
-            logger.debug(f"Using dict extra_params in parsing worker: {extra_params_str}")
+    #         # Handle extra_params specially if it exists as a list
+    #         if 'extra_params' in params and isinstance(params['extra_params'], list):
+    #             extra_params_str = f"extra_params={sorted(params['extra_params'])}"
+    #             logger.debug(f"Using list extra_params in parsing worker: {extra_params_str}")
+    #         else:
+    #             # Create a sorted, filtered copy of params excluding certain keys
+    #             extra_params = {k: v for k, v in sorted(params.items()) 
+    #                            if k not in ['target', 'force'] and not k.startswith('--')}
+    #             # Convert extra_params to a string representation
+    #             extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
+    #         logger.debug(f"Using dict extra_params in parsing worker: {extra_params_str}")
             
-            # Construct Redis key with extra parameters
-            redis_key = f"{function_name}:{target}:{extra_params_str}"
+    #         # Construct Redis key with extra parameters
+    #         redis_key = f"{function_name}:{target}:{extra_params_str}"
             
-            # Update Redis with the last execution timestamp
-            logger.debug(f"Setting Redis key: {redis_key} with timestamp: {timestamp}")
-            self.redis_cache.set(redis_key, timestamp)
-        except Exception as e:
-            logger.error(f"Error logging or updating function execution: {e}")
+    #         # Update Redis with the last execution timestamp
+    #         logger.debug(f"Setting Redis key: {redis_key} with timestamp: {timestamp}")
+    #         self.redis_cache.set(redis_key, timestamp)
+    #     except Exception as e:
+    #         logger.error(f"Error logging or updating function execution: {e}")
 
     async def process_function_output(self, msg_data: Dict[str, Any]):
         """Process the output from a function execution."""

@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_website_path_data, send_website_data
 from h3xrecon.core.utils import parse_url, is_valid_url
@@ -13,6 +13,11 @@ class WebFuzz(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
+    
+    @property
+    def target_types(self) -> List[str]:
+        return ["url"]
+
 
     @property
     def timeout(self) -> int:

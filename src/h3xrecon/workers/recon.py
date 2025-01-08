@@ -29,7 +29,7 @@ class FunctionExecutionRequest:
             self.execution_id = str(uuid.uuid4())
 
 class ReconWorker(Worker):
-    def __init__(self, config: Config):
+    def __init__(self, config: Config = Config()):
         super().__init__("recon", config)
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
@@ -182,7 +182,7 @@ class ReconWorker(Worker):
                 return
             
             # Execution
-            logger.info(f"STARTING JOB: {function_execution_request.function_name} : {function_execution_request.params.get('target')} : {function_execution_request.execution_id}")
+            #logger.info(f"STARTING JOB: {function_execution_request.function_name} : {function_execution_request.params.get('target')} : {function_execution_request.execution_id}")
             self.current_task = asyncio.create_task(
                 self.run_function_execution(function_execution_request)
             )
@@ -228,7 +228,6 @@ class ReconWorker(Worker):
     @debug_trace
     async def run_function_execution(self, msg_data: FunctionExecutionRequest):
         """Execute the requested function."""
-        result_count = 0
         
         try:
             async for result in self.execute_function(msg_data):
@@ -246,9 +245,8 @@ class ReconWorker(Worker):
                     )
                     return  # Exit the function to prevent further processing
                 
-                result_count += 1
                 #logger.debug(f"Execution {msg_data.execution_id}: Result #{result_count}: {result}")
-            logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
+            #logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
             # Log successful completion
             await self.db.log_reconworker_operation(
                 execution_id=msg_data.execution_id,
@@ -314,6 +312,7 @@ class ReconWorker(Worker):
                     self.function_map[plugin_instance.name] = {
                         'execute': bound_method,
                         'format_input': plugin_instance.format_input,
+                        'format_targets': plugin_instance.format_targets,
                         'timeout': plugin_instance.timeout,
                         'is_valid_input': plugin_instance.is_valid_input
                     }
@@ -336,68 +335,91 @@ class ReconWorker(Worker):
                 raise ValueError(f"Function {function_execution_request.function_name} not found")
 
 
-            # Format input
-            if plugin.get('format_input', None):
-               function_execution_request.params = await plugin['format_input'](function_execution_request.params)
-            
-            # Validate input
-            if plugin.get('is_valid_input', None):
-                if not await plugin['is_valid_input'](function_execution_request.params):
-                    logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid input")
+            # # Format input
+            # if plugin.get('format_input', None):
+            #    function_execution_request.params['target'] = await plugin['format_input'](function_execution_request.params)
+            if function_execution_request.function_name != "sleep":
+                _fixed_targets = await plugin['format_targets'](function_execution_request.params['target'])
+                logger.debug(f"FIXED TARGETS: {_fixed_targets}")
+            else:
+                _fixed_targets = [function_execution_request.params['target']]
+            result_count = 0
+            for _target in _fixed_targets:
+                # Create a new params dictionary with the updated target
+                new_function_execution_request = FunctionExecutionRequest(
+                    program_id=function_execution_request.program_id,
+                    function_name=function_execution_request.function_name,
+                    params={
+                        **function_execution_request.params,
+                        'target': _target
+                    },
+                    force=function_execution_request.force,
+                    execution_id=function_execution_request.execution_id
+                )
+                # Update current target
+                self.current_target = _target
+                logger.debug(f"UPDATED PARAMS: {new_function_execution_request.params}")
+                logger.debug(f"CURRENT TARGET: {self.current_target}")
+                logger.debug(f"VALIDATING INPUT: {new_function_execution_request.params}")
+                # Validate input
+                if plugin.get('is_valid_input', None):
+                    if not await plugin['is_valid_input'](new_function_execution_request.params):
+                        logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid input")
+                        return
+                
+                # Check if we should execute this function
+                if not function_execution_request.force and not await self._should_execute(new_function_execution_request):
+                    logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : recently executed")
                     return
-            
-            # Check if we should execute this function
-            if not function_execution_request.force and not await self._should_execute(function_execution_request):
-                logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : recently executed")
-                return
-            
-            # Log execution start
-            await self.db.log_reconworker_operation(
-                execution_id=function_execution_request.execution_id,
-                component_id=self.component_id,
-                function_name=function_execution_request.function_name,
-                program_id=function_execution_request.program_id,
-                target=function_execution_request.params.get('target', 'unknown'),
-                parameters=function_execution_request.params,
-                status='started'
-            )
-            
-            logger.debug(f"Running function {function_execution_request.function_name} on {function_execution_request.params.get('target')} ({function_execution_request.execution_id})")
-            await self.set_state(WorkerState.BUSY, f"{function_execution_request.function_name}:{function_execution_request.params.get('target')}:{function_execution_request.execution_id}")
-            try:
-                async for result in plugin['execute'](function_execution_request.params, function_execution_request.program_id, function_execution_request.execution_id, self.db):
-                    output_data = {
-                        "program_id": function_execution_request.program_id,
-                        "execution_id": function_execution_request.execution_id,
-                        "source": {
-                            "function_name": function_execution_request.function_name,
-                            "params": function_execution_request.params
-                        },
-                        "output": result,
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    
-                    # Yield the result first
-                    yield output_data
-                    
-                    # Then attempt to publish it
-                    try:
-                        await self.qm.publish_message(
-                            subject="parsing.input",
-                            stream="PARSING_INPUT",
-                            message=output_data
-                        )
-                        logger.info(f"SENT JOB OUTPUT: {function_execution_request.function_name} : {function_execution_request.params.get('target')}")
-                    except StreamUnavailableError as e:
-                        logger.warning(f"Stream locked, dropping message: {str(e)}")
-                        continue  # Continue with the next result
+                
+                # Log execution start
+                await self.db.log_reconworker_operation(
+                    execution_id=function_execution_request.execution_id,
+                    component_id=self.component_id,
+                    function_name=function_execution_request.function_name,
+                    program_id=function_execution_request.program_id,
+                    target=new_function_execution_request.params.get('target', 'unknown'),
+                    parameters=new_function_execution_request.params,
+                    status='started'
+                )
+                
+                logger.debug(f"Running function {function_execution_request.function_name} on {new_function_execution_request.params.get('target')} ({function_execution_request.execution_id})")
+                await self.set_state(WorkerState.BUSY, f"{function_execution_request.function_name}:{new_function_execution_request.params.get('target')}:{function_execution_request.execution_id}")
+                try:
+                    async for result in plugin['execute'](new_function_execution_request.params, function_execution_request.program_id, function_execution_request.execution_id, self.db):
+                        output_data = {
+                            "program_id": function_execution_request.program_id,
+                            "execution_id": function_execution_request.execution_id,
+                            "source": {
+                                "function_name": function_execution_request.function_name,
+                                "params": new_function_execution_request.params
+                            },
+                            "output": result,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        logger.debug(f"OUTPUT DATA: {output_data}")
+                        # Yield the result first
+                        yield output_data
+                        
+                        # Then attempt to publish it
+                        try:
+                            await self.qm.publish_message(
+                                subject="parsing.input",
+                                stream="PARSING_INPUT",
+                                message=output_data
+                            )
+                            logger.info(f"SENT JOB OUTPUT: {function_execution_request.function_name} : {new_function_execution_request.params.get('target')}")
+                            result_count += 1
+                        except StreamUnavailableError as e:
+                            logger.warning(f"Stream locked, dropping message: {str(e)}")
+                            continue  # Continue with the next result
 
-            except Exception as e:
-                logger.error(f"Error executing function {function_execution_request.function_name}: {str(e)}")
-                logger.exception(e)
-                raise
-            finally:
-                logger.debug(f"Finished running {function_execution_request.function_name} on {function_execution_request.params.get('target')} ({function_execution_request.execution_id})")
+                except Exception as e:
+                    logger.error(f"Error executing function {function_execution_request.function_name}: {str(e)}")
+                    logger.exception(e)
+                    raise
+                finally:
+                    logger.success(f"JOB COMPLETED: {function_execution_request.function_name} : {new_function_execution_request.params.get('target')} : {result_count} results")
 
         except Exception as e:
             logger.error(f"Error executing function {function_execution_request.function_name}: {str(e)}")
@@ -425,6 +447,9 @@ class ReconWorker(Worker):
         Returns True if the function should be executed, False otherwise.
         """
         try:
+            # Never check last execution for sleep plugin
+            if request.function_name == "sleep":
+                return True
             time_since_last = check_last_execution(request.function_name, request.params, self.redis_cache)
             return time_since_last > self.execution_threshold if time_since_last else True
 

@@ -43,7 +43,7 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
 }
 
 class DataWorker(Worker):
-    def __init__(self, config: Config):
+    def __init__(self, config: Config = Config()):
         super().__init__("data", config)
         self.trigger_threshold = timedelta(hours=24)
         self.plugins: Dict[str, Callable] = {}
@@ -170,6 +170,7 @@ class DataWorker(Worker):
                         
                     plugin_instance = attribute()
                     self.plugins[plugin_instance.name] = {
+                        'plugin': plugin_instance,
                         'format_input': plugin_instance.format_input,
                         'is_valid_input': plugin_instance.is_valid_input
                     }
