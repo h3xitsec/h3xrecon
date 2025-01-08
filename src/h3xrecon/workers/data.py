@@ -1,7 +1,8 @@
 from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
-from h3xrecon.core.utils import check_last_execution, parse_url
+from h3xrecon.core.utils import check_last_execution, parse_url, is_valid_url, get_domain_from_url
+from h3xrecon.plugins import ReconPlugin
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
 from typing import Dict, Any, List, Callable, Optional
@@ -10,6 +11,8 @@ from urllib.parse import urlparse
 import os
 import json
 import asyncio
+import importlib
+import pkgutil
 import sys
 import urllib.parse
 import hashlib
@@ -43,6 +46,8 @@ class DataWorker(Worker):
     def __init__(self, config: Config):
         super().__init__("data", config)
         self.trigger_threshold = timedelta(hours=24)
+        self.plugins: Dict[str, Callable] = {}
+        self.load_plugins()
         self.data_type_processors = {
             "ip": self.process_ip,
             "domain": self.process_domain,
@@ -133,7 +138,47 @@ class DataWorker(Worker):
         except Exception as e:
             logger.error(f"Error setting up data processor subscriptions: {e}")
             raise
+    
+    def load_plugins(self):
+        """Dynamically load all recon plugins."""
+        try:
+            package = importlib.import_module('h3xrecon.plugins.plugins')
+            logger.debug(f"Found plugin package at: {package.__path__}")
+            
+            # Walk through all subdirectories
+            plugin_modules = []
+            for finder, name, ispkg in pkgutil.walk_packages(package.__path__, package.__name__ + '.'):
+                if not name.endswith('.base'):  # Skip the base module
+                    plugin_modules.append(name)
+            
+            logger.info(f"LOADED PLUGINS: {', '.join(p.split('.')[-1] for p in plugin_modules)}")
+            
+        except ModuleNotFoundError as e:
+            logger.error(f"Failed to import 'plugins': {e}")
+            return
 
+        for module_name in plugin_modules:
+            try:
+                logger.debug(f"Attempting to load module: {module_name}")
+                module = importlib.import_module(module_name)
+                
+                for attribute_name in dir(module):
+                    attribute = getattr(module, attribute_name)
+                    
+                    if not isinstance(attribute, type) or not issubclass(attribute, ReconPlugin) or attribute is ReconPlugin:
+                       continue
+                        
+                    plugin_instance = attribute()
+                    self.plugins[plugin_instance.name] = {
+                        'format_input': plugin_instance.format_input,
+                        'is_valid_input': plugin_instance.is_valid_input
+                    }
+                    logger.debug(f"Loaded plugin: {plugin_instance.name}")
+                
+            except Exception as e:
+                logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
+        logger.debug(f"Current plugins list: {[key for key in self.plugins.keys()]}")
+    
     async def _process_data(self, msg, processor, raw_msg):
         """Internal method to process data with the appropriate processor."""
         try:
@@ -233,7 +278,8 @@ class DataWorker(Worker):
                         "program_id": program_id,
                         "params": job.param_map(result)
                     }
-                    #new_job['params']['extra_params'] = []
+                    new_job['params'] = await self.plugins[job.function_name]['format_input'](new_job['params'])
+
                     if await self._should_trigger_job(job.function_name, new_job.get('params', {})):
                         try:
                             logger.info(f"JOB TRIGGERED: {job.function_name}")
@@ -422,6 +468,9 @@ class DataWorker(Worker):
     async def process_domain(self, msg_data: Dict[str, Any]):
         """Process domain data."""
         for domain in msg_data.get('data'):
+            if is_valid_url(domain):
+                logger.warning(f"Domain {domain} is a URL, extracting domain")
+                domain = get_domain_from_url(domain)
             logger.info(f"PROCESSING DOMAIN: {domain}")
             if not await self.db.check_domain_regex_match(domain, msg_data.get('program_id')):
                 logger.debug(f"Domain {domain} is not part of program {msg_data.get('program_id')}. Skipping processing.")

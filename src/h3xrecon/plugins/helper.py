@@ -1,5 +1,6 @@
 from typing import Dict, Any
 import ipaddress
+from h3xrecon.core.utils import is_valid_url, get_domain_from_url
 from ipwhois import IPWhois
 import requests
 from loguru import logger
@@ -9,7 +10,9 @@ def log_sent_data(func):
     async def wrapper(qm, data: str, program_id: int, *args, **kwargs):
         # Extract data_type from function name
         data_type = func.__name__.replace('send_', '').replace('_data', '')
-        
+        if data_type == "domain":
+            if is_valid_url(data):
+                data = get_domain_from_url(data)
         # Build message
         msg = {
             "program_id": program_id,

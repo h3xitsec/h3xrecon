@@ -3,7 +3,9 @@ from typing import Dict, Any, AsyncGenerator
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import Config, QueueManager
 from loguru import logger
+from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 
+__input_type__ = "domain"
 
 class FindSubdomainsPlugin(ReconPlugin):
     """
@@ -12,6 +14,17 @@ class FindSubdomainsPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
+
+    async def is_input_valid(self, params: Dict[str, Any]) -> bool:
+        return is_valid_hostname(params.get("target", {}))
+    
+    async def format_input(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        if not is_valid_hostname(params.get("target", {})):
+            if params.get("target", {}).startswith("https://") or params.get("target", {}).startswith("http://"):
+                params["target"] = get_domain_from_url(params.get("target", {}))
+            else:
+                params["target"] = params.get("target", {})
+        return params
 
     async def execute(self, params: Dict[str, Any], program_id: int, execution_id: str, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         """

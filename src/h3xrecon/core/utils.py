@@ -6,6 +6,40 @@ from datetime import datetime, timezone, timedelta
 from redis import Redis
 from urllib.parse import urlparse
 
+
+def get_domain_from_url(url: str) -> str:
+    try:
+        if is_valid_hostname(url):
+            return url
+        _parsed_url = parse_url(url)
+        return _parsed_url.get('website', {}).get('host', None)
+    except Exception as e:
+        logger.error(f"Error parsing URL {url}: {str(e)}")
+        raise
+
+def is_valid_hostname(hostname: str) -> bool:
+    # Check if target contains any URL components
+    if any(x in hostname for x in ["://", ":", "/", "?"]):
+        return False
+    # Check if target is a valid hostname format
+    if not hostname or " " in hostname:
+        return False
+    # Basic hostname validation - at least one dot, valid chars
+    if "." not in hostname or not all(c.isalnum() or c in "-." for c in hostname):
+        return False
+    # Check parts between dots are valid
+    parts = hostname.split(".")
+    if not all(part and not (part.startswith("-") or part.endswith("-")) for part in parts):
+        return False
+    return True
+
+def is_valid_url(url: str) -> bool:
+    try:
+        parse_url(url)
+        return True
+    except Exception as e:
+        return False
+
 def parse_url(url: str):
     _return = {}
     try:

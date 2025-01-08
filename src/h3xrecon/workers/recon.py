@@ -35,6 +35,7 @@ class ReconWorker(Worker):
         self.result_publisher = None
         self.current_task: Optional[asyncio.Task] = None
         self.function_map: Dict[str, Callable] = {}
+        self.function_input_validator: Dict[str, Callable] = {}
         self.load_plugins()
         self.current_module = None
         self.current_target = None
@@ -162,23 +163,6 @@ class ReconWorker(Worker):
             elif not isinstance(function_execution_request.params['extra_params'], list):
                 function_execution_request.params['extra_params'] = []
 
-            # Check if we should execute this function
-            if not function_execution_request.force and not await self._should_execute(function_execution_request):
-                logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : recently executed")
-                await raw_msg.ack()
-                return
-            
-            # Log execution start
-            await self.db.log_reconworker_operation(
-                execution_id=function_execution_request.execution_id,
-                component_id=self.component_id,
-                function_name=function_execution_request.function_name,
-                program_id=function_execution_request.program_id,
-                target=function_execution_request.params.get('target', 'unknown'),
-                parameters=function_execution_request.params,
-                status='started'
-            )
-            
             # Validation
             function_valid = await self.validate_function_execution_request(function_execution_request)
             if not function_valid:
@@ -196,8 +180,7 @@ class ReconWorker(Worker):
                 )
                 await raw_msg.ack()
                 return
-
-            await self.set_state(WorkerState.BUSY, f"{function_execution_request.function_name}:{function_execution_request.params.get('target')}:{function_execution_request.execution_id}")
+            
             # Execution
             logger.info(f"STARTING JOB: {function_execution_request.function_name} : {function_execution_request.params.get('target')} : {function_execution_request.execution_id}")
             self.current_task = asyncio.create_task(
@@ -235,7 +218,9 @@ class ReconWorker(Worker):
                              for key in self.function_map.keys())
             if not plugin_found:
                 raise ValueError(f"Invalid function_name: {function_execution_request.function_name}")
-            return plugin_found
+            if self.function_input_validator.get(function_execution_request.function_name, None):
+                return await self.function_input_validator[function_execution_request.function_name](function_execution_request.params)
+            return True
         except Exception as e:
             logger.error(f"Error validating function request: {e}")
             return False
@@ -246,12 +231,7 @@ class ReconWorker(Worker):
         result_count = 0
         
         try:
-            async for result in self.execute_function(
-                function_name=msg_data.function_name,
-                params=msg_data.params,
-                program_id=msg_data.program_id,
-                execution_id=msg_data.execution_id
-            ):
+            async for result in self.execute_function(msg_data):
                 if asyncio.current_task().cancelled():
                     await self.db.log_reconworker_operation(
                         execution_id=msg_data.execution_id,
@@ -331,35 +311,67 @@ class ReconWorker(Worker):
                         
                     plugin_instance = attribute()
                     bound_method = plugin_instance.execute
-                    self.function_map[plugin_instance.name] = bound_method
+                    self.function_map[plugin_instance.name] = {
+                        'execute': bound_method,
+                        'format_input': plugin_instance.format_input,
+                        'timeout': plugin_instance.timeout,
+                        'is_valid_input': plugin_instance.is_valid_input
+                    }
                     logger.debug(f"Loaded plugin: {plugin_instance.name} with timeout: {plugin_instance.timeout}s")
                 
             except Exception as e:
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
         logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
     
-    async def execute_function(self, function_name: str, params: Dict[str, Any], program_id: int, execution_id: str) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute_function(self, function_execution_request: FunctionExecutionRequest) -> AsyncGenerator[Dict[str, Any], None]:
         try:
             # Update current execution info
-            self.current_module = function_name
-            self.current_target = params.get('target')
+            self.current_module = function_execution_request.function_name
+            self.current_target = function_execution_request.params.get('target')
             self.current_start_time = datetime.now(timezone.utc)
 
-            plugin = self.function_map.get(function_name)
+            plugin = self.function_map.get(function_execution_request.function_name)
             if not plugin:
-                logger.error(f"Function {function_name} not found")
-                raise ValueError(f"Function {function_name} not found")
+                logger.error(f"Function {function_execution_request.function_name} not found")
+                raise ValueError(f"Function {function_execution_request.function_name} not found")
 
-            logger.debug(f"Running function {function_name} on {params.get('target')} ({execution_id})")
+
+            # Format input
+            if plugin.get('format_input', None):
+               function_execution_request.params = await plugin['format_input'](function_execution_request.params)
             
+            # Validate input
+            if plugin.get('is_valid_input', None):
+                if not await plugin['is_valid_input'](function_execution_request.params):
+                    logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid input")
+                    return
+            
+            # Check if we should execute this function
+            if not function_execution_request.force and not await self._should_execute(function_execution_request):
+                logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : recently executed")
+                return
+            
+            # Log execution start
+            await self.db.log_reconworker_operation(
+                execution_id=function_execution_request.execution_id,
+                component_id=self.component_id,
+                function_name=function_execution_request.function_name,
+                program_id=function_execution_request.program_id,
+                target=function_execution_request.params.get('target', 'unknown'),
+                parameters=function_execution_request.params,
+                status='started'
+            )
+            
+            logger.debug(f"Running function {function_execution_request.function_name} on {function_execution_request.params.get('target')} ({function_execution_request.execution_id})")
+            await self.set_state(WorkerState.BUSY, f"{function_execution_request.function_name}:{function_execution_request.params.get('target')}:{function_execution_request.execution_id}")
             try:
-                async for result in plugin(params, program_id, execution_id, self.db):
+                async for result in plugin['execute'](function_execution_request.params, function_execution_request.program_id, function_execution_request.execution_id, self.db):
                     output_data = {
-                        "program_id": program_id,
-                        "execution_id": execution_id,
+                        "program_id": function_execution_request.program_id,
+                        "execution_id": function_execution_request.execution_id,
                         "source": {
-                            "function_name": function_name,
-                            "params": params
+                            "function_name": function_execution_request.function_name,
+                            "params": function_execution_request.params
                         },
                         "output": result,
                         "timestamp": datetime.now().isoformat()
@@ -375,20 +387,20 @@ class ReconWorker(Worker):
                             stream="PARSING_INPUT",
                             message=output_data
                         )
-                        logger.info(f"SENT JOB OUTPUT: {function_name} : {params.get('target')}")
+                        logger.info(f"SENT JOB OUTPUT: {function_execution_request.function_name} : {function_execution_request.params.get('target')}")
                     except StreamUnavailableError as e:
                         logger.warning(f"Stream locked, dropping message: {str(e)}")
                         continue  # Continue with the next result
 
             except Exception as e:
-                logger.error(f"Error executing function {function_name}: {str(e)}")
+                logger.error(f"Error executing function {function_execution_request.function_name}: {str(e)}")
                 logger.exception(e)
                 raise
             finally:
-                logger.debug(f"Finished running {function_name} on {params.get('target')} ({execution_id})")
+                logger.debug(f"Finished running {function_execution_request.function_name} on {function_execution_request.params.get('target')} ({function_execution_request.execution_id})")
 
         except Exception as e:
-            logger.error(f"Error executing function {function_name}: {str(e)}")
+            logger.error(f"Error executing function {function_execution_request.function_name}: {str(e)}")
             logger.exception(e)
             raise
 

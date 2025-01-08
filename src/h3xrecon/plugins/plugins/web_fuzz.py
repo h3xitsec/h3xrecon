@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Dict, Any
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_website_path_data, send_website_data
-from h3xrecon.core.utils import parse_url
+from h3xrecon.core.utils import parse_url, is_valid_url
 from loguru import logger
 import asyncio
 import json
@@ -17,11 +17,15 @@ class WebFuzz(ReconPlugin):
     @property
     def timeout(self) -> int:
         return 300  # 5 minutes timeout
-
+    
+    async def is_input_valid(self, params: Dict[str, Any]) -> bool:
+        return is_valid_url(params.get("target", {}))
+    
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         parsed_url = parse_url(params.get('target', {}))
         target_url = parsed_url.get('website_path', {}).get('url')
         wordlist = params.get('wordlist', "/app/Worker/files/webcontent_test.txt")
+        tmp_list = False
         if wordlist.startswith("http"):
             wl_content = requests.get(wordlist).text
             tmp_list = True
@@ -36,7 +40,7 @@ class WebFuzz(ReconPlugin):
             target_url = target_url[:-1]
         logger.debug(f"Running {self.name} on {target_url}")
         command = (
-            f"ffuf -ac -u {target_url}/FUZZ -w {wordlist} -s -json"
+            f"ffuf -u {target_url}/FUZZ -w {wordlist} -s -json"
         )
         logger.debug(f"Command: {command}")
         process = None
