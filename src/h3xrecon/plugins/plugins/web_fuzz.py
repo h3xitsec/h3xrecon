@@ -17,8 +17,7 @@ class WebFuzz(ReconPlugin):
     @property
     def target_types(self) -> List[str]:
         return ["url"]
-
-
+    
     @property
     def timeout(self) -> int:
         return 300  # 5 minutes timeout
