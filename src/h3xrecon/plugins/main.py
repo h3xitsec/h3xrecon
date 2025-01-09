@@ -29,25 +29,25 @@ class ReconPlugin(ABC):
         """Format the input for the plugin."""
         return params
     
+    def get_target_type(self, target: str) -> str:
+        """Get the type of target."""
+        if is_valid_url(target):
+            return "url"
+        elif is_valid_ip(target):
+            return "ip"
+        elif is_valid_hostname(target):
+            return "domain"
+        elif is_valid_cidr(target):
+            return "cidr"
+        else:
+            raise ValueError(f"Invalid target: {target}")
+
     async def format_targets(self, target: str) -> List[str]:
         """Format the targets for the plugin."""
         from h3xrecon.core.database import DatabaseManager
         db = DatabaseManager()
         _fixed_targets = []
-        print(target)
-        # Identify the type of target
-        print(is_valid_url(target))
-        if is_valid_url(target):
-            _target_type = "url"
-            target = parse_url(target).get('website_path', {}).get('url', {})
-        elif is_valid_ip(target):
-            _target_type = "ip"
-        elif is_valid_hostname(target):
-            _target_type = "domain"
-        elif is_valid_cidr(target):
-            _target_type = "cidr"
-        else:
-            raise ValueError(f"Invalid target: {target}")
+        _target_type = self.get_target_type(target)
         logger.debug(f"TARGET TYPE: {_target_type}")
 
         #If the target type is not in the target_types list, we need to fix it
