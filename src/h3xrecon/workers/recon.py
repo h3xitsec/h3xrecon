@@ -34,6 +34,7 @@ class ReconWorker(Worker):
         self.execution_threshold = timedelta(hours=24)
         self.result_publisher = None
         self.current_task: Optional[asyncio.Task] = None
+        self.current_process: Optional[asyncio.subprocess.Process] = None  # Track current subprocess
         self.function_map: Dict[str, Callable] = {}
         self.function_input_validator: Dict[str, Callable] = {}
         self.load_plugins()
@@ -328,16 +329,14 @@ class ReconWorker(Worker):
             self.current_module = function_execution_request.function_name
             self.current_target = function_execution_request.params.get('target')
             self.current_start_time = datetime.now(timezone.utc)
+            self.current_process = None  # Reset current process
 
             plugin = self.function_map.get(function_execution_request.function_name)
             if not plugin:
                 logger.error(f"Function {function_execution_request.function_name} not found")
                 raise ValueError(f"Function {function_execution_request.function_name} not found")
 
-
-            # # Format input
-            # if plugin.get('format_input', None):
-            #    function_execution_request.params['target'] = await plugin['format_input'](function_execution_request.params)
+            # Format input
             if function_execution_request.function_name != "sleep":
                 _fixed_targets = await plugin['format_targets'](function_execution_request.params['target'])
                 logger.debug(f"FIXED TARGETS: {_fixed_targets}")
@@ -386,6 +385,7 @@ class ReconWorker(Worker):
                 logger.debug(f"Running function {function_execution_request.function_name} on {new_function_execution_request.params.get('target')} ({function_execution_request.execution_id})")
                 await self.set_state(WorkerState.BUSY, f"{function_execution_request.function_name}:{new_function_execution_request.params.get('target')}:{function_execution_request.execution_id}")
                 try:
+                    # Pass self as worker to the plugin's execute method
                     async for result in plugin['execute'](new_function_execution_request.params, function_execution_request.program_id, function_execution_request.execution_id, self.db):
                         output_data = {
                             "program_id": function_execution_request.program_id,
@@ -459,12 +459,37 @@ class ReconWorker(Worker):
             return True
 
     async def _handle_killjob_command(self, msg: Dict[str, Any]):
-        """Handle killjob command to cancel the running task."""
+        """Handle killjob command to cancel the running task and kill any running subprocess."""
         try:
             if self.current_task:
+                # First kill any running subprocess
+                if self.current_process:
+                    try:
+                        import signal
+                        import os
+                        # Try to kill the entire process group
+                        try:
+                            pgid = os.getpgid(self.current_process.pid)
+                            os.killpg(pgid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        
+                        # Also try to kill the process directly
+                        try:
+                            self.current_process.kill()
+                        except ProcessLookupError:
+                            pass
+                            
+                        await self.current_process.wait()
+                    except Exception as e:
+                        logger.error(f"Error killing subprocess: {e}")
+                    finally:
+                        self.current_process = None
+
+                # Then cancel the asyncio task
                 self.current_task.cancel()
                 await self._send_control_response(command="killjob", status="task killed", success=True)
-                logger.debug("Cancelled the current running task")
+                logger.debug("Cancelled the current running task and killed subprocess")
             else:
                 logger.debug("No running task to cancel")
                 await self._send_control_response(command="killjob", status="no running task", success=True)

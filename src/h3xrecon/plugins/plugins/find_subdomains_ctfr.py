@@ -30,12 +30,7 @@ class FindSubdomainsCTFR(ReconPlugin):
         
         process = None
         try:
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                shell=True
-            )
+            process = await self._create_subprocess_shell(command)
             
             try:
                 while True:

@@ -40,12 +40,7 @@ class SubdomainPermutation(ReconPlugin):
         logger.debug(f"Using permutation file {permutation_file}")
         command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {permutation_file} -depth 1 -numbers 10 -mindup -adv -md"
         logger.debug(f"Running command {command}")
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            shell=True
-        )
+        process = await self._create_subprocess_shell(command)
         to_test = []
         async for output in self._read_subprocess_output(process):
             # Prepare the message for reverse_resolve_ip

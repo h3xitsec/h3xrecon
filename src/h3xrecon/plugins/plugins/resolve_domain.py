@@ -23,12 +23,7 @@ class ResolveDomain(ReconPlugin):
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
         command = f"echo {params.get("target", {})} | ~/.pdtm/go/bin/dnsx -nc -resp -a -cname -silent -j | jq -Mc '{{host: .host,a_records: (.a // []),cnames: (.cname // [])}}'"
         logger.debug(f"Running command: {command}")
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            shell=True
-        )
+        process = await self._create_subprocess_shell(command)
         
         async for output in self._read_subprocess_output(process):
             try:

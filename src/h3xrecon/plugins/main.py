@@ -3,6 +3,7 @@ from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.core.utils import is_valid_url, is_valid_hostname, get_domain_from_url, is_valid_ip, is_valid_cidr, parse_url
 from loguru import logger
 import asyncio
+import inspect
 
 class ReconPlugin(ABC):
     @property
@@ -17,7 +18,7 @@ class ReconPlugin(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, params: dict) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: dict, program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         """Execute the recon function on the target."""
         pass
     
@@ -99,3 +100,28 @@ class ReconPlugin(ABC):
                 break
 
         await process.wait()
+
+    async def _create_subprocess_shell(self, command: str, **kwargs) -> asyncio.subprocess.Process:
+        """Helper method to create a subprocess and track it in the worker."""
+        from h3xrecon.workers.recon import ReconWorker
+
+        # Get the current frame and walk up the call stack to find the worker instance
+        frame = inspect.currentframe()
+        while frame:
+            if frame.f_locals.get('self') and isinstance(frame.f_locals['self'], ReconWorker):
+                worker = frame.f_locals['self']
+                break
+            frame = frame.f_back
+
+        process = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            **kwargs
+        )
+
+        # If we found a worker instance, track the process
+        if frame and 'worker' in locals():
+            worker.current_process = process
+
+        return process

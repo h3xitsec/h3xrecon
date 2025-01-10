@@ -45,12 +45,7 @@ class Screenshot(ReconPlugin):
         """
         process = None
         try:
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                shell=True
-            )
+            process = await self._create_subprocess_shell(command)
             
             # Read the entire output at once instead of line by line
             stdout, stderr = await process.communicate()
