@@ -438,7 +438,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(u.id) FROM urls u JOIN programs p ON p.id = u.program_id WHERE p.name = '$_program_name'",
+          "rawSql": "SELECT COUNT(wp.id) FROM websites_paths wp JOIN programs p ON p.id = wp.program_id WHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1001,7 +1001,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT u.url, u.title, u.status_code, c.serial as certificate FROM urls u JOIN programs p ON p.id = u.program_id LEFT JOIN certificates c ON u.id = ANY(c.url_id) WHERE p.name = '$_program_name'",
+          "rawSql": "SELECT \n    w.url,\n    w.host,\n    w.port,\n    w.scheme,\n        c.serial as certificate,\n            COUNT(wp.path) as Paths\n            FROM websites w\n            JOIN programs p ON p.id = w.program_id\n            JOIN websites_paths wp ON wp.website_id = w.id\n            LEFT JOIN certificates c ON w.id = ANY(c.website_id)\n            WHERE p.name = '$_program_name'\n            GROUP BY w.url, c.serial, w.host, w.scheme, w.port",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1022,7 +1022,7 @@
           }
         }
       ],
-      "title": "URLs",
+      "title": "Websites",
       "type": "table"
     },
     {
@@ -1392,7 +1392,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT c.subject_cn, c.issuer_org, c.serial, c.valid_date, c.expiry_date, array_length(c.subject_an, 1) as subject_an_count, array_length(c.url_id, 1) as url_count FROM certificates c JOIN programs p ON p.id = c.program_id WHERE p.name = '$_program_name'",
+          "rawSql": "SELECT c.subject_cn, c.issuer_org, c.serial, c.valid_date, c.expiry_date, array_length(c.subject_an, 1) as subject_an_count, array_length(c.website_id, 1) as website_count FROM certificates c JOIN programs p ON p.id = c.program_id WHERE p.name = '$_program_name'",
           "refId": "A",
           "sql": {
             "columns": [

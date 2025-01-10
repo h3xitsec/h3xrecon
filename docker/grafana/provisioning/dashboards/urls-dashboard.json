@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 5,
+  "id": 9,
   "links": [],
   "panels": [
     {
@@ -54,32 +54,7 @@
             ]
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "status_code"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 72
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "content_type"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 162
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 33,
@@ -99,8 +74,7 @@
           ],
           "show": false
         },
-        "showHeader": true,
-        "sortBy": []
+        "showHeader": true
       },
       "pluginVersion": "11.4.0",
       "targets": [
@@ -112,7 +86,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT u.url,u.title,u.webserver,u.content_type,u.status_code,u.final_url,c.subject_cn as certificate FROM urls u JOIN programs p ON p.id = u.program_id LEFT JOIN certificates c ON u.id = ANY(c.url_id) WHERE p.name = '$_program_name'",
+          "rawSql": "SELECT w.url,c.subject_cn as certificate, COUNT(wp.path) as Paths FROM websites w JOIN programs p ON p.id = w.program_id LEFT JOIN certificates c ON w.id = ANY(c.website_id) LEFT JOIN websites_paths wp ON w.id = wp.website_id WHERE p.name = '$_program_name' GROUP BY w.url, c.subject_cn",
           "refId": "A",
           "sql": {
             "columns": [
@@ -133,7 +107,7 @@
           }
         }
       ],
-      "title": "URLs",
+      "title": "Websites",
       "type": "table"
     }
   ],
@@ -169,8 +143,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "URLs Data",
-  "uid": "be6iajp48q48wa",
+  "title": "Websites Data",
+  "uid": "ae9itheqf1zb4f",
   "version": 1,
   "weekStart": ""
 }
