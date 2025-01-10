@@ -4,6 +4,7 @@ from h3xrecon.core.utils import is_valid_url, is_valid_hostname, get_domain_from
 from loguru import logger
 import asyncio
 import inspect
+import os
 
 class ReconPlugin(ABC):
     @property
@@ -113,10 +114,12 @@ class ReconPlugin(ABC):
                 break
             frame = frame.f_back
 
+        # Create process in its own process group
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=os.setsid,  # Create new process group
             **kwargs
         )
 

@@ -467,19 +467,19 @@ class ReconWorker(Worker):
                     try:
                         import signal
                         import os
-                        # Try to kill the entire process group
+                        # Get the process group ID and kill it
                         try:
-                            pgid = os.getpgid(self.current_process.pid)
-                            os.killpg(pgid, signal.SIGKILL)
+                            os.killpg(os.getpgid(self.current_process.pid), signal.SIGKILL)
                         except ProcessLookupError:
                             pass
+                        except Exception as e:
+                            logger.error(f"Error killing process group: {e}")
+                            # Fallback to killing just the process
+                            try:
+                                self.current_process.kill()
+                            except:
+                                pass
                         
-                        # Also try to kill the process directly
-                        try:
-                            self.current_process.kill()
-                        except ProcessLookupError:
-                            pass
-                            
                         await self.current_process.wait()
                     except Exception as e:
                         logger.error(f"Error killing subprocess: {e}")
