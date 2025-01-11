@@ -79,11 +79,11 @@ class DatabaseManager():
             List[re.Pattern]: A list of compiled regex patterns
         """
         async with self._regex_lock:
-            scope_count = await self._fetch_value('SELECT COUNT(*) FROM program_scopes WHERE program_id = $1', program_id)
+            scope_count = await self._fetch_value('SELECT COUNT(*) FROM program_scopes_domains WHERE program_id = $1', program_id)
             if not self._regex_cache[program_id] or len(self._regex_cache[program_id]) < scope_count.data:
                 logger.debug(f"Regex cache for program_id {program_id} is empty or has fewer regexes than scope count. Refreshing...")
                 program_regexes = await self._fetch_records(
-                    'SELECT regex FROM program_scopes WHERE program_id = $1',
+                    'SELECT regex FROM program_scopes_domains WHERE program_id = $1',
                     program_id
                 )
                 for row in program_regexes.data:
