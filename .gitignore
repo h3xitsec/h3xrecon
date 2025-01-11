@@ -61,3 +61,7 @@ docker_swarm/ansible/galaxy_token
 docker_swarm/ansible/vars/oci_credentials.yml
 docker_swarm/ansible/galaxy_cache/api.json
 .ruff_cache/
+.terraform.lock.hcl
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
