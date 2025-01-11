@@ -4,4 +4,6 @@ CREATE TABLE IF NOT EXISTS program_scopes_domains (
     domain VARCHAR(255) NOT NULL,
     wildcard BOOLEAN DEFAULT FALSE,
     regex TEXT DEFAULT NULL
-);2
+);
+
+ALTER TABLE program_scopes_domains ADD CONSTRAINT unique_program_domain_regex UNIQUE (program_id, domain, regex);
