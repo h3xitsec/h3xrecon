@@ -34,7 +34,6 @@ class TestHTTP(ReconPlugin):
             "-threads 50 "
             "-no-color "
             "-json "
-            "-p 80-99,443-449,11443,8443-8449,9000-9003,8080-8089,8801-8810,3000,5000 "
             "-efqdn "
             "-tls-grab "
             "-pa "
@@ -49,6 +48,8 @@ class TestHTTP(ReconPlugin):
             "-favicon "
             "-hash sha256"
         )
+        if self.get_target_type(params.get('target', {})) == "domain":
+            command += " -p 80-99,443-449,11443,8443-8449,9000-9003,8080-8089,8801-8810,3000,5000 "
         logger.debug(f"Command: {command}")
         process = None
         try:
