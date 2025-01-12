@@ -1,0 +1,495 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 11,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "P6A97E0E519E2E292"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "name",
+              "text": "1-StreamName",
+              "type": "string"
+            },
+            {
+              "selector": "state.messages",
+              "text": "2-Messages",
+              "type": "number"
+            },
+            {
+              "selector": "state.consumer_count",
+              "text": "3-Consumers",
+              "type": "number"
+            }
+          ],
+          "computed_columns": [
+            {
+              "selector": "",
+              "text": "Name",
+              "type": "string"
+            }
+          ],
+          "data": "",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "P6A97E0E519E2E292"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "json_options": {
+            "root_is_not_array": false
+          },
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "$.account_details[0].stream_detail[*]",
+          "source": "url",
+          "type": "json",
+          "url": "/jsz?streams=true",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Queue Messages",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 18,
+        "x": 6,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": false,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Ascending",
+        "wrapLogMessage": true
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          },
+          "editorMode": "builder",
+          "expr": "{service_name=~\".*h3xrecon[_-]recon.*\"} !~ `^$` |= `$_recon_filter` |~ `(?P<loglevel>$_log_level)`",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Recon Worker Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "P65570902A02A9609"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.3.0",
+      "repeat": "_status_keys",
+      "repeatDirection": "v",
+      "targets": [
+        {
+          "command": "get",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "P65570902A02A9609"
+          },
+          "keyName": "$_status_keys",
+          "query": "",
+          "refId": "A",
+          "type": "command"
+        }
+      ],
+      "title": "",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 18,
+        "x": 6,
+        "y": 11
+      },
+      "id": 2,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": false,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Ascending",
+        "wrapLogMessage": true
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          },
+          "editorMode": "builder",
+          "expr": "{service_name=~\".*h3xrecon[_-]parsing.*\"} !~ `^$` |= `$_parsing_filter` |~ `(?P<loglevel>$_log_level)`",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Parsing Worker Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 18,
+        "x": 6,
+        "y": 22
+      },
+      "id": 3,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": false,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Ascending",
+        "wrapLogMessage": true
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          },
+          "editorMode": "builder",
+          "expr": "{service_name=~\".*h3xrecon[_-]data.*\"} !~ `^$` |= `$_data_filter` |~ `(?P<loglevel>$_log_level)`",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Data Worker Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 0,
+        "y": 23
+      },
+      "id": 6,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": false,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Ascending",
+        "wrapLogMessage": true
+      },
+      "pluginVersion": "11.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
+          },
+          "editorMode": "builder",
+          "expr": "{service_name=~\".*h3xrecon[_-]data.*\"} |~ `(?P<inserted>INSERTED)`",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "New Assets",
+      "type": "logs"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 40,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "String used to filter recon worker logs",
+        "label": "Recon Filter",
+        "name": "_recon_filter",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "String used to filter parsing worker logs",
+        "label": "Parsing Filter",
+        "name": "_parsing_filter",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "String used to filter data worker logs",
+        "label": "Data Filter",
+        "name": "_data_filter",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "allValue": "|",
+        "current": {
+          "text": "$__all",
+          "value": "$__all"
+        },
+        "description": "Filter all 3 workers based on the log level of lines",
+        "includeAll": true,
+        "label": "Log Level",
+        "name": "_log_level",
+        "options": [
+          {
+            "selected": false,
+            "text": "ERROR",
+            "value": "ERROR"
+          },
+          {
+            "selected": false,
+            "text": "WARNING",
+            "value": "WARNING"
+          },
+          {
+            "selected": false,
+            "text": "INFO",
+            "value": "INFO"
+          },
+          {
+            "selected": false,
+            "text": "SUCCESS",
+            "value": "SUCCESS"
+          }
+        ],
+        "query": "ERROR,WARNING,INFO,SUCCESS",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "redis-datasource",
+          "uid": "P65570902A02A9609"
+        },
+        "definition": "KEYS *",
+        "description": "",
+        "includeAll": true,
+        "label": "Workers",
+        "name": "_status_keys",
+        "options": [],
+        "query": "KEYS *",
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Monitoring",
+  "uid": "de4vkriavjz7kd",
+  "version": 1,
+  "weekStart": ""
+}

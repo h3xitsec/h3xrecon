@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 6,
+  "id": 2,
   "links": [],
   "panels": [
     {
@@ -76,7 +76,7 @@
         },
         "showHeader": true
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -191,7 +191,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -313,7 +313,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -428,7 +428,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -517,7 +517,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -606,7 +606,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -694,7 +694,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -852,7 +852,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -991,7 +991,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -1073,7 +1073,7 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -1243,7 +1243,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -1382,7 +1382,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -1545,7 +1545,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -1555,7 +1555,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n    unnested_tech as Tech,\n        COUNT(DISTINCT host) as URLCount\n        FROM urls u\n        JOIN programs p ON p.id = u.program_id\n        CROSS JOIN UNNEST(tech) AS unnested_tech\n        WHERE u.tech IS NOT NULL AND p.name = '$_program_name'\n        GROUP BY unnested_tech\n        ORDER BY URLCount DESC;",
+          "rawSql": "SELECT \n    unnested_tech as Tech,\n        COUNT(DISTINCT path) as URLCount\n        FROM websites_paths wp\n        JOIN programs p ON p.id = wp.program_id\n        CROSS JOIN UNNEST(techs) AS unnested_tech\n        WHERE wp.techs IS NOT NULL AND p.name = '$_program_name'\n        GROUP BY unnested_tech\n        ORDER BY URLCount DESC;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1684,7 +1684,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
@@ -1835,7 +1835,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.4.0",
+      "pluginVersion": "11.3.0",
       "targets": [
         {
           "datasource": {
