@@ -35,10 +35,10 @@ datasources:
   - name: h3xrecon_database
     type: postgres
     url: pgbouncer:6432
-    database: h3xrecon
-    user: h3xrecon
+    database: ${H3XRECON_DB_NAME}
+    user: ${H3XRECON_DB_USER}
     secureJsonData:
-      password: "h3xrecon"
+      password: ${H3XRECON_DB_PASS}
     jsonData:
       sslmode: "disable" # disable/require/verify-ca/verify-full
       maxOpenConns: 25         # Grafana v5.4+
