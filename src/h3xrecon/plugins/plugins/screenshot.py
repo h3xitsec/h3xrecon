@@ -115,7 +115,7 @@ class Screenshot(ReconPlugin):
                     try:
                         hostname = parsed_website_and_path.get('website').get('url')
                         domain_msg = hostname
-                        await send_domain_data(qm, domain_msg, output_msg.get('program_id', ""))
+                        await send_domain_data(qm, domain_msg, output_msg.get('program_id', ""), execution_id=output_msg.get('execution_id', ""), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
                     except Exception as e:
                         logger.warning(f"Error extracting domain: {str(e)}")
                 except Exception as e:

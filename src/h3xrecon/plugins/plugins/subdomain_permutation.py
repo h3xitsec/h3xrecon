@@ -71,7 +71,9 @@ class SubdomainPermutation(ReconPlugin):
                     "function_name": "subdomain_permutation",
                     "program_id": output_msg.get("program_id"),
                     "params": {"target": output_msg.get("output").get("target")},
-                    "force": True
+                    "force": True,
+                    "execution_id": output_msg.get('execution_id', ""),
+                    "trigger_new_jobs": True
                 }
             )
         else:
@@ -88,12 +90,16 @@ class SubdomainPermutation(ReconPlugin):
                         "function_name": "test_domain_catchall",
                         "program_id": output_msg.get("program_id"),
                         "params": {"target": output_msg.get("output").get("target")},
-                        "force": True
+                        "force": True,
+                        "execution_id": output_msg.get('execution_id', ""),
+                        "trigger_new_jobs": True
                     },{
                         "function_name": "subdomain_permutation",
                         "program_id": output_msg.get("program_id"),
                         "params": {"target": output_msg.get("output").get("target")},
-                        "force": True
+                        "force": True,
+                        "execution_id": output_msg.get('execution_id', ""),
+                        "trigger_new_jobs": True
                     }]
                 )
 
@@ -106,6 +112,8 @@ class SubdomainPermutation(ReconPlugin):
                             "function_name": "resolve_domain",
                             "program_id": output_msg.get("program_id"),
                             "params": {"target": t},
-                            "force": False
+                            "force": False,
+                            "execution_id": output_msg.get('execution_id', ""),
+                            "trigger_new_jobs": True
                         }
                     )

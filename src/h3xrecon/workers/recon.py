@@ -23,7 +23,7 @@ class FunctionExecutionRequest:
     params: Dict[str, Any]
     force: bool = False
     execution_id: Optional[str] = None
-    
+    trigger_new_jobs: bool = True
     def __post_init__(self):
         if self.execution_id is None:
             self.execution_id = str(uuid.uuid4())
@@ -156,7 +156,8 @@ class ReconWorker(Worker):
                 program_id=msg.get('program_id'),
                 function_name=msg.get('function_name'),
                 params=msg.get('params'),
-                force=msg.get("force", False)
+                force=msg.get("force", False),
+                trigger_new_jobs=msg.get('trigger_new_jobs', True)
             )
             logger.debug(f"Created function execution request: {function_execution_request}")
             if not function_execution_request.params.get('extra_params'):
@@ -390,6 +391,7 @@ class ReconWorker(Worker):
                         output_data = {
                             "program_id": function_execution_request.program_id,
                             "execution_id": function_execution_request.execution_id,
+                            "trigger_new_jobs": function_execution_request.trigger_new_jobs,
                             "source": {
                                 "function_name": function_execution_request.function_name,
                                 "params": new_function_execution_request.params
