@@ -159,6 +159,8 @@ class ReconWorker(Worker):
                 force=msg.get("force", False),
                 trigger_new_jobs=msg.get('trigger_new_jobs', True)
             )
+            if msg.get('execution_id', None):
+                function_execution_request.execution_id = msg.get('execution_id')
             logger.debug(f"Created function execution request: {function_execution_request}")
             if not function_execution_request.params.get('extra_params'):
                 function_execution_request.params['extra_params'] = []
@@ -394,7 +396,8 @@ class ReconWorker(Worker):
                             "trigger_new_jobs": function_execution_request.trigger_new_jobs,
                             "source": {
                                 "function_name": function_execution_request.function_name,
-                                "params": new_function_execution_request.params
+                                "params": new_function_execution_request.params,
+                                "force": function_execution_request.force
                             },
                             "output": result,
                             "timestamp": datetime.now().isoformat()

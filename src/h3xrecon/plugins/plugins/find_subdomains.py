@@ -55,22 +55,6 @@ class FindSubdomainsPlugin(ReconPlugin):
             
             yield job
     
-    async def send_job(self, function_name: str, program_id: int, target: str, force: bool):
-        """Send a job to the worker using QueueManager"""
-
-        message = {
-            "force": force,
-            "function_name": function_name,
-            "program_id": program_id,
-            "params": {"target": target}
-        }
-        logger.info(self.config.nats)
-        await self.qm.publish_message(
-            subject="recon.input",
-            stream="RECON_INPUT",
-            message=message
-        )
-    
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         await qm.publish_message(
             subject="recon.input",
@@ -79,6 +63,8 @@ class FindSubdomainsPlugin(ReconPlugin):
                 "function_name": output_msg.get("output").get("function_name"),
                 "program_id": output_msg.get("program_id"),
                 "params": {"target": output_msg.get("output").get("target")},
-                "force": False
+                "force": output_msg.get("source", {}).get("force", False),
+                "trigger_new_jobs": output_msg.get("trigger_new_jobs"),
+                "execution_id": output_msg.get("execution_id")
             }
         )
