@@ -436,7 +436,7 @@ class DataWorker(Worker):
                     if msg_data.get('trigger_new_jobs'):
                         await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
                     else:
-                        logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {msg_data.get('data')} : {msg_data.get('execution_id', 'no execution id')}")
+                        logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {ip} : {msg_data.get('execution_id', 'no execution id')}")
                 else:
                     logger.info(f"UPDATED IP: {ip}")
             except Exception as e:
@@ -506,7 +506,7 @@ class DataWorker(Worker):
                         if msg_data.get('trigger_new_jobs'):
                             await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
                         else:
-                            logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {msg_data.get('data')} : {msg_data.get('execution_id', 'no execution id')}")
+                            logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {domain} : {msg_data.get('execution_id', 'no execution id')}")
                     else:
                         logger.info(f"UPDATED DOMAIN: {domain}")
                 else:

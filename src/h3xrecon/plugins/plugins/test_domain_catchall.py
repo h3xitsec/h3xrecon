@@ -74,7 +74,7 @@ class TestDomainCatchall(ReconPlugin):
         #if await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params',{}).get('target'), output_msg.get('program_id')):
         #if await self.db.check_domain_regex_match(output_msg.get('source', {}).get('params',{}).get('target'), output_msg.get('program_id')):
         #logger.info(f"Domain {output_msg.get('source', {}).get('params',{}).get('target')} is part of program {output_msg.get('program_id')}. Sending to data processor.")
-        await send_domain_data(qm=qm, data=output_msg.get('output', {}).get('domain'), program_id=output_msg.get('program_id'), attributes={"is_catchall": output_msg.get('output', {}).get('is_catchall')})
+        await send_domain_data(qm=qm, data=output_msg.get('output', {}).get('domain'), program_id=output_msg.get('program_id'), attributes={"is_catchall": output_msg.get('output', {}).get('is_catchall')}, execution_id=output_msg.get('execution_id', ""), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
         # msg = {
         #     "program_id": output_msg.get('program_id'),
         #     "data_type": "domain",

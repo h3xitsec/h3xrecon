@@ -62,5 +62,5 @@ class ReverseResolveIP(ReconPlugin):
             "ptr": output_msg.get('output', []).get('domain'),
             "cloud_provider": cloud_provider
         }
-        await send_domain_data(qm=qm, data=output_msg.get('output', []).get('domain'), program_id=output_msg.get('program_id'))
-        await send_ip_data(qm=qm, data=ip_data, program_id=output_msg.get('program_id'), attributes=ip_attributes)
+        await send_domain_data(qm=qm, data=output_msg.get('output', []).get('domain'), program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+        await send_ip_data(qm=qm, data=ip_data, program_id=output_msg.get('program_id'), attributes=ip_attributes, execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
