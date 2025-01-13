@@ -20,6 +20,7 @@ class FunctionExecution:
     execution_id: str
     timestamp: str
     program_id: int
+    trigger_new_jobs: bool
     source: Dict[str, Any]
     output: List[Dict[str, Any]]
 
@@ -208,7 +209,8 @@ class ParsingWorker(Worker):
                 timestamp=msg['timestamp'],
                 program_id=msg['program_id'],
                 source=msg['source'],
-                output=msg.get('data', [])
+                output=msg.get('data', []),
+                trigger_new_jobs=msg['trigger_new_jobs']
             )
             # Log or update function execution in database
             await self.log_or_update_function_execution(msg)

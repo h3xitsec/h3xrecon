@@ -17,13 +17,14 @@ def log_sent_data(func):
         msg = {
             "program_id": program_id,
             "data_type": data_type,
-            "data": [data]
+            "data": [data],
+            "trigger_new_jobs": kwargs.get('trigger_new_jobs', True),
+            "execution_id": kwargs.get('execution_id', None)
         }
         
         # Add attributes if provided
         if kwargs.get('attributes'):
             msg["attributes"] = kwargs['attributes']
-        
         # Publish message
         await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=msg)
         logger.info(f"SENT RECON DATA: {data_type} : {data}")
@@ -32,35 +33,35 @@ def log_sent_data(func):
 
 
 @log_sent_data
-async def send_nuclei_data(qm, data: str, program_id: int):
+async def send_nuclei_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
 
 @log_sent_data
-async def send_domain_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None):
+async def send_domain_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
 
 @log_sent_data
-async def send_ip_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None):
+async def send_ip_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
 
 @log_sent_data
-async def send_service_data(qm, data: str, program_id: int):
+async def send_service_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
 
 @log_sent_data
-async def send_website_data(qm, data: str, program_id: int):
+async def send_website_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
 
 @log_sent_data
-async def send_website_path_data(qm, data: str, program_id: int):
+async def send_website_path_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
 
 @log_sent_data
-async def send_certificate_data(qm, data: str, program_id: int):
+async def send_certificate_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
 
 @log_sent_data
-async def send_screenshot_data(qm, data: str, program_id: int):
+async def send_screenshot_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
 
 def fetch_aws_cidr():

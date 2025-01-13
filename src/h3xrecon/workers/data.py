@@ -433,7 +433,10 @@ class DataWorker(Worker):
                         result={'inserted': True, 'id': result.get('id')},
                         completed_at=datetime.now(timezone.utc)
                     )
-                    await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
+                    if msg_data.get('trigger_new_jobs'):
+                        await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
+                    else:
+                        logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {msg_data.get('data')} : {msg_data.get('execution_id', 'no execution id')}")
                 else:
                     logger.info(f"UPDATED IP: {ip}")
             except Exception as e:
@@ -463,6 +466,7 @@ class DataWorker(Worker):
             )
             if result['inserted']:
                 logger.success(f"INSERTED SCREENSHOT: {screenshot.get('url')}")
+                return screenshot.get('url')
             else:
                 logger.info(f"UPDATED SCREENSHOT: {screenshot.get('url')}")
 
@@ -499,7 +503,10 @@ class DataWorker(Worker):
                 if result.success:
                     if result.data.get('inserted'):
                         logger.success(f"INSERTED DOMAIN: {domain}")
-                        await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
+                        if msg_data.get('trigger_new_jobs'):
+                            await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
+                        else:
+                            logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {msg_data.get('data')} : {msg_data.get('execution_id', 'no execution id')}")
                     else:
                         logger.info(f"UPDATED DOMAIN: {domain}")
                 else:
@@ -544,7 +551,10 @@ class DataWorker(Worker):
                     if result.success:
                         if result.data.get('inserted'):
                             logger.success(f"INSERTED WEBSITE: {url}")
-                            await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website", result=url)
+                            if msg.get('trigger_new_jobs'):
+                                await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website", result=url)
+                            else:
+                                logger.warning(f"JOB TRIGGERING DISABLED: {msg.get('data_type')} : {msg.get('data')} : {msg.get('execution_id', 'no execution id')}")
                         else:
                             logger.info(f"UPDATED WEBSITE: {url}")
                     else:
@@ -592,6 +602,10 @@ class DataWorker(Worker):
                     if result.success:
                         if result.data.get('inserted'):
                             logger.success(f"INSERTED WEBSITE PATH: {d.get('url')}")
+                            if msg.get('trigger_new_jobs'):
+                                await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website_path", result=d.get('url'))
+                            else:
+                                logger.warning(f"JOB TRIGGERING DISABLED: {msg.get('data_type')} : {msg.get('data')} : {msg.get('execution_id', 'no execution id')}")
                         else:
                             logger.info(f"UPDATED WEBSITE PATH: {d.get('url')}")
                     else:
