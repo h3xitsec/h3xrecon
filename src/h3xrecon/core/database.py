@@ -437,15 +437,15 @@ class DatabaseManager():
                 '''INSERT INTO screenshots (program_id, filepath, md5_hash, website_id) VALUES ($1, $2, $3, $4) 
                 ON CONFLICT (program_id, filepath) DO UPDATE 
                 SET md5_hash = CASE 
-                    WHEN screenshots.md5_hash <> $3 THEN $3 
+                    WHEN EXCLUDED.md5_hash IS NOT NULL AND EXCLUDED.md5_hash <> screenshots.md5_hash THEN EXCLUDED.md5_hash 
                     ELSE screenshots.md5_hash 
                 END,
                 updated_at = CASE 
-                    WHEN screenshots.md5_hash <> $3 THEN CURRENT_TIMESTAMP 
+                    WHEN EXCLUDED.md5_hash IS NOT NULL AND EXCLUDED.md5_hash <> screenshots.md5_hash THEN CURRENT_TIMESTAMP 
                     ELSE screenshots.updated_at 
                 END,
                 website_id = CASE 
-                    WHEN screenshots.md5_hash <> $3 THEN $4 
+                    WHEN EXCLUDED.website_id IS NOT NULL THEN EXCLUDED.website_id 
                     ELSE screenshots.website_id 
                 END
                 RETURNING (xmax = 0) AS inserted, id''',
@@ -472,7 +472,6 @@ class DatabaseManager():
         except ValueError as e:
             logger.error(f"Invalid IP address: {ip}")
             raise
-            #return {'inserted': False, 'id': None}
 
         query = """
         INSERT INTO ips (ip, ptr, cloud_provider, program_id)
@@ -486,7 +485,10 @@ class DatabaseManager():
                 WHEN EXCLUDED.cloud_provider IS NOT NULL AND EXCLUDED.cloud_provider <> '' THEN EXCLUDED.cloud_provider
                 ELSE ips.cloud_provider
             END,
-            program_id = EXCLUDED.program_id,
+            program_id = CASE
+                WHEN EXCLUDED.program_id IS NOT NULL THEN EXCLUDED.program_id
+                ELSE ips.program_id
+            END,
             discovered_at = CURRENT_TIMESTAMP
         RETURNING (xmax = 0) AS inserted, id
         """
@@ -578,15 +580,28 @@ class DatabaseManager():
                     INSERT INTO domains (domain, program_id, ips, cnames, is_catchall) 
                     VALUES ($1, $2, $3, $4, $5::boolean) 
                     ON CONFLICT (domain) DO UPDATE 
-                    SET program_id = EXCLUDED.program_id, 
-                        ips = EXCLUDED.ips, 
-                        cnames = EXCLUDED.cnames, 
-                        is_catchall = EXCLUDED.is_catchall::boolean
+                    SET program_id = EXCLUDED.program_id,
+                        ips = CASE
+                            WHEN EXCLUDED.ips IS NOT NULL THEN 
+                                CASE
+                                    WHEN domains.ips IS NULL THEN EXCLUDED.ips
+                                    ELSE (SELECT ARRAY(SELECT DISTINCT UNNEST(domains.ips || EXCLUDED.ips)))
+                                END
+                            ELSE domains.ips
+                        END,
+                        cnames = CASE
+                            WHEN EXCLUDED.cnames IS NOT NULL THEN EXCLUDED.cnames
+                            ELSE domains.cnames
+                        END,
+                        is_catchall = CASE
+                            WHEN EXCLUDED.is_catchall IS NOT NULL THEN EXCLUDED.is_catchall::boolean
+                            ELSE domains.is_catchall
+                        END
                     RETURNING (xmax = 0) AS inserted, is_catchall, id
                     ''',
                     domain.lower(),
                     program_id,
-                    ip_ids,
+                    ip_ids if ip_ids else None,
                     [c.lower() for c in cnames] if cnames else None,
                     is_catchall
                 )
@@ -634,14 +649,35 @@ class DatabaseManager():
                         $1, $2, $3, $4, $5, $6, $7, $8
                     )
                     ON CONFLICT (url) DO UPDATE SET
-                        host = EXCLUDED.host,
-                        port = EXCLUDED.port,
-                        scheme = EXCLUDED.scheme,
-                        techs = EXCLUDED.techs,
-                        program_id = EXCLUDED.program_id,
-                        discovered_at = EXCLUDED.discovered_at,
-                        favicon_hash = EXCLUDED.favicon_hash,
-                        favicon_url = EXCLUDED.favicon_url
+                        host = CASE
+                            WHEN EXCLUDED.host IS NOT NULL THEN EXCLUDED.host
+                            ELSE websites.host
+                        END,
+                        port = CASE
+                            WHEN EXCLUDED.port IS NOT NULL THEN EXCLUDED.port
+                            ELSE websites.port
+                        END,
+                        scheme = CASE
+                            WHEN EXCLUDED.scheme IS NOT NULL THEN EXCLUDED.scheme
+                            ELSE websites.scheme
+                        END,
+                        techs = CASE
+                            WHEN EXCLUDED.techs IS NOT NULL THEN EXCLUDED.techs
+                            ELSE websites.techs
+                        END,
+                        program_id = CASE
+                            WHEN EXCLUDED.program_id IS NOT NULL THEN EXCLUDED.program_id
+                            ELSE websites.program_id
+                        END,
+                        discovered_at = CURRENT_TIMESTAMP,
+                        favicon_hash = CASE
+                            WHEN EXCLUDED.favicon_hash IS NOT NULL THEN EXCLUDED.favicon_hash
+                            ELSE websites.favicon_hash
+                        END,
+                        favicon_url = CASE
+                            WHEN EXCLUDED.favicon_url IS NOT NULL THEN EXCLUDED.favicon_url
+                            ELSE websites.favicon_url
+                        END
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 url.lower(),
@@ -654,11 +690,9 @@ class DatabaseManager():
                 favicon_url
             )
             
-            # Handle nested DbResult objects
             if result.success:
                 return DbResult(success=True, data=result.data[0])
-            else:
-                return DbResult(success=False, error=f"Error inserting or updating website in database: {result.error}")
+            return DbResult(success=False, error=f"Error inserting or updating website in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating website in database: {e}")
             logger.exception(e)
@@ -786,18 +820,49 @@ class DatabaseManager():
                     ON CONFLICT (serial) DO UPDATE SET 
                         website_id = CASE 
                             WHEN $1 = ANY(certificates.website_id) THEN certificates.website_id
-                            ELSE array_append(certificates.website_id, $1)
+                            WHEN EXCLUDED.website_id IS NOT NULL THEN array_append(certificates.website_id, $1)
+                            ELSE certificates.website_id
                         END,
-                        subject_dn = EXCLUDED.subject_dn,
-                        subject_cn = EXCLUDED.subject_cn,
-                        subject_an = EXCLUDED.subject_an,
-                        valid_date = EXCLUDED.valid_date,
-                        expiry_date = EXCLUDED.expiry_date,
-                        issuer_dn = EXCLUDED.issuer_dn,
-                        issuer_cn = EXCLUDED.issuer_cn,
-                        issuer_org = EXCLUDED.issuer_org,
-                        fingerprint_hash = EXCLUDED.fingerprint_hash,
-                        program_id = EXCLUDED.program_id
+                        subject_dn = CASE
+                            WHEN EXCLUDED.subject_dn IS NOT NULL THEN EXCLUDED.subject_dn
+                            ELSE certificates.subject_dn
+                        END,
+                        subject_cn = CASE
+                            WHEN EXCLUDED.subject_cn IS NOT NULL THEN EXCLUDED.subject_cn
+                            ELSE certificates.subject_cn
+                        END,
+                        subject_an = CASE
+                            WHEN EXCLUDED.subject_an IS NOT NULL THEN EXCLUDED.subject_an
+                            ELSE certificates.subject_an
+                        END,
+                        valid_date = CASE
+                            WHEN EXCLUDED.valid_date IS NOT NULL THEN EXCLUDED.valid_date
+                            ELSE certificates.valid_date
+                        END,
+                        expiry_date = CASE
+                            WHEN EXCLUDED.expiry_date IS NOT NULL THEN EXCLUDED.expiry_date
+                            ELSE certificates.expiry_date
+                        END,
+                        issuer_dn = CASE
+                            WHEN EXCLUDED.issuer_dn IS NOT NULL THEN EXCLUDED.issuer_dn
+                            ELSE certificates.issuer_dn
+                        END,
+                        issuer_cn = CASE
+                            WHEN EXCLUDED.issuer_cn IS NOT NULL THEN EXCLUDED.issuer_cn
+                            ELSE certificates.issuer_cn
+                        END,
+                        issuer_org = CASE
+                            WHEN EXCLUDED.issuer_org IS NOT NULL THEN EXCLUDED.issuer_org
+                            ELSE certificates.issuer_org
+                        END,
+                        fingerprint_hash = CASE
+                            WHEN EXCLUDED.fingerprint_hash IS NOT NULL THEN EXCLUDED.fingerprint_hash
+                            ELSE certificates.fingerprint_hash
+                        END,
+                        program_id = CASE
+                            WHEN EXCLUDED.program_id IS NOT NULL THEN EXCLUDED.program_id
+                            ELSE certificates.program_id
+                        END
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 website_id,
@@ -814,16 +879,13 @@ class DatabaseManager():
                 int(program_id)
             )
             
-            # Handle nested DbResult objects
             if result.success:
                 return DbResult(success=True, data=result.data[0])
-            else:
-                return DbResult(success=False, error=f"Error inserting or updating certificate in database: {result.error}")
+            return DbResult(success=False, error=f"Error inserting or updating certificate in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating certificate in database: {e}")
             logger.exception(e)
             return DbResult(success=False, error=f"Error inserting or updating certificate in database: {e}")
-
 
     async def insert_nuclei(self, program_id: int, data: Dict[str, Any]):
         await self.ensure_connected()
@@ -853,15 +915,42 @@ class DatabaseManager():
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
                     )
                     ON CONFLICT (url, template_id) DO UPDATE SET
-                        matched_at = EXCLUDED.matched_at,
-                        type = EXCLUDED.type,
-                        ip = EXCLUDED.ip,
-                        port = EXCLUDED.port,
-                        template_path = EXCLUDED.template_path,
-                        template_name = EXCLUDED.template_name,
-                        severity = EXCLUDED.severity,
-                        matcher_name = EXCLUDED.matcher_name,
-                        program_id = EXCLUDED.program_id
+                        matched_at = CASE
+                            WHEN EXCLUDED.matched_at IS NOT NULL THEN EXCLUDED.matched_at
+                            ELSE nuclei.matched_at
+                        END,
+                        type = CASE
+                            WHEN EXCLUDED.type IS NOT NULL THEN EXCLUDED.type
+                            ELSE nuclei.type
+                        END,
+                        ip = CASE
+                            WHEN EXCLUDED.ip IS NOT NULL THEN EXCLUDED.ip
+                            ELSE nuclei.ip
+                        END,
+                        port = CASE
+                            WHEN EXCLUDED.port IS NOT NULL THEN EXCLUDED.port
+                            ELSE nuclei.port
+                        END,
+                        template_path = CASE
+                            WHEN EXCLUDED.template_path IS NOT NULL THEN EXCLUDED.template_path
+                            ELSE nuclei.template_path
+                        END,
+                        template_name = CASE
+                            WHEN EXCLUDED.template_name IS NOT NULL THEN EXCLUDED.template_name
+                            ELSE nuclei.template_name
+                        END,
+                        severity = CASE
+                            WHEN EXCLUDED.severity IS NOT NULL THEN EXCLUDED.severity
+                            ELSE nuclei.severity
+                        END,
+                        matcher_name = CASE
+                            WHEN EXCLUDED.matcher_name IS NOT NULL THEN EXCLUDED.matcher_name
+                            ELSE nuclei.matcher_name
+                        END,
+                        program_id = CASE
+                            WHEN EXCLUDED.program_id IS NOT NULL THEN EXCLUDED.program_id
+                            ELSE nuclei.program_id
+                        END
                     RETURNING (xmax = 0) AS inserted
                 ''',
                 str(url),

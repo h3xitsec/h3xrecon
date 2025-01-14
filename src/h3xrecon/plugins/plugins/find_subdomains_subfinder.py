@@ -42,7 +42,7 @@ class FindSubdomainsSubfinder(ReconPlugin):
                             break
                             
                         output = line.decode().strip()
-                        if output:
+                        if output and is_valid_hostname(output):
                             logger.debug(f"Output: {output}")
                             yield {"subdomain": [output]}
                     except asyncio.TimeoutError:
