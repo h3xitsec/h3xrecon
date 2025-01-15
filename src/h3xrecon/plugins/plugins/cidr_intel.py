@@ -14,7 +14,10 @@ class CIDRIntel(ReconPlugin):
     @property
     def target_types(self) -> List[str]:
         return ["cidr"]
-
+    @property
+    def timeout(self) -> int:
+        """Timeout in seconds for the plugin execution. Default is 300 seconds (5 minutes)."""
+        return 300
     @property
     def sample_output(self) -> Dict[str, Any]:
         output_data = {

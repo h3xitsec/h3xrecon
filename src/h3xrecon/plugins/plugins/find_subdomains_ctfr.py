@@ -8,7 +8,10 @@ class FindSubdomainsCTFR(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
-    
+    @property
+    def timeout(self) -> int:
+        """Timeout in seconds for the plugin execution. Default is 300 seconds (5 minutes)."""
+        return 120
     @property
     def target_types(self) -> List[str]:
         return ["domain"]

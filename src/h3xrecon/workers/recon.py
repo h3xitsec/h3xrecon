@@ -339,6 +339,10 @@ class ReconWorker(Worker):
                 logger.error(f"Function {function_execution_request.function_name} not found")
                 raise ValueError(f"Function {function_execution_request.function_name} not found")
 
+            # Get timeout from request or plugin default
+            timeout = function_execution_request.params.get('timeout', plugin['timeout'])
+            logger.debug(f"Using timeout of {timeout} seconds for {function_execution_request.function_name}")
+
             # Format input
             if function_execution_request.function_name != "sleep":
                 _fixed_targets = await plugin['format_targets'](function_execution_request.params['target'])
@@ -389,36 +393,70 @@ class ReconWorker(Worker):
                 await self.set_state(WorkerState.BUSY, f"{function_execution_request.function_name}:{new_function_execution_request.params.get('target')}:{function_execution_request.execution_id}")
                 try:
                     # Pass self as worker to the plugin's execute method
-                    async for result in plugin['execute'](new_function_execution_request.params, function_execution_request.program_id, function_execution_request.execution_id, self.db):
-                        output_data = {
-                            "program_id": function_execution_request.program_id,
-                            "execution_id": function_execution_request.execution_id,
-                            "trigger_new_jobs": function_execution_request.trigger_new_jobs,
-                            "source": {
-                                "function_name": function_execution_request.function_name,
-                                "params": new_function_execution_request.params,
-                                "force": function_execution_request.force
-                            },
-                            "output": result,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                        logger.debug(f"OUTPUT DATA: {output_data}")
-                        # Yield the result first
-                        yield output_data
-                        
-                        # Then attempt to publish it
+                    execution = plugin['execute'](new_function_execution_request.params, function_execution_request.program_id, function_execution_request.execution_id, self.db)
+                    while True:
                         try:
-                            await self.qm.publish_message(
-                                subject="parsing.input",
-                                stream="PARSING_INPUT",
-                                message=output_data
+                            result = await asyncio.wait_for(
+                                execution.__anext__(),
+                                timeout=timeout
                             )
-                            logger.info(f"SENT JOB OUTPUT: {function_execution_request.function_name} : {new_function_execution_request.params.get('target')}")
-                            result_count += 1
-                        except StreamUnavailableError as e:
-                            logger.warning(f"Stream locked, dropping message: {str(e)}")
-                            continue  # Continue with the next result
+                            output_data = {
+                                "program_id": function_execution_request.program_id,
+                                "execution_id": function_execution_request.execution_id,
+                                "trigger_new_jobs": function_execution_request.trigger_new_jobs,
+                                "source": {
+                                    "function_name": function_execution_request.function_name,
+                                    "params": new_function_execution_request.params,
+                                    "force": function_execution_request.force
+                                },
+                                "output": result,
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            logger.debug(f"OUTPUT DATA: {output_data}")
+                            # Yield the result first
+                            yield output_data
+                            
+                            # Then attempt to publish it
+                            try:
+                                await self.qm.publish_message(
+                                    subject="parsing.input",
+                                    stream="PARSING_INPUT",
+                                    message=output_data
+                                )
+                                logger.info(f"SENT JOB OUTPUT: {function_execution_request.function_name} : {new_function_execution_request.params.get('target')}")
+                                result_count += 1
+                            except StreamUnavailableError as e:
+                                logger.warning(f"Stream locked, dropping message: {str(e)}")
+                                continue  # Continue with the next result
+                        except StopAsyncIteration:
+                            break
 
+                except asyncio.TimeoutError:
+                    logger.error(f"Function {function_execution_request.function_name} timed out after {timeout} seconds")
+                    # Kill any running subprocess
+                    if self.current_process:
+                        try:
+                            import signal
+                            import os
+                            # Get the process group ID and kill it
+                            try:
+                                os.killpg(os.getpgid(self.current_process.pid), signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                            except Exception as e:
+                                logger.error(f"Error killing process group: {e}")
+                                # Fallback to killing just the process
+                                try:
+                                    self.current_process.kill()
+                                except:
+                                    pass
+                            
+                            await self.current_process.wait()
+                        except Exception as e:
+                            logger.error(f"Error killing subprocess: {e}")
+                        finally:
+                            self.current_process = None
+                    #raise
                 except Exception as e:
                     logger.error(f"Error executing function {function_execution_request.function_name}: {str(e)}")
                     logger.exception(e)
