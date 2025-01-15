@@ -491,7 +491,7 @@ class DataWorker(Worker):
                     attributes = msg_data.get('attributes')
                 
                 # Only update is_catchall if explicitly provided
-                is_catchall = attributes.get('is_catchall', existing_domain.get('is_catchall', False) if existing_domain else False)
+                is_catchall = attributes.get('is_catchall', existing_domain.get('is_catchall', None) if existing_domain else None)
                 
                 result = await self.db.insert_domain(
                     domain=domain, 

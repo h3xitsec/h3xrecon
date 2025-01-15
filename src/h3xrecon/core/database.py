@@ -563,7 +563,7 @@ class DatabaseManager():
             logger.exception(e)
             return DbResult(success=False, error=f"Error inserting or updating service in database: {str(e)}")
     
-    async def insert_domain(self, domain: str, program_id: int, ips: List[str] = None, cnames: List[str] = None, is_catchall: bool = False) -> Dict[str, Any]:
+    async def insert_domain(self, domain: str, program_id: int, ips: List[str] = None, cnames: List[str] = None, is_catchall: bool = None) -> Dict[str, Any]:
         try:
             logger.debug(f"insert_domain called with is_catchall={is_catchall}, type={type(is_catchall)}")
             if await self.check_domain_regex_match(domain, program_id):
