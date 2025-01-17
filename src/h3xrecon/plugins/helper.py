@@ -31,6 +31,9 @@ def log_sent_data(func):
         return msg
     return wrapper
 
+@log_sent_data
+async def send_dns_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
+    pass
 
 @log_sent_data
 async def send_nuclei_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
@@ -63,6 +66,38 @@ async def send_certificate_data(qm, data: str, program_id: int, attributes: Dict
 @log_sent_data
 async def send_screenshot_data(qm, data: str, program_id: int, attributes: Dict[str, Any] = None, execution_id: str = None, trigger_new_jobs: bool = True):
     pass
+
+def parse_dns_record(record_line: str) -> dict:
+    """Parse a single DNS record line and return structured data."""
+    # Skip PSEUDOSECTION lines and empty lines
+    if record_line.startswith(';') or record_line.startswith('\n') or not record_line.strip():
+        return None
+    
+    try:
+        # Split the record line into components
+        parts = record_line.strip().split('\t')
+        # Remove empty strings from parts
+        parts = [p for p in parts if p]
+        
+        if len(parts) < 5:
+            return None
+            
+        # Extract components
+        hostname = parts[0].rstrip('.')  # Remove trailing dot
+        ttl = int(parts[1])
+        record_class = parts[2]
+        record_type = parts[3]
+        value = parts[4]
+        
+        return {
+            "hostname": hostname,
+            "ttl": ttl,
+            "dns_class": record_class,
+            "dns_type": record_type,
+            "value": value
+        }
+    except (IndexError, ValueError):
+        return None
 
 def fetch_aws_cidr():
     url = 'https://ip-ranges.amazonaws.com/ip-ranges.json'

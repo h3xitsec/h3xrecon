@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_ip_data, send_domain_data
+from h3xrecon.plugins.helper import send_ip_data, send_domain_data, parse_dns_record, send_dns_data
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 from loguru import logger
 import asyncio
@@ -40,7 +40,13 @@ class ResolveDomain(ReconPlugin):
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:    
         try:
-            #if await self.db.check_domain_regex_match(output_msg.get('output').get('host'), output_msg.get('program_id')):
+            # Process DNS entries
+            for r in output_msg.get('output', {}).get('all', []):
+                parsed_record = parse_dns_record(r)
+                if parsed_record:
+                    parsed_record['target_domain'] = output_msg.get('source', {}).get('params',{}).get('target')
+                    await send_dns_data(qm=qm, data=parsed_record, program_id=output_msg.get('program_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', False), execution_id=output_msg.get('execution_id'))
+                    logger.debug(f"Sent DNS record {parsed_record} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
             for ip in output_msg.get('output').get('a'):
                 if isinstance(ip, str):
                     try:
