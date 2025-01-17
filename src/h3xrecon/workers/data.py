@@ -408,43 +408,44 @@ class DataWorker(Worker):
         else:
             data = [msg_data.get('data')]
         for record in data:
-            logger.info(f"PROCESSING DNS RECORD: {record}")
-            root_domain = get_base_domain(record.get('target_domain'))
-            result = await self.db._fetch_value(
-                'SELECT id FROM domains WHERE domain = $1',
-                root_domain
-            )
-            domain_id = None
-            if result.success and result.data:
-                domain_id = result.data
-            else:
-                result = await self.db.insert_domain(
-                    domain=record.get('target_domain'),
-                    program_id=msg_data.get('program_id')
+            if record.get('target_domain') in record.get('hostname'):
+                logger.info(f"PROCESSING DNS RECORD: {record}")
+                root_domain = get_base_domain(record.get('target_domain'))
+                result = await self.db._fetch_value(
+                    'SELECT id FROM domains WHERE domain = $1',
+                    root_domain
                 )
+                domain_id = None
+                if result.success and result.data:
+                    domain_id = result.data
+                else:
+                    result = await self.db.insert_domain(
+                        domain=record.get('target_domain'),
+                        program_id=msg_data.get('program_id')
+                    )
+                    if result.success:
+                        domain_id = result.data.get('id')
+                    else:
+                        logger.error(f"Failed to insert domain {record.get('target_domain')}: {result.error}")
+                        continue
+                
+                result = await self.db.insert_dns_record(
+                    domain_id=domain_id,
+                    program_id=msg_data.get('program_id'),
+                    hostname=record.get('hostname'),
+                    ttl=record.get('ttl'),
+                    dns_class=record.get('dns_class'),
+                    dns_type=record.get('dns_type'),
+                    value=record.get('value')
+                )
+                logger.debug(f"result: {result}")
                 if result.success:
-                    domain_id = result.data.get('id')
+                    if result.data.get('inserted') is True:
+                        logger.success(f"INSERTED DNS RECORD: {record.get('hostname')} {record.get('dns_type')} {record.get('value')}")
+                    else:
+                        logger.info(f"UPDATED DNS RECORD: {record.get('hostname')} {record.get('dns_type')} {record.get('value')}")
                 else:
-                    logger.error(f"Failed to insert domain {record.get('target_domain')}: {result.error}")
-                    continue
-            
-            result = await self.db.insert_dns_record(
-                domain_id=domain_id,
-                program_id=msg_data.get('program_id'),
-                hostname=record.get('hostname'),
-                ttl=record.get('ttl'),
-                dns_class=record.get('dns_class'),
-                dns_type=record.get('dns_type'),
-                value=record.get('value')
-            )
-            logger.debug(f"result: {result}")
-            if result.success:
-                if result.data.get('inserted') is True:
-                    logger.success(f"INSERTED DNS RECORD: {record.get('hostname')} {record.get('dns_type')} {record.get('value')}")
-                else:
-                    logger.info(f"UPDATED DNS RECORD: {record.get('hostname')} {record.get('dns_type')} {record.get('value')}")
-            else:
-                logger.error(f"Failed to insert or update DNS record: {result.error}")
+                    logger.error(f"Failed to insert or update DNS record: {result.error}")
 
     async def process_ip(self, msg_data: Dict[str, Any]):
         """Process IP data."""
