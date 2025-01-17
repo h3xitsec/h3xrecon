@@ -805,7 +805,12 @@ class DatabaseManager():
             subject_an = data.get("cert", {}).get('subject_an')
             issuer_dn = data.get("cert", {}).get('issuer_dn')
             issuer_cn = data.get("cert", {}).get('issuer_cn')
-            issuer_org = data.get("cert", {}).get('issuer_org')[0]
+            issuer_org = data.get("cert", {}).get('issuer_org')
+            if issuer_org:
+                issuer_org = issuer_org[0]
+            else:
+                issuer_org = None
+            
             serial = data.get("cert", {}).get('serial')
             fingerprint_hash = data.get("cert", {}).get('fingerprint_hash')
 
