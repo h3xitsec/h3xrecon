@@ -337,6 +337,25 @@ class DatabaseManager():
         ORDER BY p.name;
         """
         return await self._fetch_records(query)
+
+    async def insert_dns_record(self, domain_id: int, program_id: int, hostname: str, ttl: int, dns_class: str, dns_type: str, value: str):
+        try:
+            result = await self._write_records('''
+                INSERT INTO dns_records (domain_id, program_id, hostname, ttl, dns_class, dns_type, value)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (domain_id,hostname, dns_type, value) DO UPDATE
+                SET ttl = EXCLUDED.ttl,
+                    dns_class = EXCLUDED.dns_class
+                RETURNING (xmax = 0) AS inserted, id
+            ''', domain_id, program_id, hostname, ttl, dns_class, dns_type, value)
+            logger.debug(f"DNS record inserted: {result}")
+            if result.success:
+                return DbResult(success=True, data=result.data[0])
+            else:
+                return DbResult(success=False, error=f"Error inserting or updating DNS record in database: {result.error}")
+        except Exception as e:
+            logger.error(f"Error inserting DNS record: {str(e)}")
+            logger.exception(e)
     
     async def insert_out_of_scope_domain(self, domain: str, program_id: int):
         try:
