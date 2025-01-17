@@ -408,6 +408,7 @@ class DataWorker(Worker):
         else:
             data = [msg_data.get('data')]
         for record in data:
+            # Check if the record is a subdomain of the target domain
             if record.get('target_domain') in record.get('hostname'):
                 logger.info(f"PROCESSING DNS RECORD: {record}")
                 root_domain = get_base_domain(record.get('target_domain'))
