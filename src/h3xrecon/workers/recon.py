@@ -148,50 +148,54 @@ class ReconWorker(Worker):
             
             # Set state to busy before processing
             await self.set_state(WorkerState.BUSY, "parsing_incoming_job")
-            msg = json.loads(raw_msg.data.decode())
+            # Deal with batch jobs messages
+            # If the message is a single job, wrap it in a list then loop through it
+            msg_data = json.loads(raw_msg.data.decode())
+            if isinstance(msg_data, dict):
+                msg_data = [msg_data]
             self._last_message_time = datetime.now(timezone.utc)
-
-            # Parse message
-            function_execution_request = FunctionExecutionRequest(
-                program_id=msg.get('program_id'),
-                function_name=msg.get('function_name'),
-                params=msg.get('params'),
-                force=msg.get("force", False),
-                trigger_new_jobs=msg.get('trigger_new_jobs', True)
-            )
-            if msg.get('execution_id', None):
-                function_execution_request.execution_id = msg.get('execution_id')
-            logger.debug(f"Created function execution request: {function_execution_request}")
-            if not function_execution_request.params.get('extra_params'):
-                function_execution_request.params['extra_params'] = []
-            elif not isinstance(function_execution_request.params['extra_params'], list):
-                function_execution_request.params['extra_params'] = []
-
-            # Validation
-            function_valid = await self.validate_function_execution_request(function_execution_request)
-            if not function_valid:
-                logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid function request")
-                await self.db.log_reconworker_operation(
-                    execution_id=function_execution_request.execution_id,
-                    component_id=self.component_id,
-                    function_name=function_execution_request.function_name,
-                    program_id=function_execution_request.program_id,
-                    target=function_execution_request.params.get('target', 'unknown'),
-                    parameters=function_execution_request.params,
-                    status='failed',
-                    error_message='Invalid function request',
-                    completed_at=datetime.now(timezone.utc)
+            for msg in msg_data:
+                # Parse message
+                function_execution_request = FunctionExecutionRequest(
+                    program_id=msg.get('program_id'),
+                    function_name=msg.get('function_name'),
+                    params=msg.get('params'),
+                    force=msg.get("force", False),
+                    trigger_new_jobs=msg.get('trigger_new_jobs', True)
                 )
-                await raw_msg.ack()
-                return
-            
-            # Execution
-            #logger.info(f"STARTING JOB: {function_execution_request.function_name} : {function_execution_request.params.get('target')} : {function_execution_request.execution_id}")
-            self.current_task = asyncio.create_task(
-                self.run_function_execution(function_execution_request)
-            )
-            await self.current_task
-            self.current_task = None  # Reset the current task when done
+                if msg.get('execution_id', None):
+                    function_execution_request.execution_id = msg.get('execution_id')
+                logger.debug(f"Created function execution request: {function_execution_request}")
+                if not function_execution_request.params.get('extra_params'):
+                    function_execution_request.params['extra_params'] = []
+                elif not isinstance(function_execution_request.params['extra_params'], list):
+                    function_execution_request.params['extra_params'] = []
+
+                # Validation
+                function_valid = await self.validate_function_execution_request(function_execution_request)
+                if not function_valid:
+                    logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid function request")
+                    await self.db.log_reconworker_operation(
+                        execution_id=function_execution_request.execution_id,
+                        component_id=self.component_id,
+                        function_name=function_execution_request.function_name,
+                        program_id=function_execution_request.program_id,
+                        target=function_execution_request.params.get('target', 'unknown'),
+                        parameters=function_execution_request.params,
+                        status='failed',
+                        error_message='Invalid function request',
+                        completed_at=datetime.now(timezone.utc)
+                    )
+                    await raw_msg.ack()
+                    return
+                
+                # Execution
+                #logger.info(f"STARTING JOB: {function_execution_request.function_name} : {function_execution_request.params.get('target')} : {function_execution_request.execution_id}")
+                self.current_task = asyncio.create_task(
+                    self.run_function_execution(function_execution_request)
+                )
+                await self.current_task
+                self.current_task = None  # Reset the current task when done
                 
         except Exception as e:
             logger.error(f"Error in message handler: {e}")
