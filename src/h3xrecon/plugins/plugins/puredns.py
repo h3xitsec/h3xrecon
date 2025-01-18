@@ -43,6 +43,19 @@ class PureDNSPlugin(ReconPlugin):
                 --write-massdns /tmp/puredns.txt > /dev/null 2>&1"
         
         elif run_mode == "bruteforce":
+            # check if the target is a catchall domain
+            domain = await db.get_domain(params.get("target"))
+            if domain:
+                if domain.get("is_catchall") is None:
+                    logger.info("SKIPPED JOB: Domain not tested for catchall")
+                    return
+                if domain.get("is_catchall") is True:
+                    logger.info("SKIPPED JOB: Domain is catchall")
+                    return
+            else:
+                logger.info("SKIPPED JOB: Domain unknown")
+                return
+
             puredns_command = f"puredns bruteforce {BRUTEFORCE_WORDLIST} \
                 -d /tmp/puredns_target.txt \
                 --resolvers {RESOLVERS_FILE} \
