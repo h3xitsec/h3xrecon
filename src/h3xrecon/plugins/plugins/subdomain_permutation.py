@@ -33,6 +33,7 @@ class SubdomainPermutation(ReconPlugin):
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
 
         # For testing purposes, use a different permutation file for h3xit.io
+        # TODO: fix this : get the file from job params
         if params.get("target", {}) == "h3xit.io":
             permutation_file = "/app/Worker/files/permutation_test.txt"
         else:

@@ -24,6 +24,7 @@ class FunctionExecutionRequest:
     force: bool = False
     execution_id: Optional[str] = None
     trigger_new_jobs: bool = True
+    mode: Optional[str] = None
     def __post_init__(self):
         if self.execution_id is None:
             self.execution_id = str(uuid.uuid4())

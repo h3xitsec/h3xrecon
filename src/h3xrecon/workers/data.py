@@ -195,6 +195,7 @@ class DataWorker(Worker):
             await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error processing message: {e}")
+            logger.exception(e)
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
