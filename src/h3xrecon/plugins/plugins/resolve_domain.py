@@ -47,7 +47,7 @@ class ResolveDomain(ReconPlugin):
                     parsed_record['target_domain'] = output_msg.get('source', {}).get('params',{}).get('target')
                     await send_dns_data(qm=qm, data=parsed_record, program_id=output_msg.get('program_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', False), execution_id=output_msg.get('execution_id'))
                     logger.debug(f"Sent DNS record {parsed_record} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
-            for ip in output_msg.get('output').get('a'):
+            for ip in output_msg.get('output', {}).get('a', []):
                 if isinstance(ip, str):
                     try:
                         await send_ip_data(qm=qm, data=ip, program_id=output_msg.get('program_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True), execution_id=output_msg.get('execution_id'))
