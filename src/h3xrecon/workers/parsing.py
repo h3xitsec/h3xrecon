@@ -16,7 +16,7 @@ from uuid import UUID
 import uuid
 
 @dataclass
-class FunctionExecution:
+class ReconOutput:
     execution_id: str
     timestamp: str
     program_id: int
@@ -203,8 +203,8 @@ class ParsingWorker(Worker):
                 status='received'
             )
 
-            # Validate the message using FunctionExecution dataclass
-            function_execution = FunctionExecution(
+            # Validate the message using ReconOutput dataclass
+            recon_output = ReconOutput(
                 execution_id=msg['execution_id'],
                 timestamp=msg['timestamp'],
                 program_id=msg['program_id'],
@@ -212,9 +212,10 @@ class ParsingWorker(Worker):
                 output=msg.get('data', []),
                 trigger_new_jobs=msg['trigger_new_jobs']
             )
+            logger.info(f"RECEIVED RECON OUTPUT: {recon_output}")
             # Log or update function execution in database
             await self.log_or_update_function_execution(msg)
-            function_name = function_execution.source.get("function_name")
+            function_name = recon_output.source.get("function_name")
             
             if function_name:
                 processing_result = {}
@@ -294,42 +295,11 @@ class ParsingWorker(Worker):
                 await raw_msg.ack()
             await self.set_state(WorkerState.IDLE)
 
-    # async def log_or_update_function_execution(self, message_data: Dict[str, Any], execution_id: str, timestamp: str):
-    #     """Log or update function execution in the database."""
-    #     try:
-    #         # Extract function parameters
-    #         params = message_data.get("source", {}).get("params", {})
-    #         function_name = message_data.get("source", {}).get("function_name", "unknown")
-    #         target = params.get("target", "unknown")
-            
-    #         logger.debug(f"Original params in parsing worker: {params}")
-            
-    #         # Handle extra_params specially if it exists as a list
-    #         if 'extra_params' in params and isinstance(params['extra_params'], list):
-    #             extra_params_str = f"extra_params={sorted(params['extra_params'])}"
-    #             logger.debug(f"Using list extra_params in parsing worker: {extra_params_str}")
-    #         else:
-    #             # Create a sorted, filtered copy of params excluding certain keys
-    #             extra_params = {k: v for k, v in sorted(params.items()) 
-    #                            if k not in ['target', 'force'] and not k.startswith('--')}
-    #             # Convert extra_params to a string representation
-    #             extra_params_str = ':'.join(f"{k}={v}" for k, v in extra_params.items()) if extra_params else ''
-    #         logger.debug(f"Using dict extra_params in parsing worker: {extra_params_str}")
-            
-    #         # Construct Redis key with extra parameters
-    #         redis_key = f"{function_name}:{target}:{extra_params_str}"
-            
-    #         # Update Redis with the last execution timestamp
-    #         logger.debug(f"Setting Redis key: {redis_key} with timestamp: {timestamp}")
-    #         self.redis_cache.set(redis_key, timestamp)
-    #     except Exception as e:
-    #         logger.error(f"Error logging or updating function execution: {e}")
-
     async def process_function_output(self, msg_data: Dict[str, Any]):
         """Process the output from a function execution."""
         function_name = msg_data.get("source", {}).get("function_name")
         if function_name in self.processor_map:
-            logger.info(f"PROCESSING OUTPUT: '{function_name}':'{msg_data.get('source', {}).get('params', {}).get('target')}'")
+            logger.info(f"PROCESSING RECON OUTPUT: '{function_name}':'{msg_data.get('source', {}).get('params', {}).get('target')}'")
             try:
                 await self.processor_map[function_name](msg_data, self.db, self.qm)
             except Exception as e:

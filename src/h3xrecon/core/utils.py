@@ -113,7 +113,10 @@ def check_last_execution(function_name: str, params: Dict[str, Any], redis_cache
             extra_params_str = f'extra_params={extra_params}'
 
         # Construct Redis key
-        redis_key = f"{function_name}:{params.get('target', 'unknown')}:{extra_params_str}"
+        if params.get('mode', None):
+            redis_key = f"{function_name}:{params.get('target', 'unknown')}:{params.get('mode')}:{extra_params_str}"
+        else:
+            redis_key = f"{function_name}:{params.get('target', 'unknown')}:{extra_params_str}"
         logger.debug(f"Redis key: {redis_key}")
         # Get last execution time from Redis
         last_execution_time = redis_cache.get(redis_key)

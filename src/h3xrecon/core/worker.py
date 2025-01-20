@@ -243,7 +243,11 @@ class Worker:
             logger.debug(f"Using dict extra_params in parsing worker: {extra_params_str}")
             
             # Construct Redis key with extra parameters
-            redis_key = f"{function_name}:{target}:{extra_params_str}"
+            
+            if output_msg.get("source", {}).get("params", {}).get("mode"):
+                redis_key = f"{function_name}:{target}:{output_msg.get('source', {}).get('params', {}).get('mode')}:{extra_params_str}"
+            else:
+                redis_key = f"{function_name}:{target}:{extra_params_str}"
             
             # Update Redis with the last execution timestamp
             logger.debug(f"Setting Redis key: {redis_key} with timestamp: {timestamp}")
