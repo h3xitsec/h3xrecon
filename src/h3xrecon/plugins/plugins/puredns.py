@@ -3,9 +3,9 @@ from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_ip_data, send_domain_data, parse_dns_record, send_dns_data
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 from loguru import logger
-import asyncio
-import json
 import os
+import random
+
 
 FILES_PATH = os.environ.get('H3XRECON_RECON_FILES_PATH')
 RESOLVERS_FILE = f"{FILES_PATH}/resolvers.txt"
@@ -28,124 +28,234 @@ class PureDNSPlugin(ReconPlugin):
     
     async def is_input_valid(self, params: Dict[str, Any]) -> bool:
         return is_valid_hostname(params.get("target", {}))
+    
+    def clean_tmp_files(self):
+        try:
+            os.remove("/tmp/puredns.txt")
+            os.remove("/tmp/puredns_wildcards.txt")
+            os.remove("/tmp/puredns_target.txt")
+            os.remove("/tmp/puredns_massdns.txt")
+        except FileNotFoundError:
+            pass
+    
+    def read_puredns_output(self) -> List[str]:
+        if "output" not in self.__dict__:
+            self.output = {}
+        output_file_map = {
+            "resolved": "/tmp/puredns_massdns.txt",
+            "wildcards": "/tmp/puredns_wildcards.txt",
+        }
 
+        try:
+            for file in output_file_map:
+                with open(output_file_map[file], "r") as f:
+                    if file not in self.output:
+                        self.output[file] = []
+                    self.output[file].extend([line.strip() for line in f.readlines() if line.strip()])
+        except FileNotFoundError:
+            pass
+
+    def _get_resolve_command(self, target: str) -> str:
+        wrapper = f"echo {target} > /tmp/puredns_target.txt"
+        return f"{wrapper} && puredns resolve /tmp/puredns_target.txt \
+                --resolvers {RESOLVERS_FILE} \
+                --resolvers-trusted {RESOLVERS_TRUSTED_FILE} \
+                --write-massdns /tmp/puredns_massdns.txt \
+                --write-wildcards /tmp/puredns_wildcards.txt \
+                --write /tmp/puredns.txt"
+
+    def _get_bruteforce_command(self, target: str) -> str:
+        wrapper = f"echo {target} > /tmp/puredns_target.txt"
+        return f"{wrapper} && puredns bruteforce {self.wordlist} \
+                -d /tmp/puredns_target.txt \
+                --resolvers {RESOLVERS_FILE} \
+                --resolvers-trusted {RESOLVERS_TRUSTED_FILE} \
+                --write-massdns /tmp/puredns_massdns.txt \
+                --write-wildcards /tmp/puredns_wildcards.txt \
+                --write /tmp/puredns.txt"
+
+    def get_output_object(self) -> Dict[str, Any]:
+        output = {"mode": self.run_mode, "wildcards": self.output.get("wildcards", []), "resolved": self.output.get("resolved", [])}
+        # Remove duplicates while preserving order
+        output["wildcards"] = list(dict.fromkeys(output["wildcards"]))
+        output["resolved"] = list(dict.fromkeys(output["resolved"]))
+        return output
+    
+
+    def resolve_target(self, target: str):
+        # First resolve the target with a random number to test if the target is a wildcard domain
+        command = self._get_resolve_command(f"{random.randint(1000000000, 9999999999)}.{target}")
+        self._create_subprocess_shell_sync(command)
+        self.read_puredns_output()
+        # If the target is a wildcard domain, return the output
+        if target in self.output.get("wildcards", []):
+            return
+        # If the target is not a wildcard domain, resolve it again with the actual target
+        command = self._get_resolve_command(target)
+        self._create_subprocess_shell_sync(command)
+        self.read_puredns_output()
+
+    
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         if not params.get("mode"):
             logger.error("Run mode not specified")
             return
-        run_mode = params.get("mode")
-        logger.debug(f"Running {self.name} ({run_mode} mode) on {params.get("target", {})}")
-        puredns_command = None
-        if run_mode == "resolve":
-            puredns_command = f"puredns resolve /tmp/puredns_target.txt \
-                --resolvers {RESOLVERS_FILE} \
-                --resolvers-trusted {RESOLVERS_TRUSTED_FILE} \
-                --write-massdns /tmp/puredns.txt > /dev/null 2>&1"
+        self.output = {}
+        self.run_mode = params.get("mode")
+        self.wordlist = params.get("wordlist", BRUTEFORCE_WORDLIST)
+        target = params.get("target", None)
+        logger.debug(f"Running {self.name} ({self.run_mode} mode) on {target}")
+
         
-        elif run_mode == "bruteforce":
-            # check if the target is a catchall domain
-            domain = await db.get_domain(params.get("target"))
-            if domain:
-                if domain.get("is_catchall") is None:
-                    logger.info("SKIPPED JOB: Domain not tested for catchall")
-                    return
-                if domain.get("is_catchall") is True:
-                    logger.info("SKIPPED JOB: Domain is catchall")
-                    return
+        self.clean_tmp_files()
+
+        if self.run_mode == "bruteforce":
+            domain = await db.get_domain(target)
+            logger.debug(f"Domain: {domain}")
+            if params.get("wordlist"):
+                self.wordlist = params.get("wordlist")
             else:
-                logger.info("SKIPPED JOB: Domain unknown")
+                self.wordlist = BRUTEFORCE_WORDLIST
+            # If the domain is not in the database or if the wildcard status is not known, run resolve mode first
+            if domain is None or domain.get("is_catchall") is None:
+                logger.debug(f"Can't get {target}'s wildcard status, running resolve mode first")
+                self.clean_tmp_files()
+                self.resolve_target(target)
+                if target in self.output.get("wildcards", []):
+                    logger.info(f"JOB SKIPPED: {target} is a wildcard domain")
+                else:
+                    command = self._get_bruteforce_command(target)
+                    self._create_subprocess_shell_sync(command)
+                    self.read_puredns_output()
+            elif domain.get("is_catchall") is True:
+                logger.info(f"JOB SKIPPED: {target} is already known to be a wildcard domain")
                 return
-
-            puredns_command = f"puredns bruteforce {BRUTEFORCE_WORDLIST} \
-                -d /tmp/puredns_target.txt \
-                --resolvers {RESOLVERS_FILE} \
-                --resolvers-trusted {RESOLVERS_TRUSTED_FILE} \
-                --write-massdns /tmp/puredns.txt > /dev/null 2>&1"
+            else:
+                logger.debug(f"Domain {target} is not a wildcard domain, proceeding with bruteforce")
+                self.clean_tmp_files()
+                command = self._get_bruteforce_command(target)
+                self._create_subprocess_shell_sync(command)
+                self.read_puredns_output()
         
-        elif run_mode == "custom":
-            puredns_command = f"puredns \
-                {" ".join(params.get('extra_params', []))} \
-                --write-massdns /tmp/puredns.txt > /dev/null 2>&1"
+
+        elif self.run_mode == "resolve":
+            # Resolve mode
+            self.resolve_target(target)
+            self.read_puredns_output()
+        
         else:
-            raise ValueError(f"Invalid mode: {run_mode}")
-        if not puredns_command:
-            raise ValueError(f"Invalid puredns command")
-        command = f"echo {params.get("target", {})} > /tmp/puredns_target.txt && {puredns_command} && cat /tmp/puredns.txt && rm -f /tmp/puredns_target.txt && rm -f /tmp/puredns.txt"
-        logger.debug(f"Running command: {command}")
-        process = await self._create_subprocess_shell(command)
-        
-        async for output in self._read_subprocess_output(process):
-            try:
-                logger.debug(f"Output: {output}")
-                yield output
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON output: {e}")
+            raise ValueError(f"Invalid mode: {self.run_mode}")
 
-        await process.wait()
+        
+        if len(self.output.get("resolved", [])) > 0 or len(self.output.get("wildcards", [])) > 0:
+            output = self.get_output_object()
+            logger.debug(f"Output: {output}")
+            yield output
+        
+        # Cleanup temporary files
+        self.clean_tmp_files()
+
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:    
         logger.debug(f"Processing output: {output_msg}")
         try:
+            self.run_mode = output_msg.get('source', {}).get('params', {}).get('mode', None)
+            logger.debug(f"Run mode: {self.run_mode}")
             # Get the raw output string
-            raw_output = output_msg.get('output', '')
-            logger.debug(f"Raw output: {raw_output}")
-            if not raw_output:
-                return
+            outputs = output_msg.get('output', {})
+            resolved = outputs.get('resolved', [])
+            logger.debug(f"Resolved: {resolved}")
+            wildcards = outputs.get('wildcards', [])
+            logger.debug(f"Wildcards: {wildcards}")
 
+            # Filter out subdomains of wildcard domains
+            filtered_resolved = []
+            for record in resolved:
+                parts = record.split(' ')
+                if len(parts) != 3:
+                    continue
+                subdomain = parts[0].rstrip('.')
+                is_subdomain_of_wildcard = False
+                for wildcard in wildcards:
+                    wildcard_domain = wildcard.split(' ')[0].rstrip('.')  # Get domain part from wildcard record
+                    if subdomain.endswith(wildcard_domain) and subdomain != wildcard_domain:
+                        is_subdomain_of_wildcard = True
+                        break
+                if not is_subdomain_of_wildcard:
+                    filtered_resolved.append(record)
+            
+            resolved = filtered_resolved
+            logger.debug(f"Filtered resolved (removed wildcard subdomains): {resolved}")
+                
             # Parse the DNS record directly
             # Format example: "promotion.portofantwerp.com. A 188.118.8.16"
-            parts = raw_output.strip().split()
-            if len(parts) < 3:
-                return
-
-            # Remove trailing dot from domain name
-            name = parts[0].rstrip('.')
-            record_type = parts[1]
-            value = parts[2]
-
-            parsed_record = {
-                'hostname': name,
-                'dns_type': record_type,
-                'value': value,
-                'ttl': 0,
-                'dns_class': '?IN?',
-                'target_domain': output_msg.get('source', {}).get('params', {}).get('target')
-            }
-            logger.debug(f"Parsed record: {parsed_record}")
-            # Send DNS record data
-            await send_dns_data(
-                qm=qm,
-                data=parsed_record,
-                program_id=output_msg.get('program_id'),
-                trigger_new_jobs=output_msg.get('trigger_new_jobs', False),
-                execution_id=output_msg.get('execution_id')
-            )
-            logger.debug(f"Sent DNS record {parsed_record} to data processor queue")
-
-            # If it's an A record, send IP data
-            if record_type == 'A':
-                await send_ip_data(
+            for record in resolved:
+                # Split the record into components
+                parts = record.split(' ')
+                if len(parts) != 3:
+                    logger.warning(f"Invalid record format: {record}")
+                    continue
+                    
+                name = parts[0].rstrip('.')  # Remove trailing dot
+                record_type = parts[1]
+                value = parts[2]
+                logger.debug(f"Name: {name}, Record type: {record_type}, Value: {value}")
+                parsed_record = {
+                    'hostname': name,
+                    'dns_type': record_type,
+                    'value': value,
+                    'ttl': 0,
+                    'dns_class': '?IN?',
+                    'target_domain': output_msg.get('source', {}).get('params', {}).get('target')
+                }
+                logger.debug(f"Parsed record: {parsed_record}")
+                # Send DNS record data
+                await send_dns_data(
                     qm=qm,
-                    data=value,
+                    data=parsed_record,
                     program_id=output_msg.get('program_id'),
-                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True),
+                    trigger_new_jobs=output_msg.get('trigger_new_jobs', False),
                     execution_id=output_msg.get('execution_id')
                 )
-                logger.debug(f"Sent IP {value} to data processor queue")
+                logger.debug(f"Sent DNS record {parsed_record} to data processor queue")
 
-            # Send domain data
-            await send_domain_data(
-                qm=qm,
-                data=name,
-                execution_id=output_msg.get('execution_id'),
-                program_id=output_msg.get('program_id'),
-                attributes={
-                    "cnames": [value] if record_type == 'CNAME' else None,
-                    "ips": [value] if record_type == 'A' else None
-                },
-                trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
-            )
-            logger.debug(f"Sent domain {name} to data processor queue")
+                # If it's an A record, send IP data
+                if record_type == 'A':
+                    await send_ip_data(
+                        qm=qm,
+                        data=value,
+                        program_id=output_msg.get('program_id'),
+                        trigger_new_jobs=output_msg.get('trigger_new_jobs', True),
+                        execution_id=output_msg.get('execution_id')
+                    )
+                    logger.debug(f"Sent IP {value} to data processor queue")
+
+                # Send domain data
+                await send_domain_data(
+                    qm=qm,
+                    data=name,
+                    execution_id=output_msg.get('execution_id'),
+                    program_id=output_msg.get('program_id'),
+                    attributes={
+                        "cnames": [value] if record_type == 'CNAME' else None,
+                        "ips": [value] if record_type == 'A' else None,
+                        "is_catchall": True if name in wildcards else False
+                    },
+                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
+                )
+                logger.debug(f"Sent domain {name} to data processor queue")
+                if not name in wildcards:
+                    await send_domain_data(
+                        qm=qm,
+                        data=name,
+                        execution_id=output_msg.get('execution_id'),
+                        attributes={
+                            "is_catchall": True
+                        },
+                        program_id=output_msg.get('program_id'),
+                        trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
+                    )
+                    logger.debug(f"Sent domain {wildcards} to data processor queue")
 
         except Exception as e:
             logger.error(f"Error in process_output: {str(e)}")

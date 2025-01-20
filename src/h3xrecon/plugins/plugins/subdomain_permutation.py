@@ -31,15 +31,10 @@ class SubdomainPermutation(ReconPlugin):
         logger.debug("Checking if the target is a dns catchall domain")
         
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
-
-        # For testing purposes, use a different permutation file for h3xit.io
-        # TODO: fix this : get the file from job params
-        if params.get("target", {}) == "h3xit.io":
-            permutation_file = "/app/Worker/files/permutation_test.txt"
-        else:
-            permutation_file = "/app/Worker/files/permutations.txt"
-        logger.debug(f"Using permutation file {permutation_file}")
-        command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {permutation_file} -depth 1 -numbers 10 -mindup -adv -md"
+        
+        wordlist = params.get("wordlist", "/app/Worker/files/permutations.txt")
+        logger.debug(f"Using permutation file {wordlist}")
+        command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {wordlist} -depth 1 -numbers 10 -mindup -adv -md"
         logger.debug(f"Running command {command}")
         process = await self._create_subprocess_shell(command)
         to_test = []
@@ -83,14 +78,14 @@ class SubdomainPermutation(ReconPlugin):
                 return
             elif is_catchall.data[0].get("is_catchall") is None:
                 logger.info(f"Failed to check if target {output_msg.get('output').get('target')} is a dns catchall domain. Requesting a new check.")
-                logger.debug("Publishing test_domain_catchall message")
+                logger.debug("Publishing puredns message")
                 await qm.publish_message(
                     subject="recon.input",
                     stream="RECON_INPUT",
                     message=[{
-                        "function_name": "test_domain_catchall",
+                        "function_name": "puredns",
                         "program_id": output_msg.get("program_id"),
-                        "params": {"target": output_msg.get("output").get("target")},
+                        "params": {"target": output_msg.get("output").get("target"), "mode": "resolve"},
                         "force": True,
                         "execution_id": output_msg.get('execution_id', ""),
                         "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)

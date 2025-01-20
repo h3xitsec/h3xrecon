@@ -40,9 +40,9 @@ class TestDomainCatchall(ReconPlugin):
         except dns.resolver.NoAnswer:
             return False
         except dns.resolver.Timeout:
-            return False
+            return None
         except Exception:
-            return False
+            return None
     
     async def format_input(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if not is_valid_hostname(params.get("target", {})):
@@ -55,10 +55,10 @@ class TestDomainCatchall(ReconPlugin):
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
         
-        resolver = dns.resolver.Resolver()
-        resolver.nameservers = ['8.8.8.8']  # Using Google's DNS server, you can change this if needed
+        #resolver = dns.resolver.Resolver()
+        #resolver.nameservers = ['8.8.8.8']  # Using Google's DNS server, you can change this if needed
         
-        is_catchall = self.check_catchall(params.get("target", {}), resolver)
+        #is_catchall = self.check_catchall(params.get("target", {}), resolver)
         if params.get("target", {}).startswith("https://") or params.get("target", {}).startswith("http://"):
             domain = parse_url(params.get("target", {})).get("website", {}).get("host", None)
         else:

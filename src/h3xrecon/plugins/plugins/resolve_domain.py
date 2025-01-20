@@ -44,13 +44,33 @@ class ResolveDomainMetaPlugin(ReconPlugin):
             "dnsx",
             "puredns"
         ]
-        # Send jobs for each tool and yield dispatched job information
-        for tool in dns_tools:
-            job = {
-                "function_name": tool,
-                "target": params.get("target", {}),
+        jobs = [
+            {
+                "function_name": "puredns",
+                "params": {
+                    "mode": "resolve",
+                    "target": params.get("target", {})
+                }
+            },
+            {
+                "function_name": "dnsx",
+                "params": {
+                    "target": params.get("target", {})
+                }
+            },
+            {
+                "function_name": "test_domain_catchall",
+                "params": {
+                    "target": params.get("target", {})
+                }
             }
-            
+        ]
+        # Send jobs for each tool and yield dispatched job information
+        for job in jobs:
+            job["params"] = job.get("params", {})
+            job['params']['target'] = params.get("target", {})
+            job['program_name'] = self.program_id
+            job['params']['extra_params'] = job.get("params", {}).get("extra_params", [])
             yield job
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
@@ -60,7 +80,7 @@ class ResolveDomainMetaPlugin(ReconPlugin):
             message={
                 "function_name": output_msg.get("output").get("function_name"),
                 "program_id": output_msg.get("program_id"),
-                "params": {"target": output_msg.get("output").get("target")},
+                "params": output_msg.get("output").get("params"),
                 "force": output_msg.get("source", {}).get("force", False),
                 "trigger_new_jobs": output_msg.get("trigger_new_jobs"),
                 "execution_id": output_msg.get("execution_id")
