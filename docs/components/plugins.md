@@ -80,7 +80,7 @@ class CustomPlugin(ReconPlugin):
         message = {
             "program_id": output_msg.get('program_id'),
             "data_type": "custom_data",
-            "data": output_msg.get('output', {})
+            "data": output_msg.get("data"), {})
         }
         await self.qm.publish_message("data.input", "DATA_INPUT", message)
 ```

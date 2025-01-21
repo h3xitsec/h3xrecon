@@ -182,11 +182,11 @@ def debug_trace(func):
     async def async_wrapper(*args, **kwargs):
         func_name = func.__qualname__
         trunc_args, trunc_kwargs = _truncate_args_kwargs(args, kwargs)
-        logger.debug(f"Entering {func_name} with args={trunc_args}, kwargs={trunc_kwargs}")
+        #logger.debug(f"Entering {func_name} with args={trunc_args}, kwargs={trunc_kwargs}")
         try:
             result = await func(*args, **kwargs)
-            trunc_result = _truncate_value(result)
-            logger.debug(f"Exiting {func_name} with result={trunc_result}")
+            #trunc_result = _truncate_value(result)
+            #logger.debug(f"Exiting {func_name} with result={trunc_result}")
             return result
         except Exception as e:
             logger.debug(f"Exception in {func_name}: {str(e)}")
