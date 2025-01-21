@@ -28,7 +28,7 @@ class CIDRIntel(ReconPlugin):
                 "target": "1.1.0.0/16",
                 "force": False
             },
-            "output": {
+            "data": {
                 "domain": "example.com",
                 "ip": "1.1.1.1"
             },
@@ -62,8 +62,8 @@ class CIDRIntel(ReconPlugin):
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         try:
-            domain = output_msg.get('output').get('domain')
-            ip = output_msg.get('output').get('ip')
+            domain = output_msg.get('data').get('domain')
+            ip = output_msg.get('data').get('ip')
             if isinstance(ip, str):
                 try:
                     await send_ip_data(qm=qm, data=ip, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))

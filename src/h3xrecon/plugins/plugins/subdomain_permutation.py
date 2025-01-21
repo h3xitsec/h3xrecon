@@ -1,5 +1,6 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
+from h3xrecon.plugins.plugins.puredns import PureDNSPlugin
 from h3xrecon.plugins.helper import send_domain_data
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 from loguru import logger
@@ -15,7 +16,6 @@ class SubdomainPermutation(ReconPlugin):
     def target_types(self) -> List[str]:
         return ["domain"]
 
-    
     async def is_input_valid(self, params: Dict[str, Any]) -> bool:
         return is_valid_hostname(params.get("target", {}))
     
@@ -44,7 +44,6 @@ class SubdomainPermutation(ReconPlugin):
             logger.debug(f"Adding {output} to to_test")
         logger.debug(to_test)
         message = {
-            "function_name": "resolve_domain",
             "target": params.get("target", {}),
             "to_test": to_test
         }
@@ -54,11 +53,25 @@ class SubdomainPermutation(ReconPlugin):
         await process.wait()
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        is_catchall = await db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("output").get("target"))
+        puredns = PureDNSPlugin()
+        puredns.resolve_target(output_msg.get("data").get("target"))
+        logger.debug(puredns.output)
+        is_catchall = output_msg.get("data").get("target") in puredns.output.get("wildcards", []) #await db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
+        domain = await db._fetch_records("SELECT * FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
         logger.info(is_catchall)
-        if len(is_catchall.data) == 0:
-            logger.info(f"Domain {output_msg.get('output').get('target')} not found in database. Requesting for insertion.")
-            await send_domain_data(qm=qm, data=output_msg.get("output").get("target"), program_id=output_msg.get("program_id"))
+        if domain is None:
+            logger.info(f"Domain {output_msg.get("data").get('target')} not found in database. Requesting for insertion.")
+            await send_domain_data(
+                    qm=qm,
+                    data=output_msg.get("data").get("target"),
+                    execution_id=output_msg.get('execution_id'),
+                    program_id=output_msg.get('program_id'),
+                    attributes={
+                        "is_catchall": is_catchall
+                    },
+                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
+                )
+            #await send_domain_data(qm=qm, data=output_msg.get("data").get("target"), program_id=output_msg.get("program_id"))
             await asyncio.sleep(5)
             await qm.publish_message(
                 subject="recon.input",
@@ -66,49 +79,27 @@ class SubdomainPermutation(ReconPlugin):
                 message={
                     "function_name": "subdomain_permutation",
                     "program_id": output_msg.get("program_id"),
-                    "params": {"target": output_msg.get("output").get("target")},
+                    "params": {"target": output_msg.get("data").get("target"), "wordlist": output_msg.get("source", {}).get("params", {}).get("wordlist", "/app/Worker/files/permutations.txt")},
                     "force": True,
                     "execution_id": output_msg.get('execution_id', None),
                     "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
                 }
             )
         else:
-            if is_catchall.data[0].get("is_catchall"):
-                logger.info(f"Target {output_msg.get('output').get('target')} is a dns catchall domain, skipping subdomain permutation processing.")
+            if is_catchall:
+                logger.info(f"Target {output_msg.get("data").get('target')} is a wildcard domain, skipping subdomain permutation processing.")
                 return
-            elif is_catchall.data[0].get("is_catchall") is None:
-                logger.info(f"Failed to check if target {output_msg.get('output').get('target')} is a dns catchall domain. Requesting a new check.")
-                logger.debug("Publishing puredns message")
-                await qm.publish_message(
-                    subject="recon.input",
-                    stream="RECON_INPUT",
-                    message=[{
-                        "function_name": "puredns",
-                        "program_id": output_msg.get("program_id"),
-                        "params": {"target": output_msg.get("output").get("target"), "mode": "resolve"},
-                        "force": True,
-                        "execution_id": output_msg.get('execution_id', ""),
-                        "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
-                    },{
-                        "function_name": "subdomain_permutation",
-                        "program_id": output_msg.get("program_id"),
-                        "params": {"target": output_msg.get("output").get("target")},
-                        "force": True,
-                        "execution_id": output_msg.get('execution_id', ""),
-                        "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
-                    }]
-                )
 
             else:
-                for t in output_msg.get("output").get("to_test"):
+                for t in output_msg.get("data").get("to_test"):
                     await qm.publish_message(
                         subject="recon.input",
                         stream="RECON_INPUT",
                         message={
-                            "function_name": "resolve_domain",
+                            "function_name": "puredns",
                             "program_id": output_msg.get("program_id"),
-                            "params": {"target": t},
-                            "force": False,
+                            "params": {"target": t, "mode": "resolve"},
+                            "force": True,
                             "execution_id": output_msg.get('execution_id', ""),
                             "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
                         }

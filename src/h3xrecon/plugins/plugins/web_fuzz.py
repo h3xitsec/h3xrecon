@@ -83,7 +83,7 @@ class WebFuzz(ReconPlugin):
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         logger.debug(f"Incoming message:\nObject Type: {type(output_msg)} : {json.dumps(output_msg)}")
-        data = output_msg.get('output', {})
+        data = output_msg.get("data", {})
         parsed_website_and_path = parse_url(data.get('url', {}))
         website_msg = parsed_website_and_path.get('website', {})
         await send_website_data(qm, website_msg, output_msg.get('program_id', None))

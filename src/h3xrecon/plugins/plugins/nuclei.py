@@ -53,7 +53,7 @@ class Nuclei(ReconPlugin):
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         function_params = asdict(FunctionParams(**params))
         logger.debug(f"Function params: {function_params}")
-        command = f"~/.pdtm/go/bin/nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}"
+        command = f"nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}"
         logger.debug(f"Running command: {command}")
         process = None
         try:
@@ -103,29 +103,29 @@ class Nuclei(ReconPlugin):
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         #if output_msg.get('in_scope', False):
-        if output_msg.get('output', {}).get('type', "") == "http":
-            hostname = urlparse(output_msg.get('output', {}).get('url', "")).hostname            
+        if output_msg.get("data", {}).get('type', "") == "http":
+            hostname = urlparse(output_msg.get("data", {}).get('url', "")).hostname            
         else:
-            hostname = output_msg.get('output', {}).get('url', "").split(":")[0]
+            hostname = output_msg.get("data", {}).get('url', "").split(":")[0]
         await send_domain_data(qm=qm, data=hostname, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
-        await send_ip_data(qm=qm, data=output_msg.get('output', {}).get('ip', ""), program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
-        await send_nuclei_data(qm=qm, data=output_msg.get('output', {}), program_id=output_msg.get('program_id'))
+        await send_ip_data(qm=qm, data=output_msg.get("data", {}).get('ip', ""), program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+        await send_nuclei_data(qm=qm, data=output_msg.get("data", {}), program_id=output_msg.get('program_id'))
         # Find scheme and protocol
         scheme = None
         protocol = None
-        if output_msg.get('output').get('type') == "http":
+        if output_msg.get("data").get('type') == "http":
             protocol = "tcp"
-            scheme = output_msg.get('output').get('scheme', "")
-        elif output_msg.get('output').get('type') == "tcp":
+            scheme = output_msg.get("data").get('scheme', "")
+        elif output_msg.get("data").get('type') == "tcp":
             protocol = "tcp"
-            if output_msg.get('output').get('template_id') == "openssh-detect":
+            if output_msg.get("data").get('template_id') == "openssh-detect":
                 scheme = "ssh"
             else:
-                scheme = output_msg.get('output').get('scheme', "")
+                scheme = output_msg.get("data").get('scheme', "")
         
         service = {
-            "ip": output_msg.get('output', {}).get('ip', ""),
-            "port": int(output_msg.get('output', {}).get('port')) if "port" in output_msg.get('output', {}) else None,
+            "ip": output_msg.get("data", {}).get('ip', ""),
+            "port": int(output_msg.get("data", {}).get('port')) if "port" in output_msg.get("data", {}) else None,
             "protocol": protocol,
             "state": "open",
             "service": scheme,
