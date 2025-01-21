@@ -65,6 +65,6 @@ class FindSubdomainsCTFR(ReconPlugin):
             "program_id": output_msg.get('program_id'),
             "data_type": "domain",
             "in_scope": output_msg.get('in_scope'),
-            "data": output_msg.get('output', {}).get('subdomain')
+            "data": output_msg.get("data", {}).get('subdomain')
         }
         await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=domain_msg)

@@ -113,7 +113,10 @@ def check_last_execution(function_name: str, params: Dict[str, Any], redis_cache
             extra_params_str = f'extra_params={extra_params}'
 
         # Construct Redis key
-        redis_key = f"{function_name}:{params.get('target', 'unknown')}:{extra_params_str}"
+        if params.get('mode', None):
+            redis_key = f"{function_name}:{params.get('target', 'unknown')}:{params.get('mode')}:{extra_params_str}"
+        else:
+            redis_key = f"{function_name}:{params.get('target', 'unknown')}:{extra_params_str}"
         logger.debug(f"Redis key: {redis_key}")
         # Get last execution time from Redis
         last_execution_time = redis_cache.get(redis_key)
@@ -179,11 +182,11 @@ def debug_trace(func):
     async def async_wrapper(*args, **kwargs):
         func_name = func.__qualname__
         trunc_args, trunc_kwargs = _truncate_args_kwargs(args, kwargs)
-        logger.debug(f"Entering {func_name} with args={trunc_args}, kwargs={trunc_kwargs}")
+        #logger.debug(f"Entering {func_name} with args={trunc_args}, kwargs={trunc_kwargs}")
         try:
             result = await func(*args, **kwargs)
-            trunc_result = _truncate_value(result)
-            logger.debug(f"Exiting {func_name} with result={trunc_result}")
+            #trunc_result = _truncate_value(result)
+            #logger.debug(f"Exiting {func_name} with result={trunc_result}")
             return result
         except Exception as e:
             logger.debug(f"Exception in {func_name}: {str(e)}")

@@ -76,7 +76,7 @@ class Screenshot(ReconPlugin):
         SCREENSHOT_STORAGE_PATH = os.path.join(os.getenv('H3XRECON_SCREENSHOT_PATH', '/app/screenshots'), str(output_msg.get('program_id', {})))
         if not os.path.exists(SCREENSHOT_STORAGE_PATH):
             os.makedirs(SCREENSHOT_STORAGE_PATH)
-        base64_archive = output_msg.get('output', {}).get('data')
+        base64_archive = output_msg.get("data", {}).get('data')
         if base64_archive:
             archive_data = base64.b64decode(base64_archive)
             with tempfile.TemporaryDirectory() as temp_dir:

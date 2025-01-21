@@ -32,8 +32,8 @@ class JobConfig:
 # Job mapping configuration
 JOB_MAPPING: Dict[str, List[JobConfig]] = {
     "domain": [
-       JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
-       JobConfig(function_name="resolve_domain", param_map=lambda result: {"target": result.lower()}),
+       #JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="puredns", param_map=lambda result: {"target": result.lower(), "mode": "resolve"}),
        JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
        JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
     ],
@@ -195,6 +195,7 @@ class DataWorker(Worker):
             await raw_msg.ack()
         except Exception as e:
             logger.error(f"Error processing message: {e}")
+            logger.exception(e)
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
@@ -208,8 +209,7 @@ class DataWorker(Worker):
             await raw_msg.nak()
             return
         self._last_message_time = datetime.now(timezone.utc)
-        logger.debug(f"Incoming message:\nObject Type: {type(msg)} : {json.dumps(msg)}")
-        
+        logger.info(f"RECEIVED RECON DATA: {msg}")        
         try:
             if isinstance(msg.get("data"), list):
                 data_item = msg.get("data")[0]
@@ -284,7 +284,8 @@ class DataWorker(Worker):
                     new_job = {
                         "function_name": job.function_name,
                         "program_id": program_id,
-                        "params": job.param_map(result)
+                        "params": job.param_map(result),
+                        "trigger_new_jobs": False
                     }
                     new_job['params'] = await self.plugins[job.function_name]['format_input'](new_job['params'])
 
@@ -371,7 +372,8 @@ class DataWorker(Worker):
         new_job = {
             "function_name": job.function_name,
             "program_id": program_id,
-            "params": job.param_map(result)
+            "params": job.param_map(result),
+            "trigger_new_jobs": False
         }
         logger.debug(f"New job: {new_job}")
         if await self._should_trigger_job(new_job.get('function_name'), new_job.get('params', {})):
@@ -391,6 +393,7 @@ class DataWorker(Worker):
         """
         try:
             time_since_last = check_last_execution(function_name, params, self.redis_cache)
+            logger.debug(f"Time since last execution: {time_since_last}")
             return time_since_last > self.trigger_threshold if time_since_last else True
 
         except Exception as e:
@@ -680,7 +683,7 @@ class DataWorker(Worker):
                     else:
                         hostname = d.get('url', "").split(":")[0]
                     if not hostname:
-                        logger.error(f"Failed to extract hostname from URL: {d.get('output', {}).get('http', {}).get('url', {})}")
+                        logger.error(f"Failed to extract hostname from URL: {d.get('data', {}).get('http', {}).get('url', {})}")
                         continue
                     else:
                         is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))

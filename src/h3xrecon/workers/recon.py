@@ -24,6 +24,7 @@ class FunctionExecutionRequest:
     force: bool = False
     execution_id: Optional[str] = None
     trigger_new_jobs: bool = True
+    mode: Optional[str] = None
     def __post_init__(self):
         if self.execution_id is None:
             self.execution_id = str(uuid.uuid4())
@@ -53,7 +54,7 @@ class ReconWorker(Worker):
 
                 # Clean up existing subscriptions using parent class method
                 await self._cleanup_subscriptions()
-
+                # RECON_INPUT: Job requests queue
                 subscription = await self.qm.subscribe(
                     subject="recon.input",
                     stream="RECON_INPUT",
@@ -75,47 +76,35 @@ class ReconWorker(Worker):
                 self._sub_key = "RECON_INPUT:recon.input:RECON_EXECUTE"
                 logger.debug(f"Subscribed to execute channel : {self._sub_key}")
 
-                # Setup control subscriptions
-                await self.qm.subscribe(
-                    subject="worker.control.all",
-                    stream="WORKER_CONTROL",
-                    durable_name=f"CONTROL_ALL_{self.component_id}",
-                    message_handler=self.control_message_handler,
-                    batch_size=1,
-                    consumer_config={
+                # Base control subscription settings
+                base_control_subscription_settings = {
+                    "message_handler": self.control_message_handler,
+                    "stream": "WORKER_CONTROL",
+                    "batch_size": 1,
+                    "consumer_config": {
                         'ack_policy': AckPolicy.EXPLICIT,
                         'deliver_policy': DeliverPolicy.NEW,
                         'replay_policy': ReplayPolicy.INSTANT
                     },
-                    broadcast=True
+                    "broadcast": True
+                }
+                # Setup control subscriptions
+                await self.qm.subscribe(
+                    subject="worker.control.all",
+                    durable_name=f"CONTROL_ALL_{self.component_id}",
+                    **base_control_subscription_settings
                 )
 
                 await self.qm.subscribe(
                     subject="worker.control.all_recon",
-                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_ALL_RECON_{self.component_id}",
-                    message_handler=self.control_message_handler,
-                    batch_size=1,
-                    consumer_config={
-                        'ack_policy': AckPolicy.EXPLICIT,
-                        'deliver_policy': DeliverPolicy.NEW,
-                        'replay_policy': ReplayPolicy.INSTANT
-                    },
-                    broadcast=True
+                    **base_control_subscription_settings
                 )
 
                 await self.qm.subscribe(
                     subject=f"worker.control.{self.component_id}",
-                    stream="WORKER_CONTROL",
                     durable_name=f"CONTROL_{self.component_id}",
-                    message_handler=self.control_message_handler,
-                    batch_size=1,
-                    consumer_config={
-                        'ack_policy': AckPolicy.EXPLICIT,
-                        'deliver_policy': DeliverPolicy.NEW,
-                        'replay_policy': ReplayPolicy.INSTANT
-                    },
-                    broadcast=True
+                    **base_control_subscription_settings
                 )
 
         except Exception as e:
@@ -128,6 +117,7 @@ class ReconWorker(Worker):
 
     async def message_handler(self, raw_msg):
         """Handle incoming function execution messages."""
+
         # First check if we're already processing or paused
         if self.state == WorkerState.PAUSED:
             await raw_msg.nak()
@@ -144,7 +134,7 @@ class ReconWorker(Worker):
                 await raw_msg.nak()
                 return
 
-            logger.debug(f"{self.component_id} received message: {raw_msg.data}")
+            logger.info(f"RECEIVED JOB REQUEST: {raw_msg.data}")
             
             # Set state to busy before processing
             await self.set_state(WorkerState.BUSY, "parsing_incoming_job")
@@ -165,12 +155,12 @@ class ReconWorker(Worker):
                 )
                 if msg.get('execution_id', None):
                     function_execution_request.execution_id = msg.get('execution_id')
-                logger.debug(f"Created function execution request: {function_execution_request}")
                 if not function_execution_request.params.get('extra_params'):
                     function_execution_request.params['extra_params'] = []
                 elif not isinstance(function_execution_request.params['extra_params'], list):
                     function_execution_request.params['extra_params'] = []
-
+                # Send job request response
+                await self._send_jobrequest_response(function_execution_request.execution_id)
                 # Validation
                 function_valid = await self.validate_function_execution_request(function_execution_request)
                 if not function_valid:
@@ -189,8 +179,7 @@ class ReconWorker(Worker):
                     await raw_msg.ack()
                     return
                 
-                # Execution
-                #logger.info(f"STARTING JOB: {function_execution_request.function_name} : {function_execution_request.params.get('target')} : {function_execution_request.execution_id}")
+                # Job Execution
                 self.current_task = asyncio.create_task(
                     self.run_function_execution(function_execution_request)
                 )
@@ -329,7 +318,18 @@ class ReconWorker(Worker):
             except Exception as e:
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
         logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
-    
+    async def _send_jobrequest_response(self, execution_id: str):
+        """Send control response message."""
+        logger.debug(f"{self.component_id}: Sending job request response with execution_id {execution_id}")
+        await self.qm.publish_message(
+            subject=f"control.response.jobrequest",
+            stream=f"CONTROL_RESPONSE_JOBREQUEST",
+            message={
+                "component_id": self.component_id,
+                "execution_id": execution_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     async def execute_function(self, function_execution_request: FunctionExecutionRequest) -> AsyncGenerator[Dict[str, Any], None]:
         try:
             # Update current execution info
@@ -368,9 +368,6 @@ class ReconWorker(Worker):
                 )
                 # Update current target
                 self.current_target = _target
-                logger.debug(f"UPDATED PARAMS: {new_function_execution_request.params}")
-                logger.debug(f"CURRENT TARGET: {self.current_target}")
-                logger.debug(f"VALIDATING INPUT: {new_function_execution_request.params}")
                 # Validate input
                 if plugin.get('is_valid_input', None):
                     if not await plugin['is_valid_input'](new_function_execution_request.params):
@@ -404,34 +401,35 @@ class ReconWorker(Worker):
                                 execution.__anext__(),
                                 timeout=timeout
                             )
-                            output_data = {
-                                "program_id": function_execution_request.program_id,
-                                "execution_id": function_execution_request.execution_id,
-                                "trigger_new_jobs": function_execution_request.trigger_new_jobs,
-                                "source": {
-                                    "function_name": function_execution_request.function_name,
-                                    "params": new_function_execution_request.params,
-                                    "force": function_execution_request.force
-                                },
-                                "output": result,
-                                "timestamp": datetime.now().isoformat()
-                            }
-                            logger.debug(f"OUTPUT DATA: {output_data}")
-                            # Yield the result first
-                            yield output_data
-                            
-                            # Then attempt to publish it
-                            try:
-                                await self.qm.publish_message(
-                                    subject="parsing.input",
-                                    stream="PARSING_INPUT",
-                                    message=output_data
-                                )
-                                logger.info(f"SENT JOB OUTPUT: {function_execution_request.function_name} : {new_function_execution_request.params.get('target')}")
-                                result_count += 1
-                            except StreamUnavailableError as e:
-                                logger.warning(f"Stream locked, dropping message: {str(e)}")
-                                continue  # Continue with the next result
+                            if result:
+                                output_data = {
+                                    "program_id": function_execution_request.program_id,
+                                    "execution_id": function_execution_request.execution_id,
+                                    "trigger_new_jobs": function_execution_request.trigger_new_jobs,
+                                    "source": {
+                                        "function_name": function_execution_request.function_name,
+                                        "params": new_function_execution_request.params,
+                                        "force": function_execution_request.force
+                                    },
+                                    "data": result,
+                                    "timestamp": datetime.now().isoformat()
+                                }
+                                logger.debug(f"OUTPUT DATA: {output_data}")
+                                # Yield the result first
+                                yield output_data
+                                
+                                # Then attempt to publish it
+                                try:
+                                    await self.qm.publish_message(
+                                        subject="parsing.input",
+                                        stream="PARSING_INPUT",
+                                        message=output_data
+                                    )
+                                    logger.info(f"SENT JOB OUTPUT: {function_execution_request.function_name} : {new_function_execution_request.params.get('target')} : {output_data}")
+                                    result_count += 1
+                                except StreamUnavailableError as e:
+                                    logger.warning(f"Stream locked, dropping message: {str(e)}")
+                                    continue  # Continue with the next result
                         except StopAsyncIteration:
                             break
 

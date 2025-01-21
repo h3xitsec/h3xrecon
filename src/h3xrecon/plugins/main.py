@@ -128,3 +128,42 @@ class ReconPlugin(ABC):
             worker.current_process = process
 
         return process
+
+    def _create_subprocess_shell_sync(self, command: str, **kwargs) -> tuple[str, str]:
+        """Helper method to create and run a subprocess synchronously.
+        
+        Args:
+            command: The shell command to execute
+            **kwargs: Additional arguments to pass to subprocess.run
+            
+        Returns:
+            tuple[str, str]: A tuple containing (stdout, stderr) from the process
+        """
+        import subprocess
+        from h3xrecon.workers.recon import ReconWorker
+        logger.debug(f"COMMAND: {command}")
+        # Get the current frame and walk up the call stack to find the worker instance
+        frame = inspect.currentframe()
+        while frame:
+            if frame.f_locals.get('self') and isinstance(frame.f_locals['self'], ReconWorker):
+                worker = frame.f_locals['self']
+                break
+            frame = frame.f_back
+
+        # Create and run process in its own process group
+        process = subprocess.run(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            preexec_fn=os.setsid,  # Create new process group
+            **kwargs
+        )
+
+        # If we found a worker instance, track the process
+        if frame and 'worker' in locals():
+            worker.current_process = process
+
+        return process.stdout.decode()
+
+    

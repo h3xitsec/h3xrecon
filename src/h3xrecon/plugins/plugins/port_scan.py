@@ -56,13 +56,13 @@ class PortScan(ReconPlugin):
                     service = port.find('service')
                     service_name = service.get('name') if service is not None else None
 
-                    yield [{
+                    yield {
                         "ip": params.get("target", {}),
                         "port": port_id,
                         "protocol": protocol,
                         "state": state,
                         "service": service_name
-                    }]
+                    }
 
             except Exception as e:
                 logger.error(f"Error parsing nmap output: {str(e)}")
@@ -75,10 +75,10 @@ class PortScan(ReconPlugin):
             raise
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        for service in output_msg.get('output', []):
-            await send_service_data(qm=qm, data={
-                "ip": service.get('ip'),
-                "port": int(service.get('port')),
-                "protocol": service.get('protocol'),
-                "program_id": output_msg.get('program_id')
-            }, program_id=output_msg.get('program_id'))
+        service = output_msg.get("data", [])
+        await send_service_data(qm=qm, data={
+            "ip": service.get('ip'),
+            "port": int(service.get('port')),
+            "protocol": service.get('protocol'),
+            "program_id": output_msg.get('program_id')
+        }, program_id=output_msg.get('program_id'))

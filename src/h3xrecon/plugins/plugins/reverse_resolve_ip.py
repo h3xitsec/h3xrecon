@@ -20,7 +20,7 @@ class ReverseResolveIP(ReconPlugin):
     
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get('target', {})}")
-        command = f"echo \"{params.get('target', {})}\" | ~/.pdtm/go/bin/dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'"
+        command = f"echo \"{params.get('target', {})}\" | dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'"
         
         process = None
         try:
@@ -62,8 +62,8 @@ class ReverseResolveIP(ReconPlugin):
             cloud_provider = None
         ip_data = output_msg.get('source', []).get('params', {}).get('target')
         ip_attributes = {
-            "ptr": output_msg.get('output', []).get('domain'),
+            "ptr": output_msg.get("data", []).get('domain'),
             "cloud_provider": cloud_provider
         }
-        await send_domain_data(qm=qm, data=output_msg.get('output', []).get('domain'), program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+        await send_domain_data(qm=qm, data=output_msg.get("data", []).get('domain'), program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
         await send_ip_data(qm=qm, data=ip_data, program_id=output_msg.get('program_id'), attributes=ip_attributes, execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
