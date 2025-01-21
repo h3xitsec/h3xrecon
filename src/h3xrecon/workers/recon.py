@@ -159,7 +159,8 @@ class ReconWorker(Worker):
                     function_execution_request.params['extra_params'] = []
                 elif not isinstance(function_execution_request.params['extra_params'], list):
                     function_execution_request.params['extra_params'] = []
-
+                # Send job request response
+                await self._send_jobrequest_response(function_execution_request.execution_id)
                 # Validation
                 function_valid = await self.validate_function_execution_request(function_execution_request)
                 if not function_valid:
@@ -317,7 +318,18 @@ class ReconWorker(Worker):
             except Exception as e:
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
         logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
-    
+    async def _send_jobrequest_response(self, execution_id: str):
+        """Send control response message."""
+        logger.debug(f"{self.component_id}: Sending job request response with execution_id {execution_id}")
+        await self.qm.publish_message(
+            subject=f"control.response.jobrequest",
+            stream=f"CONTROL_RESPONSE_JOBREQUEST",
+            message={
+                "component_id": self.component_id,
+                "execution_id": execution_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     async def execute_function(self, function_execution_request: FunctionExecutionRequest) -> AsyncGenerator[Dict[str, Any], None]:
         try:
             # Update current execution info
@@ -399,7 +411,7 @@ class ReconWorker(Worker):
                                         "params": new_function_execution_request.params,
                                         "force": function_execution_request.force
                                     },
-                                    "output": result,
+                                    "data": result,
                                     "timestamp": datetime.now().isoformat()
                                 }
                                 logger.debug(f"OUTPUT DATA: {output_data}")

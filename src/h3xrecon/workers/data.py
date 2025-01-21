@@ -34,8 +34,8 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
     "domain": [
        #JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
        JobConfig(function_name="puredns", param_map=lambda result: {"target": result.lower(), "mode": "resolve"}),
-       #JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
-       #JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
+       JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
     ],
     "ip": [
        JobConfig(function_name="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
@@ -683,7 +683,7 @@ class DataWorker(Worker):
                     else:
                         hostname = d.get('url', "").split(":")[0]
                     if not hostname:
-                        logger.error(f"Failed to extract hostname from URL: {d.get('output', {}).get('http', {}).get('url', {})}")
+                        logger.error(f"Failed to extract hostname from URL: {d.get('data', {}).get('http', {}).get('url', {})}")
                         continue
                     else:
                         is_in_scope = await self.db.check_domain_regex_match(hostname, msg.get('program_id'))

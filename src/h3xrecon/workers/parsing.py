@@ -22,7 +22,7 @@ class ReconOutput:
     program_id: int
     trigger_new_jobs: bool
     source: Dict[str, Any]
-    output: List[Dict[str, Any]]
+    data: Dict[str, Any]
 
     def __post_init__(self):
         # Validate execution_id is a valid UUID
@@ -52,9 +52,9 @@ class ReconOutput:
             raise TypeError("source must be a dictionary")
 
         # Validate output is a list
-        if not isinstance(self.output, list):
-            logger.error("output must be a list")
-            raise TypeError("output must be a list")
+        if not isinstance(self.data, dict):
+            logger.error("output must be a dictionary")
+            raise TypeError("output must be a dictionary")
 
 class ParsingWorker(Worker):
     def __init__(self, config: Config = Config()):
@@ -209,7 +209,7 @@ class ParsingWorker(Worker):
                 timestamp=msg['timestamp'],
                 program_id=msg['program_id'],
                 source=msg['source'],
-                output=msg.get('data', []),
+                data=msg.get('data', []),
                 trigger_new_jobs=msg['trigger_new_jobs']
             )
             logger.info(f"RECEIVED RECON OUTPUT: {recon_output}")
