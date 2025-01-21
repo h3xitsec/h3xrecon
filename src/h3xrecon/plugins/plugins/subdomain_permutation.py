@@ -6,7 +6,7 @@ from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 from loguru import logger
 import asyncio
 import os
-
+from datetime import datetime
 class SubdomainPermutation(ReconPlugin):
     @property
     def name(self) -> str:
@@ -41,8 +41,6 @@ class SubdomainPermutation(ReconPlugin):
         async for output in self._read_subprocess_output(process):
             # Prepare the message for reverse_resolve_ip
             to_test.append(output)
-            logger.debug(f"Adding {output} to to_test")
-        logger.debug(to_test)
         message = {
             "target": params.get("target", {}),
             "to_test": to_test
@@ -53,13 +51,20 @@ class SubdomainPermutation(ReconPlugin):
         await process.wait()
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
+        # Use puredns plugin to resolve the target and check if it is a wildcard domain
+        logger.debug(f"Resolving target {output_msg.get('data').get('target')} with puredns")
         puredns = PureDNSPlugin()
         puredns.resolve_target(output_msg.get("data").get("target"))
-        logger.debug(puredns.output)
+        logger.debug(f"Puredns output: {puredns.output}")
+
+        # Get the domain's db entry to check if it is a wildcard domain
         is_catchall = output_msg.get("data").get("target") in puredns.output.get("wildcards", []) #await db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
         domain = await db._fetch_records("SELECT * FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
+        domain = domain.data
         logger.info(is_catchall)
-        if domain is None:
+        print(domain)
+        # If the domain is not in the database, request for insertion via the data worker and wait for insertion
+        if len(domain) == 0:
             logger.info(f"Domain {output_msg.get("data").get('target')} not found in database. Requesting for insertion.")
             await send_domain_data(
                     qm=qm,
@@ -71,8 +76,17 @@ class SubdomainPermutation(ReconPlugin):
                     },
                     trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
                 )
-            #await send_domain_data(qm=qm, data=output_msg.get("data").get("target"), program_id=output_msg.get("program_id"))
-            await asyncio.sleep(5)
+            # Wait for domain to be inserted (max 30 seconds)
+            start_time = datetime.now()
+            while True:
+                domain = await db._fetch_records("SELECT * FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
+                domain = domain.data
+                if len(domain) > 0:
+                    break
+                if (datetime.now() - start_time).total_seconds() > 30:
+                    logger.warning(f"Timeout waiting for domain {output_msg.get('data').get('target')} to be inserted")
+                    break
+                await asyncio.sleep(2)
             await qm.publish_message(
                 subject="recon.input",
                 stream="RECON_INPUT",
