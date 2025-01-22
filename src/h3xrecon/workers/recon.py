@@ -56,7 +56,7 @@ class ReconWorker(Worker):
                 await self._cleanup_subscriptions()
                 # RECON_INPUT: Job requests queue
                 subscription = await self.qm.subscribe(
-                    subject="recon.input",
+                    subject="recon.input.>",
                     stream="RECON_INPUT",
                     durable_name="RECON_EXECUTE",
                     message_handler=self.message_handler,

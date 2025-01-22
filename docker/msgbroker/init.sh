@@ -11,7 +11,7 @@ stream_exists() {
 
 if ! stream_exists "RECON_INPUT"; then
     nats stream add RECON_INPUT \
-        --subjects "recon.input" \
+        --subjects "recon.input.>" \
         --retention limits \
         --max-age 24h \
         --storage file \
