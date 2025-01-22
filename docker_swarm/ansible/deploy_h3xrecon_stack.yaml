@@ -42,6 +42,10 @@
       loop:
         - ghcr.io/h3xitsec/h3xrecon/server:nightly
         - ghcr.io/h3xitsec/h3xrecon/database:nightly
+    - name: Create screenshot directory
+      ansible.builtin.file:
+        path: "{{ h3xrecon_target_directory }}/screenshots"
+        state: directory
     - name: Deploy Docker stack
       ansible.builtin.shell:
         chdir: "{{ h3xrecon_target_directory }}"

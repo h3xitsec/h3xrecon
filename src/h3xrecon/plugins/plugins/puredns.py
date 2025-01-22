@@ -57,7 +57,7 @@ class PureDNSPlugin(ReconPlugin):
                         self.output[file] = []
                     self.output[file].extend([line.strip() for line in f.readlines() if line.strip()])
             except FileNotFoundError:
-                logger.error(f"File not found: {output_file_map[file]}")
+                #logger.error(f"File not found: {output_file_map[file]}")
                 pass
         # Remove duplicates while preserving order
         self.output["wildcards"] = list(dict.fromkeys(self.output["wildcards"]))
