@@ -25,6 +25,7 @@ class FunctionExecutionRequest:
     execution_id: Optional[str] = None
     trigger_new_jobs: bool = True
     mode: Optional[str] = None
+    need_response: Optional[bool] = False
     def __post_init__(self):
         if self.execution_id is None:
             self.execution_id = str(uuid.uuid4())
@@ -151,7 +152,8 @@ class ReconWorker(Worker):
                     function_name=msg.get('function_name'),
                     params=msg.get('params'),
                     force=msg.get("force", False),
-                    trigger_new_jobs=msg.get('trigger_new_jobs', True)
+                    trigger_new_jobs=msg.get('trigger_new_jobs', True),
+                    need_response=msg.get('need_response', False)
                 )
                 if msg.get('execution_id', None):
                     function_execution_request.execution_id = msg.get('execution_id')
@@ -160,7 +162,9 @@ class ReconWorker(Worker):
                 elif not isinstance(function_execution_request.params['extra_params'], list):
                     function_execution_request.params['extra_params'] = []
                 # Send job request response
-                await self._send_jobrequest_response(function_execution_request.execution_id)
+                if function_execution_request.need_response:
+                    logger.debug(f"Sending job request response for {function_execution_request.execution_id}")
+                    await self._send_jobrequest_response(function_execution_request.execution_id)
                 # Validation
                 function_valid = await self.validate_function_execution_request(function_execution_request)
                 if not function_valid:
