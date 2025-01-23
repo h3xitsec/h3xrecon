@@ -49,6 +49,26 @@ if ! stream_exists "WORKER_CONTROL"; then
     echo "Created WORKER_CONTROL stream"
 fi
 
+if ! stream_exists "CONTROL_RESPONSE_JOBREQUEST"; then
+    nats stream add CONTROL_RESPONSE_JOBREQUEST \
+        --subjects "control.response.jobrequest.>" \
+        --retention limits \
+        --max-age 1h \
+        --storage file \
+        --replicas 1 \
+        --discard old \
+        --max-msgs=-1 \
+        --max-msgs-per-subject=-1 \
+        --max-bytes=-1 \
+        --max-msg-size=-1 \
+        --dupe-window 1m \
+        --no-allow-rollup \
+        --no-deny-delete \
+        --no-deny-purge \
+        --server=nats://localhost:4222
+    echo "Created CONTROL_RESPONSE_JOBREQUEST stream"
+fi
+
 if ! stream_exists "WORKER_CONTROL_RESPONSE"; then
     nats stream add WORKER_CONTROL_RESPONSE \
         --subjects "worker.control.response" \

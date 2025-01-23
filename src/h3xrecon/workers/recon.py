@@ -26,6 +26,7 @@ class FunctionExecutionRequest:
     trigger_new_jobs: bool = True
     mode: Optional[str] = None
     need_response: Optional[bool] = False
+    response_id: Optional[str] = None
     def __post_init__(self):
         if self.execution_id is None:
             self.execution_id = str(uuid.uuid4())
@@ -147,24 +148,12 @@ class ReconWorker(Worker):
             self._last_message_time = datetime.now(timezone.utc)
             for msg in msg_data:
                 # Parse message
-                function_execution_request = FunctionExecutionRequest(
-                    program_id=msg.get('program_id'),
-                    function_name=msg.get('function_name'),
-                    params=msg.get('params'),
-                    force=msg.get("force", False),
-                    trigger_new_jobs=msg.get('trigger_new_jobs', True),
-                    need_response=msg.get('need_response', False)
-                )
-                if msg.get('execution_id', None):
-                    function_execution_request.execution_id = msg.get('execution_id')
+                function_execution_request = FunctionExecutionRequest(**msg)
                 if not function_execution_request.params.get('extra_params'):
                     function_execution_request.params['extra_params'] = []
                 elif not isinstance(function_execution_request.params['extra_params'], list):
                     function_execution_request.params['extra_params'] = []
-                # Send job request response
-                if function_execution_request.need_response:
-                    logger.debug(f"Sending job request response for {function_execution_request.execution_id}")
-                    await self._send_jobrequest_response(function_execution_request.execution_id)
+
                 # Validation
                 function_valid = await self.validate_function_execution_request(function_execution_request)
                 if not function_valid:
@@ -187,8 +176,13 @@ class ReconWorker(Worker):
                 self.current_task = asyncio.create_task(
                     self.run_function_execution(function_execution_request)
                 )
+                if function_execution_request.need_response:
+                    await self._send_jobrequest_response(function_execution_request.execution_id, function_execution_request.response_id, status="started")
                 await self.current_task
                 self.current_task = None  # Reset the current task when done
+                if function_execution_request.need_response:
+                    logger.debug(f"Sending job completion response for {function_execution_request.execution_id}")
+                    await self._send_jobrequest_response(function_execution_request.execution_id, function_execution_request.response_id, status="completed")
                 
         except Exception as e:
             logger.error(f"Error in message handler: {e}")
@@ -322,18 +316,21 @@ class ReconWorker(Worker):
             except Exception as e:
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
         logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
-    async def _send_jobrequest_response(self, execution_id: str):
+    
+    async def _send_jobrequest_response(self, execution_id: str, response_id: str, status: str):
         """Send control response message."""
-        logger.debug(f"{self.component_id}: Sending job request response with execution_id {execution_id}")
+        logger.debug(f"{self.component_id}: Sending job request response with execution_id {execution_id} and response_id {response_id}")
         await self.qm.publish_message(
-            subject=f"control.response.jobrequest",
+            subject=f"control.response.jobrequest.{response_id}",
             stream=f"CONTROL_RESPONSE_JOBREQUEST",
             message={
                 "component_id": self.component_id,
                 "execution_id": execution_id,
+                "status": status,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
+
     async def execute_function(self, function_execution_request: FunctionExecutionRequest) -> AsyncGenerator[Dict[str, Any], None]:
         try:
             # Update current execution info
