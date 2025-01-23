@@ -293,7 +293,7 @@ class DataWorker(Worker):
                         try:
                             logger.info(f"JOB TRIGGERED: {job.function_name}")
                             await self.qm.publish_message(
-                                subject="recon.input",
+                                subject=f"recon.input.{job.function_name}",
                                 stream="RECON_INPUT",
                                 message=new_job
                             )
@@ -377,7 +377,7 @@ class DataWorker(Worker):
         }
         logger.debug(f"New job: {new_job}")
         if await self._should_trigger_job(new_job.get('function_name'), new_job.get('params', {})):
-            await self.qm.publish_message(subject="recon.input", stream="RECON_INPUT", message=new_job)
+            await self.qm.publish_message(subject=f"recon.input.{new_job.get('function_name')}", stream="RECON_INPUT", message=new_job)
         else:
             logger.debug(f"Job {job.function_name} not triggered for {result}: already executed recently")
         

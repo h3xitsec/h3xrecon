@@ -88,7 +88,7 @@ class SubdomainPermutation(ReconPlugin):
                     break
                 await asyncio.sleep(2)
             await qm.publish_message(
-                subject="recon.input",
+                subject="recon.input.subdomain_permutation",
                 stream="RECON_INPUT",
                 message={
                     "function_name": "subdomain_permutation",
@@ -107,7 +107,7 @@ class SubdomainPermutation(ReconPlugin):
             else:
                 for t in output_msg.get("data").get("to_test"):
                     await qm.publish_message(
-                        subject="recon.input",
+                        subject="recon.input.puredns",
                         stream="RECON_INPUT",
                         message={
                             "function_name": "puredns",
