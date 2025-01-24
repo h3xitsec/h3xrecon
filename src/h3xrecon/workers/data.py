@@ -459,12 +459,13 @@ class DataWorker(Worker):
             attributes = msg_data.get('attributes')
         for ip in msg_data.get('data'):
             try:
+                ip_data = {'ip': ip, 'attributes': attributes}
                 await self.db.log_dataworker_operation(
                     component_id=self.component_id,
                     data_type='ip',
                     program_id=msg_data.get('program_id'),
                     operation_type='insert',
-                    data={'ip': ip, 'attributes': attributes},
+                    data=ip_data,
                     status='started'
                 )
 
@@ -478,13 +479,13 @@ class DataWorker(Worker):
                 
                 # Log operation result
                 if result.get('inserted'):
-                    logger.success(f"INSERTED IP: {ip}")
+                    logger.success(f"INSERTED IP: {ip_data}")
                     await self.db.log_dataworker_operation(
                         component_id=self.component_id,
                         data_type='ip',
                         program_id=msg_data.get('program_id'),
                         operation_type='insert',
-                        data={'ip': ip, 'attributes': attributes},
+                        data=ip_data,
                         status='completed',
                         result={'inserted': True, 'id': result.get('id')},
                         completed_at=datetime.now(timezone.utc)
@@ -548,23 +549,20 @@ class DataWorker(Worker):
                 
                 # Only update is_catchall if explicitly provided
                 is_catchall = attributes.get('is_catchall', existing_domain.get('is_catchall', None) if existing_domain else None)
-                
+                domain_data = {'domain': domain, 'ips': attributes.get('ips', []), 'cnames': attributes.get('cnames', []), 'is_catchall': is_catchall}
                 result = await self.db.insert_domain(
-                    domain=domain, 
-                    ips=attributes.get('ips', []), 
-                    cnames=attributes.get('cnames', []), 
-                    is_catchall=is_catchall,
+                    **domain_data,
                     program_id=msg_data.get('program_id')
                 )
                 if result.success:
                     if result.data.get('inserted'):
-                        logger.success(f"INSERTED DOMAIN: {domain}")
+                        logger.success(f"INSERTED DOMAIN: {domain_data}")
                         if msg_data.get('trigger_new_jobs'):
                             await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
                         else:
                             logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {domain} : {msg_data.get('execution_id', 'no execution id')}")
                     else:
-                        logger.info(f"UPDATED DOMAIN: {domain}")
+                        logger.info(f"UPDATED DOMAIN: {domain_data}")
                 else:
                     logger.error(f"Failed to insert or update domain: {result.error}")
     

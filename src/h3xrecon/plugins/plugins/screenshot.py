@@ -91,27 +91,27 @@ class Screenshot(ReconPlugin):
                     os.remove(os.path.join(temp_dir, 'output_parser.tar.gz'))
                     screenshots = [file for file in os.listdir(temp_dir) if re.match(r'.*\.png', file)]
                     parsed_website_and_path = parse_url(output_msg.get('source', {}).get('params', {}).get('target'))
-                    logger.debug(f"PARSED WEBSITE AND PATH: {parsed_website_and_path}")
+                    #logger.debug(f"PARSED WEBSITE AND PATH: {parsed_website_and_path}")
                     if not parsed_website_and_path:
                         logger.error(f"Error parsing URL: {output_msg.get('source', {}).get('params', {}).get('target')}")
                         return
                     if parsed_website_and_path.get('website'):
-                        logger.debug(f"Sending website data: {parsed_website_and_path.get('website')}")
+                        #logger.debug(f"Sending website data: {parsed_website_and_path.get('website')}")
                         await send_website_data(qm, parsed_website_and_path.get('website'), output_msg.get('program_id', ""))
                     if parsed_website_and_path.get('website_path'):
-                        logger.debug(f"Sending website path data: {parsed_website_and_path.get('website_path')}")
+                        #logger.debug(f"Sending website path data: {parsed_website_and_path.get('website_path')}")
                         await send_website_path_data(qm, parsed_website_and_path.get('website_path'), output_msg.get('program_id', ""))
                     # Send screenshots
-                    logger.debug(f"Found {len(screenshots)} screenshots")
+                    #logger.debug(f"Found {len(screenshots)} screenshots")
                     for file in screenshots:
-                        logger.debug(f"Moving {file} to {SCREENSHOT_STORAGE_PATH}")
+                        #logger.debug(f"Moving {file} to {SCREENSHOT_STORAGE_PATH}")
                         shutil.move(os.path.join(temp_dir, file), os.path.join(SCREENSHOT_STORAGE_PATH, file))
                         if file.endswith('.png'):
                             screenshot_msg = {
                                 "url": output_msg.get('source', {}).get('params', {}).get('target'),
                                 "path": os.path.join(SCREENSHOT_STORAGE_PATH, file),
                             }
-                            logger.debug(f"Sending screenshot data: {screenshot_msg}")
+                            #logger.debug(f"Sending screenshot data: {screenshot_msg}")
                             await send_screenshot_data(qm, screenshot_msg, output_msg.get('program_id', ""))
                     
                     # Send domain data

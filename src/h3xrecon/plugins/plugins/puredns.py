@@ -214,7 +214,8 @@ class PureDNSPlugin(ReconPlugin):
                     data=parsed_record,
                     program_id=output_msg.get('program_id'),
                     trigger_new_jobs=output_msg.get('trigger_new_jobs', False),
-                    execution_id=output_msg.get('execution_id')
+                    execution_id=output_msg.get('execution_id'),
+                    response_id=output_msg.get('response_id')
                 )
                 logger.debug(f"Sent DNS record {parsed_record} to data processor queue")
 
@@ -225,7 +226,8 @@ class PureDNSPlugin(ReconPlugin):
                         data=value,
                         program_id=output_msg.get('program_id'),
                         trigger_new_jobs=output_msg.get('trigger_new_jobs', True),
-                        execution_id=output_msg.get('execution_id')
+                        execution_id=output_msg.get('execution_id'),
+                        response_id=output_msg.get('response_id')
                     )
                     logger.debug(f"Sent IP {value} to data processor queue")
 
@@ -234,6 +236,7 @@ class PureDNSPlugin(ReconPlugin):
                     qm=qm,
                     data=name,
                     execution_id=output_msg.get('execution_id'),
+                    response_id=output_msg.get('response_id'),
                     program_id=output_msg.get('program_id'),
                     attributes={
                         "cnames": [value] if record_type == 'CNAME' else None,

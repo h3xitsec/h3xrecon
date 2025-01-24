@@ -40,7 +40,7 @@ class SubdomainPermutation(ReconPlugin):
         to_test = []
         async for output in self._read_subprocess_output(process):
             # Prepare the message for reverse_resolve_ip
-            to_test.append(output)
+            to_test.append(output)  
         message = {
             "target": params.get("target", {}),
             "to_test": to_test
@@ -61,8 +61,6 @@ class SubdomainPermutation(ReconPlugin):
         is_catchall = output_msg.get("data").get("target") in puredns.output.get("wildcards", []) #await db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
         domain = await db._fetch_records("SELECT * FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
         domain = domain.data
-        logger.info(is_catchall)
-        print(domain)
         # If the domain is not in the database, request for insertion via the data worker and wait for insertion
         if len(domain) == 0:
             logger.info(f"Domain {output_msg.get("data").get('target')} not found in database. Requesting for insertion.")
@@ -79,9 +77,11 @@ class SubdomainPermutation(ReconPlugin):
             # Wait for domain to be inserted (max 30 seconds)
             start_time = datetime.now()
             while True:
+                logger.debug(f"Checking if domain {output_msg.get('data').get('target')} is inserted in database")
                 domain = await db._fetch_records("SELECT * FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
                 domain = domain.data
                 if len(domain) > 0:
+                    logger.debug(f"Domain {output_msg.get('data').get('target')} inserted in database")
                     break
                 if (datetime.now() - start_time).total_seconds() > 30:
                     logger.warning(f"Timeout waiting for domain {output_msg.get('data').get('target')} to be inserted")
@@ -101,10 +101,11 @@ class SubdomainPermutation(ReconPlugin):
             )
         else:
             if is_catchall:
-                logger.info(f"Target {output_msg.get("data").get('target')} is a wildcard domain, skipping subdomain permutation processing.")
+                logger.info(f"JOB SKIPPED: Target {output_msg.get("data").get('target')} is a wildcard domain, skipping subdomain permutation processing.")
                 return
 
             else:
+                logger.info(f"TRIGGERING JOB: puredns for {len(output_msg.get("data").get("to_test"))} subdomains to test")
                 for t in output_msg.get("data").get("to_test"):
                     await qm.publish_message(
                         subject="recon.input.puredns",
@@ -113,6 +114,20 @@ class SubdomainPermutation(ReconPlugin):
                             "function_name": "puredns",
                             "program_id": output_msg.get("program_id"),
                             "params": {"target": t, "mode": "resolve"},
+                            "force": True,
+                            "execution_id": output_msg.get('execution_id', ""),
+                            "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
+                        }
+                    )
+                logger.info(f"TRIGGERING JOBS: dnsx for {len(output_msg.get("data").get("to_test"))} subdomains to test")
+                for t in output_msg.get("data").get("to_test"):
+                    await qm.publish_message(
+                        subject="recon.input.dnsx",
+                        stream="RECON_INPUT",
+                        message={
+                            "function_name": "dnsx",
+                            "program_id": output_msg.get("program_id"),
+                            "params": {"target": t},
                             "force": True,
                             "execution_id": output_msg.get('execution_id', ""),
                             "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)

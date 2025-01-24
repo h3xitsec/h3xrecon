@@ -55,6 +55,7 @@ class FindSubdomainsSubfinder(ReconPlugin):
                 raise
                 
             await process.wait()
+            
                 
         except Exception as e:
             logger.error(f"Error during {self.name} execution: {str(e)}")

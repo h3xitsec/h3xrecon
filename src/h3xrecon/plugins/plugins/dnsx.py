@@ -49,13 +49,14 @@ class DnsxPlugin(ReconPlugin):
                                         data=parsed_record,
                                         program_id=output_msg.get('program_id'),
                                         trigger_new_jobs=output_msg.get('trigger_new_jobs', False),
-                                        execution_id=output_msg.get('execution_id')
+                                        execution_id=output_msg.get('execution_id'),
+                                        response_id = None
                                     )
                     logger.debug(f"Sent DNS record {parsed_record} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
             for ip in output_msg.get('data', {}).get('a', []):
                 if isinstance(ip, str):
                     try:
-                        await send_ip_data(qm=qm, data=ip, program_id=output_msg.get('program_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True), execution_id=output_msg.get('execution_id'))
+                        await send_ip_data(qm=qm, data=ip, program_id=output_msg.get('program_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True), execution_id=output_msg.get('execution_id'), response_id=None)
                         logger.debug(f"Sent IP {ip} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
                     except Exception as e:
                         logger.error(f"Error processing IP {ip}: {str(e)}")
@@ -64,7 +65,7 @@ class DnsxPlugin(ReconPlugin):
             if output_msg.get('data', {}).get('ns'):
                 for ns in output_msg.get('data', {}).get('ns', []):
                     try:
-                        await send_domain_data(qm=qm, data=ns, program_id=output_msg.get('program_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True), execution_id=output_msg.get('execution_id'))
+                        await send_domain_data(qm=qm, data=ns, program_id=output_msg.get('program_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True), execution_id=output_msg.get('execution_id'), response_id=None)
                         logger.debug(f"Sent NS {ns} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
                     except Exception as e:
                         logger.error(f"Error processing NS {ns}: {str(e)}")
@@ -75,7 +76,8 @@ class DnsxPlugin(ReconPlugin):
                 execution_id=output_msg.get('execution_id'),    
                 program_id=output_msg.get('program_id'),
                 attributes={"cnames": output_msg.get('data', {}).get('cnames'), "ips": output_msg.get('data', {}).get('a')},
-                trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
+                trigger_new_jobs=output_msg.get('trigger_new_jobs', True),
+                response_id=None
             )
             logger.debug(f"Sent domain {output_msg.get('source', {}).get('params', {}).get('target')} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
             #else:
