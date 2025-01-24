@@ -25,7 +25,6 @@ class FunctionExecutionRequest:
     execution_id: Optional[str] = None
     trigger_new_jobs: bool = True
     mode: Optional[str] = None
-    need_response: Optional[bool] = False
     response_id: Optional[str] = None
     def __post_init__(self):
         if self.execution_id is None:
@@ -176,11 +175,11 @@ class ReconWorker(Worker):
                 self.current_task = asyncio.create_task(
                     self.run_function_execution(function_execution_request)
                 )
-                if function_execution_request.need_response:
+                if function_execution_request.response_id:
                     await self._send_jobrequest_response(function_execution_request.execution_id, function_execution_request.response_id, status="started")
                 await self.current_task
                 self.current_task = None  # Reset the current task when done
-                if function_execution_request.need_response:
+                if function_execution_request.response_id:
                     logger.debug(f"Sending job completion response for {function_execution_request.execution_id}")
                     await self._send_jobrequest_response(function_execution_request.execution_id, function_execution_request.response_id, status="completed")
                 
