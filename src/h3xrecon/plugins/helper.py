@@ -19,7 +19,8 @@ def log_sent_data(func):
             "data_type": data_type,
             "data": [data],
             "trigger_new_jobs": kwargs.get('trigger_new_jobs', True),
-            "execution_id": kwargs.get('execution_id', None)
+            "execution_id": kwargs.get('execution_id', None),
+            "response_id": kwargs.get('response_id', None)
         }
         
         # Add attributes if provided
@@ -27,7 +28,7 @@ def log_sent_data(func):
             msg["attributes"] = kwargs['attributes']
         # Publish message
         await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=msg)
-        logger.info(f"SENT RECON DATA: {data_type} : {data}")
+        logger.info(f"SENT RECON DATA: {data_type} : {data} : {msg.get('attributes', "No Attributes")}")
         return msg
     return wrapper
 

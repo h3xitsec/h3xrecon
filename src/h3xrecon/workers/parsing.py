@@ -23,7 +23,7 @@ class ReconOutput:
     trigger_new_jobs: bool
     source: Dict[str, Any]
     data: Dict[str, Any]
-
+    response_id: str
     def __post_init__(self):
         # Validate execution_id is a valid UUID
         try:
@@ -210,7 +210,8 @@ class ParsingWorker(Worker):
                 program_id=msg['program_id'],
                 source=msg['source'],
                 data=msg.get('data', []),
-                trigger_new_jobs=msg['trigger_new_jobs']
+                trigger_new_jobs=msg['trigger_new_jobs'],
+                response_id=msg['response_id']
             )
             logger.info(f"RECEIVED RECON OUTPUT: {recon_output}")
             # Log or update function execution in database
@@ -223,6 +224,9 @@ class ParsingWorker(Worker):
                 try:
                     self.current_task = asyncio.create_task(self.process_function_output(msg))
                     await self.current_task
+                    if recon_output.response_id:
+                        logger.debug(f"Sending job completion response for {recon_output.execution_id}")
+                        await self._send_jobrequest_response(recon_output.execution_id, recon_output.response_id, status="completed")
                     processing_result['status'] = 'success'
                     actions_taken.append(f"Processed output from {function_name}")
                     # Log successful processing

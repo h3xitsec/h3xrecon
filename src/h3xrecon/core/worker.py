@@ -440,7 +440,19 @@ class Worker:
                 "data": data
             }
         )
-
+    async def _send_jobrequest_response(self, execution_id: str, response_id: str, status: str):
+        """Send control response message."""
+        logger.debug(f"{self.component_id}: Sending job request response with execution_id {execution_id} and response_id {response_id}")
+        await self.qm.publish_message(
+            subject=f"control.response.jobrequest.{response_id}",
+            stream=f"CONTROL_RESPONSE_JOBREQUEST",
+            message={
+                "component_id": self.component_id,
+                "execution_id": execution_id,
+                "status": status,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     async def generate_report(self) -> Dict[str, Any]:
         """Generate a comprehensive report of the component's current state."""
         try:

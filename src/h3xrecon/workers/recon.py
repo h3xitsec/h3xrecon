@@ -179,9 +179,6 @@ class ReconWorker(Worker):
                     await self._send_jobrequest_response(function_execution_request.execution_id, function_execution_request.response_id, status="started")
                 await self.current_task
                 self.current_task = None  # Reset the current task when done
-                if function_execution_request.response_id:
-                    logger.debug(f"Sending job completion response for {function_execution_request.execution_id}")
-                    await self._send_jobrequest_response(function_execution_request.execution_id, function_execution_request.response_id, status="completed")
                 
         except Exception as e:
             logger.error(f"Error in message handler: {e}")
@@ -315,20 +312,6 @@ class ReconWorker(Worker):
             except Exception as e:
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
         logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
-    
-    async def _send_jobrequest_response(self, execution_id: str, response_id: str, status: str):
-        """Send control response message."""
-        logger.debug(f"{self.component_id}: Sending job request response with execution_id {execution_id} and response_id {response_id}")
-        await self.qm.publish_message(
-            subject=f"control.response.jobrequest.{response_id}",
-            stream=f"CONTROL_RESPONSE_JOBREQUEST",
-            message={
-                "component_id": self.component_id,
-                "execution_id": execution_id,
-                "status": status,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-        )
 
     async def execute_function(self, function_execution_request: FunctionExecutionRequest) -> AsyncGenerator[Dict[str, Any], None]:
         try:
@@ -406,6 +389,7 @@ class ReconWorker(Worker):
                                     "program_id": function_execution_request.program_id,
                                     "execution_id": function_execution_request.execution_id,
                                     "trigger_new_jobs": function_execution_request.trigger_new_jobs,
+                                    "response_id": function_execution_request.response_id,
                                     "source": {
                                         "function_name": function_execution_request.function_name,
                                         "params": new_function_execution_request.params,
