@@ -204,7 +204,6 @@ class QueueManager:
     @debug_trace
     async def ensure_connected(self) -> None:
         """Ensure NATS connection is established."""
-        logger.debug("Ensuring NATS connection is established")
         if self.nc is None or not self.nc.is_connected:
             try:
                 await self.connect()

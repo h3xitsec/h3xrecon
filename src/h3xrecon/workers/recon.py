@@ -389,7 +389,6 @@ class ReconWorker(Worker):
                                     "program_id": function_execution_request.program_id,
                                     "execution_id": function_execution_request.execution_id,
                                     "trigger_new_jobs": function_execution_request.trigger_new_jobs,
-                                    "response_id": function_execution_request.response_id,
                                     "source": {
                                         "function_name": function_execution_request.function_name,
                                         "params": new_function_execution_request.params,
@@ -416,7 +415,26 @@ class ReconWorker(Worker):
                                     continue  # Continue with the next result
                         except StopAsyncIteration:
                             break
-
+                    # Send end of job message
+                    message = {
+                        "program_id": function_execution_request.program_id,
+                        "execution_id": function_execution_request.execution_id,
+                        "trigger_new_jobs": function_execution_request.trigger_new_jobs,
+                        "response_id": function_execution_request.response_id,
+                        "source": {
+                            "function_name": function_execution_request.function_name,
+                            "params": new_function_execution_request.params,
+                            "force": function_execution_request.force
+                        },
+                        "data": {},
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    logger.debug(f"Sending end of job message: {message}")
+                    await self.qm.publish_message(
+                        subject=f"parsing.input",
+                        stream="PARSING_INPUT",
+                        message=message
+                    )
                 except asyncio.TimeoutError:
                     logger.error(f"Function {function_execution_request.function_name} timed out after {timeout} seconds")
                     # Kill any running subprocess
