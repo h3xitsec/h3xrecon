@@ -21,31 +21,27 @@ class ExpandCIDR(ReconPlugin):
         """
         logger.debug(f"Running {self.name} on CIDR: {params.get('target', {})}")
         command = f"prips {params.get('target', {})} && cat /tmp/prips.log"
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            shell=True
-        )
-        async for output in self._read_subprocess_output(process):
-            # Prepare the message for reverse_resolve_ip
-            message = {
-                "function_name": "reverse_resolve_ip",
-                "target": output
-            }
-            yield message
-
-        await process.wait()
+        output = self._create_subprocess_shell_sync(
+            command
+        ).split()
+        message = {
+            "function_name": "reverse_resolve_ip",
+            "target": output
+        }
+        logger.debug(f"Yielding message: {message}")
+        yield message
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         logger.debug(f"Processing output: {output_msg}")
-        await qm.publish_message(
-            subject=f"recon.input.{output_msg.get("data").get("function_name")}",
-            stream="RECON_INPUT",
-            message={
-                "function_name": output_msg.get("data").get("function_name"),
-                "program_id": output_msg.get("program_id"),
-                "params": {"target": output_msg.get("data").get("target")},
-                "force": False
-            }
-        )
+        for ip in output_msg.get("data").get("target"):
+            await qm.publish_message(
+                subject=f"recon.input.{output_msg.get("data").get("function_name")}",
+                stream="RECON_INPUT",
+                message={
+                    "function_name": output_msg.get("data").get("function_name"),
+                    "program_id": output_msg.get("program_id"),
+                    "params": {"target": ip},
+                    "force": False
+                }
+            )
+        return {}

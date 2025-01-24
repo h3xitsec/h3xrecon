@@ -40,7 +40,7 @@ class SubdomainPermutation(ReconPlugin):
         to_test = []
         async for output in self._read_subprocess_output(process):
             # Prepare the message for reverse_resolve_ip
-            to_test.append(output)
+            to_test.append(output)  
         message = {
             "target": params.get("target", {}),
             "to_test": to_test
@@ -62,7 +62,6 @@ class SubdomainPermutation(ReconPlugin):
         domain = await db._fetch_records("SELECT * FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
         domain = domain.data
         logger.info(is_catchall)
-        print(domain)
         # If the domain is not in the database, request for insertion via the data worker and wait for insertion
         if len(domain) == 0:
             logger.info(f"Domain {output_msg.get("data").get('target')} not found in database. Requesting for insertion.")
