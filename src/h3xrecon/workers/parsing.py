@@ -14,47 +14,7 @@ import asyncio
 import sys
 from uuid import UUID
 import uuid
-
-@dataclass
-class ReconOutput:
-    execution_id: str
-    timestamp: str
-    program_id: int
-    trigger_new_jobs: bool
-    source: Dict[str, Any]
-    data: Dict[str, Any]
-    response_id: str
-    def __post_init__(self):
-        # Validate execution_id is a valid UUID
-        try:
-            UUID(self.execution_id)
-        except ValueError:
-            logger.error("execution_id must be a valid UUID")
-            raise ValueError("execution_id must be a valid UUID")
-
-        # Validate timestamp is a valid timestamp
-        try:
-            datetime.fromisoformat(self.timestamp)
-        except ValueError:
-            logger.error("timestamp must be a valid ISO format timestamp")
-            raise ValueError("timestamp must be a valid ISO format timestamp")
-
-        # Validate program_id is an integer
-        try:
-            int(self.program_id)
-        except ValueError:
-            logger.error("program_id must be an integer")
-            raise ValueError("program_id must be an integer")
-
-        # Validate source is a dictionary
-        if not isinstance(self.source, dict):
-            logger.error("source must be a dictionary")
-            raise TypeError("source must be a dictionary")
-
-        # Validate output is a list
-        if not isinstance(self.data, dict):
-            logger.error("output must be a dictionary")
-            raise TypeError("output must be a dictionary")
+from h3xrecon.core.models import ReconJobOutput
 
 class ParsingWorker(Worker):
     def __init__(self, config: Config = Config()):
@@ -203,8 +163,8 @@ class ParsingWorker(Worker):
                 status='received'
             )
 
-            # Validate the message using ReconOutput dataclass
-            recon_output = ReconOutput(
+            # Validate the message using ReconJobOutput dataclass
+            recon_output = ReconJobOutput(
                 execution_id=msg.get('execution_id', str(uuid.uuid4())),
                 timestamp=msg.get('timestamp', datetime.now().isoformat()),
                 program_id=msg.get('program_id', 0),

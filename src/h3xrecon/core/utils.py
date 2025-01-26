@@ -25,7 +25,7 @@ def is_valid_hostname(hostname: str) -> bool:
     if not hostname or " " in hostname:
         return False
     # Basic hostname validation - at least one dot, valid chars
-    if "." not in hostname or not all(c.isalnum() or c in "-." for c in hostname):
+    if "." not in hostname or not all(c.isalnum() or c in "-._" for c in hostname):
         return False
     # Check parts between dots are valid
     parts = hostname.split(".")
