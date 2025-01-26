@@ -15,6 +15,7 @@ class DnsxPlugin(ReconPlugin):
     def timeout(self) -> int:
         """Timeout in seconds for the plugin execution. Default is 300 seconds (5 minutes)."""
         return 30
+
     @property
     def target_types(self) -> List[str]:
         return ["domain"]
@@ -84,4 +85,4 @@ class DnsxPlugin(ReconPlugin):
             #    logger.info(f"Domain {output_msg.get('data').get('host')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
         except Exception as e:
             logger.error(f"Error in process_resolved_domain: {str(e)}")
-            logger.exception(e)
+            #logger.exception(e)

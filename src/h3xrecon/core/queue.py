@@ -123,7 +123,7 @@ class QueueManager:
 
         # Create final consumer config
         final_config = ConsumerConfig(**default_config)
-        logger.debug(f"Final consumer config: {final_config}")
+        #logger.debug(f"Final consumer config: {final_config}")
 
         try:
             # Ensure stream exists before proceeding
@@ -174,7 +174,7 @@ class QueueManager:
             # Verify the consumer exists (don't raise an error if verification fails)
             try:
                 consumer_info = await subscription.consumer_info()
-                logger.debug(f"Consumer info: {consumer_info}")
+                #logger.debug(f"Consumer info: {consumer_info}")
                 if consumer_info.config.max_ack_pending != final_config.max_ack_pending:
                     logger.warning(f"Consumer max_ack_pending mismatch: wanted {final_config.max_ack_pending}, got {consumer_info.config.max_ack_pending}")
             except Exception as e:

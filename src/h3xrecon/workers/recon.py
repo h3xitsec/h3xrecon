@@ -5,6 +5,7 @@ from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.core import Config
 from h3xrecon.core.queue import StreamUnavailableError
 from h3xrecon.core.utils import check_last_execution
+from h3xrecon.core.models import ReconJobRequest
 from h3xrecon.plugins import ReconPlugin
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from dataclasses import dataclass
@@ -15,20 +16,6 @@ from datetime import datetime, timezone, timedelta
 import json
 import importlib
 import pkgutil
-
-@dataclass
-class FunctionExecutionRequest:
-    program_id: int
-    function_name: str
-    params: Dict[str, Any]
-    force: bool = False
-    execution_id: Optional[str] = None
-    trigger_new_jobs: bool = True
-    mode: Optional[str] = None
-    response_id: Optional[str] = None
-    def __post_init__(self):
-        if self.execution_id is None:
-            self.execution_id = str(uuid.uuid4())
 
 class ReconWorker(Worker):
     def __init__(self, config: Config = Config()):
@@ -75,7 +62,7 @@ class ReconWorker(Worker):
                 )
                 self._subscription = subscription
                 self._sub_key = "RECON_INPUT:recon.input:RECON_EXECUTE"
-                logger.debug(f"Subscribed to execute channel : {self._sub_key}")
+                #logger.debug(f"Subscribed to execute channel : {self._sub_key}")
 
                 # Base control subscription settings
                 base_control_subscription_settings = {
@@ -147,23 +134,23 @@ class ReconWorker(Worker):
             self._last_message_time = datetime.now(timezone.utc)
             for msg in msg_data:
                 # Parse message
-                function_execution_request = FunctionExecutionRequest(**msg)
-                if not function_execution_request.params.get('extra_params'):
-                    function_execution_request.params['extra_params'] = []
-                elif not isinstance(function_execution_request.params['extra_params'], list):
-                    function_execution_request.params['extra_params'] = []
+                recon_job_request = ReconJobRequest(**msg)
+                if not recon_job_request.params.get('extra_params'):
+                    recon_job_request.params['extra_params'] = []
+                elif not isinstance(recon_job_request.params['extra_params'], list):
+                    recon_job_request.params['extra_params'] = []
 
                 # Validation
-                function_valid = await self.validate_function_execution_request(function_execution_request)
+                function_valid = await self.validate_recon_job_request(recon_job_request)
                 if not function_valid:
-                    logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid function request")
+                    logger.info(f"JOB SKIPPED: {recon_job_request.function_name} : invalid function request")
                     await self.db.log_reconworker_operation(
-                        execution_id=function_execution_request.execution_id,
+                        execution_id=recon_job_request.execution_id,
                         component_id=self.component_id,
-                        function_name=function_execution_request.function_name,
-                        program_id=function_execution_request.program_id,
-                        target=function_execution_request.params.get('target', 'unknown'),
-                        parameters=function_execution_request.params,
+                        function_name=recon_job_request.function_name,
+                        program_id=recon_job_request.program_id,
+                        target=recon_job_request.params.get('target', 'unknown'),
+                        parameters=recon_job_request.params,
                         status='failed',
                         error_message='Invalid function request',
                         completed_at=datetime.now(timezone.utc)
@@ -173,24 +160,25 @@ class ReconWorker(Worker):
                 
                 # Job Execution
                 self.current_task = asyncio.create_task(
-                    self.run_function_execution(function_execution_request)
+                    self.run_function_execution(recon_job_request)
                 )
-                if function_execution_request.response_id:
-                    await self._send_jobrequest_response(function_execution_request.execution_id, function_execution_request.response_id, status="started")
+                if recon_job_request.response_id or recon_job_request.debug_id:
+                    response_subject_id = recon_job_request.response_id
+                    await self._send_jobrequest_response(recon_job_request.execution_id, response_subject_id, status="started")
                 await self.current_task
                 self.current_task = None  # Reset the current task when done
                 
         except Exception as e:
             logger.error(f"Error in message handler: {e}")
-            logger.exception(e)
-            if 'function_execution_request' in locals():
+            #logger.exception(e)
+            if 'recon_job_request' in locals():
                 await self.db.log_reconworker_operation(
-                    execution_id=function_execution_request.execution_id,
+                    execution_id=recon_job_request.execution_id,
                     component_id=self.component_id,
-                    function_name=function_execution_request.function_name,
-                    program_id=function_execution_request.program_id,
-                    target=function_execution_request.params.get('target', 'unknown'),
-                    parameters=function_execution_request.params,
+                    function_name=recon_job_request.function_name,
+                    program_id=recon_job_request.program_id,
+                    target=recon_job_request.params.get('target', 'unknown'),
+                    parameters=recon_job_request.params,
                     status='failed',
                     error_message=str(e),
                     completed_at=datetime.now(timezone.utc)
@@ -202,22 +190,22 @@ class ReconWorker(Worker):
                 await self.set_state(WorkerState.IDLE)
             self._processing_lock.release()
 
-    async def validate_function_execution_request(self, function_execution_request: FunctionExecutionRequest) -> bool:
+    async def validate_recon_job_request(self, recon_job_request: ReconJobRequest) -> bool:
         """Validate the function execution request."""
         try:
-            plugin_found = any(function_execution_request.function_name in key 
+            plugin_found = any(recon_job_request.function_name in key 
                              for key in self.function_map.keys())
             if not plugin_found:
-                raise ValueError(f"Invalid function_name: {function_execution_request.function_name}")
-            if self.function_input_validator.get(function_execution_request.function_name, None):
-                return await self.function_input_validator[function_execution_request.function_name](function_execution_request.params)
+                raise ValueError(f"Invalid function_name: {recon_job_request.function_name}")
+            if self.function_input_validator.get(recon_job_request.function_name, None):
+                return await self.function_input_validator[recon_job_request.function_name](recon_job_request.params)
             return True
         except Exception as e:
             logger.error(f"Error validating function request: {e}")
             return False
     
     @debug_trace
-    async def run_function_execution(self, msg_data: FunctionExecutionRequest):
+    async def run_function_execution(self, msg_data: ReconJobRequest):
         """Execute the requested function."""
         
         try:
@@ -289,7 +277,7 @@ class ReconWorker(Worker):
 
         for module_name in plugin_modules:
             try:
-                logger.debug(f"Attempting to load module: {module_name}")
+                #logger.debug(f"Attempting to load module: {module_name}")
                 module = importlib.import_module(module_name)
                 
                 for attribute_name in dir(module):
@@ -305,79 +293,80 @@ class ReconWorker(Worker):
                         'format_input': plugin_instance.format_input,
                         'format_targets': plugin_instance.format_targets,
                         'timeout': plugin_instance.timeout,
-                        'is_valid_input': plugin_instance.is_valid_input
+                        'is_valid_input': plugin_instance.is_valid_input,
                     }
                     logger.debug(f"Loaded plugin: {plugin_instance.name} with timeout: {plugin_instance.timeout}s")
                 
             except Exception as e:
                 logger.error(f"Error loading plugin '{module_name}': {e}", exc_info=True)
-        logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
+        #logger.debug(f"Current function_map: {[key for key in self.function_map.keys()]}")
 
-    async def execute_function(self, function_execution_request: FunctionExecutionRequest) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute_function(self, recon_job_request: ReconJobRequest) -> AsyncGenerator[Dict[str, Any], None]:
         try:
             # Update current execution info
-            self.current_module = function_execution_request.function_name
-            self.current_target = function_execution_request.params.get('target')
+            self.current_module = recon_job_request.function_name
+            self.current_target = recon_job_request.params.get('target')
             self.current_start_time = datetime.now(timezone.utc)
             self.current_process = None  # Reset current process
 
-            plugin = self.function_map.get(function_execution_request.function_name)
+            plugin = self.function_map.get(recon_job_request.function_name)
             if not plugin:
-                logger.error(f"Function {function_execution_request.function_name} not found")
-                raise ValueError(f"Function {function_execution_request.function_name} not found")
+                logger.error(f"Function {recon_job_request.function_name} not found")
+                raise ValueError(f"Function {recon_job_request.function_name} not found")
 
             # Get timeout from request or plugin default
-            timeout = function_execution_request.params.get('timeout', plugin['timeout'])
-            logger.debug(f"Using timeout of {timeout} seconds for {function_execution_request.function_name}")
+            timeout = recon_job_request.params.get('timeout', plugin['timeout'])
+            #logger.debug(f"Using timeout of {timeout} seconds for {recon_job_request.function_name}")
 
             # Format input
-            if function_execution_request.function_name != "sleep":
-                _fixed_targets = await plugin['format_targets'](function_execution_request.params['target'])
+            if recon_job_request.function_name != "sleep":
+                _fixed_targets = await plugin['format_targets'](recon_job_request.params['target'])
                 logger.debug(f"FIXED TARGETS: {_fixed_targets}")
             else:
-                _fixed_targets = [function_execution_request.params['target']]
+                _fixed_targets = [recon_job_request.params['target']]
             result_count = 0
             for _target in _fixed_targets:
                 # Create a new params dictionary with the updated target
-                new_function_execution_request = FunctionExecutionRequest(
-                    program_id=function_execution_request.program_id,
-                    function_name=function_execution_request.function_name,
+                new_recon_job_request = ReconJobRequest(
+                    program_id=recon_job_request.program_id,
+                    function_name=recon_job_request.function_name,
                     params={
-                        **function_execution_request.params,
+                        **recon_job_request.params,
                         'target': _target
                     },
-                    force=function_execution_request.force,
-                    execution_id=function_execution_request.execution_id
+                    force=recon_job_request.force,
+                    execution_id=recon_job_request.execution_id
                 )
                 # Update current target
                 self.current_target = _target
                 # Validate input
                 if plugin.get('is_valid_input', None):
-                    if not await plugin['is_valid_input'](new_function_execution_request.params):
-                        logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : invalid input")
+                    if not await plugin['is_valid_input'](new_recon_job_request.params):
+                        logger.info(f"JOB SKIPPED: {recon_job_request.function_name} : invalid input")
                         return
                 
                 # Check if we should execute this function
-                if not function_execution_request.force and not await self._should_execute(new_function_execution_request):
-                    logger.info(f"JOB SKIPPED: {function_execution_request.function_name} : recently executed")
+                if not recon_job_request.force and not await self._should_execute(new_recon_job_request):
+                    logger.info(f"JOB SKIPPED: {recon_job_request.function_name} : recently executed")
                     return
                 
                 # Log execution start
                 await self.db.log_reconworker_operation(
-                    execution_id=function_execution_request.execution_id,
+                    execution_id=recon_job_request.execution_id,
                     component_id=self.component_id,
-                    function_name=function_execution_request.function_name,
-                    program_id=function_execution_request.program_id,
-                    target=new_function_execution_request.params.get('target', 'unknown'),
-                    parameters=new_function_execution_request.params,
+                    function_name=recon_job_request.function_name,
+                    program_id=recon_job_request.program_id,
+                    target=new_recon_job_request.params.get('target', 'unknown'),
+                    parameters=new_recon_job_request.params,
                     status='started'
-                )
-                
-                logger.debug(f"Running function {function_execution_request.function_name} on {new_function_execution_request.params.get('target')} ({function_execution_request.execution_id})")
-                await self.set_state(WorkerState.BUSY, f"{function_execution_request.function_name}:{new_function_execution_request.params.get('target')}:{function_execution_request.execution_id}")
+                )              
+                logger.debug(f"Running function {recon_job_request.function_name} on {new_recon_job_request.params.get('target')} ({recon_job_request.execution_id})")
+                await self.set_state(WorkerState.BUSY, f"{recon_job_request.function_name}:{new_recon_job_request.params.get('target')}:{recon_job_request.execution_id}")
                 try:
                     # Pass self as worker to the plugin's execute method
-                    execution = plugin['execute'](new_function_execution_request.params, function_execution_request.program_id, function_execution_request.execution_id, self.db)
+                    execution = plugin['execute'](new_recon_job_request.params, recon_job_request.program_id, recon_job_request.execution_id, self.db)
+                    if recon_job_request.debug_id:
+                        debug_results = []
                     while True:
                         try:
                             result = await asyncio.wait_for(
@@ -386,13 +375,13 @@ class ReconWorker(Worker):
                             )
                             if result:
                                 output_data = {
-                                    "program_id": function_execution_request.program_id,
-                                    "execution_id": function_execution_request.execution_id,
-                                    "trigger_new_jobs": function_execution_request.trigger_new_jobs,
+                                    "program_id": recon_job_request.program_id,
+                                    "execution_id": recon_job_request.execution_id,
+                                    "trigger_new_jobs": recon_job_request.trigger_new_jobs,
                                     "source": {
-                                        "function_name": function_execution_request.function_name,
-                                        "params": new_function_execution_request.params,
-                                        "force": function_execution_request.force
+                                        "function_name": recon_job_request.function_name,
+                                        "params": new_recon_job_request.params,
+                                        "force": recon_job_request.force
                                     },
                                     "data": result,
                                     "timestamp": datetime.now().isoformat()
@@ -400,15 +389,16 @@ class ReconWorker(Worker):
                                 logger.debug(f"OUTPUT DATA: {output_data}")
                                 # Yield the result first
                                 yield output_data
-                                
-                                # Then attempt to publish it
                                 try:
-                                    await self.qm.publish_message(
-                                        subject="parsing.input",
-                                        stream="PARSING_INPUT",
-                                        message=output_data
-                                    )
-                                    logger.info(f"SENT JOB OUTPUT: {function_execution_request.function_name} : {new_function_execution_request.params.get('target')} : {output_data}")
+                                    if recon_job_request.debug_id:
+                                        debug_results.append(output_data)
+                                    else:
+                                        await self.qm.publish_message(
+                                            subject="parsing.input",
+                                            stream="PARSING_INPUT",
+                                            message=output_data
+                                        )
+                                    logger.info(f"SENT JOB OUTPUT: {recon_job_request.function_name} : {new_recon_job_request.params.get('target')} : {output_data}")
                                     result_count += 1
                                 except StreamUnavailableError as e:
                                     logger.warning(f"Stream locked, dropping message: {str(e)}")
@@ -416,27 +406,31 @@ class ReconWorker(Worker):
                         except StopAsyncIteration:
                             break
                     # Send end of job message
+                    
                     message = {
-                        "program_id": function_execution_request.program_id,
-                        "execution_id": function_execution_request.execution_id,
-                        "trigger_new_jobs": function_execution_request.trigger_new_jobs,
-                        "response_id": function_execution_request.response_id,
+                        "program_id": recon_job_request.program_id,
+                        "execution_id": recon_job_request.execution_id,
+                        "trigger_new_jobs": recon_job_request.trigger_new_jobs,
+                        "response_id": recon_job_request.response_id,
                         "source": {
-                            "function_name": function_execution_request.function_name,
-                            "params": new_function_execution_request.params,
-                            "force": function_execution_request.force
+                            "function_name": recon_job_request.function_name,
+                            "params": new_recon_job_request.params,
+                            "force": recon_job_request.force
                         },
                         "data": {},
                         "timestamp": datetime.now().isoformat()
                     }
-                    logger.debug(f"Sending end of job message: {message}")
-                    await self.qm.publish_message(
-                        subject=f"parsing.input",
-                        stream="PARSING_INPUT",
-                        message=message
-                    )
+                    if recon_job_request.debug_id:
+                        await self._send_jobrequest_response(recon_job_request.execution_id, recon_job_request.debug_id, status=debug_results)
+                    else:
+                        logger.debug(f"Sending end of job message: {message}")
+                        await self.qm.publish_message(
+                            subject=f"parsing.input",
+                            stream="PARSING_INPUT",
+                            message=message
+                        )
                 except asyncio.TimeoutError:
-                    logger.error(f"Function {function_execution_request.function_name} timed out after {timeout} seconds")
+                    logger.error(f"Function {recon_job_request.function_name} timed out after {timeout} seconds")
                     # Kill any running subprocess
                     if self.current_process:
                         try:
@@ -462,15 +456,15 @@ class ReconWorker(Worker):
                             self.current_process = None
                     #raise
                 except Exception as e:
-                    logger.error(f"Error executing function {function_execution_request.function_name}: {str(e)}")
-                    logger.exception(e)
+                    logger.error(f"Error executing function {recon_job_request.function_name}: {str(e)}")
+                    #logger.exception(e)
                     raise
                 finally:
-                    logger.success(f"JOB COMPLETED: {function_execution_request.function_name} : {new_function_execution_request.params.get('target')} : {result_count} results")
+                    logger.success(f"JOB COMPLETED: {recon_job_request.function_name} : {new_recon_job_request.params.get('target')} : {result_count} results")
 
         except Exception as e:
-            logger.error(f"Error executing function {function_execution_request.function_name}: {str(e)}")
-            logger.exception(e)
+            logger.error(f"Error executing function {recon_job_request.function_name}: {str(e)}")
+            #logger.exception(e)
             raise
 
         finally:
@@ -488,7 +482,7 @@ class ReconWorker(Worker):
             logger.debug(f"Cancelled task with Execution ID: {execution_id}")
         await super().stop()
 
-    async def _should_execute(self, request: FunctionExecutionRequest) -> bool:
+    async def _should_execute(self, request: ReconJobRequest) -> bool:
         """
         Check if a function should be executed based on its last execution time.
         Returns True if the function should be executed, False otherwise.
