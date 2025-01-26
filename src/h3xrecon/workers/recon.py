@@ -391,7 +391,7 @@ class ReconWorker(Worker):
                                 yield output_data
                                 try:
                                     if recon_job_request.debug_id:
-                                        debug_results.append(output_data)
+                                        debug_results.append(result)
                                     else:
                                         await self.qm.publish_message(
                                             subject="parsing.input",
