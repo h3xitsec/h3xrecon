@@ -1,0 +1,7 @@
+- name: Test all nodes
+  hosts: all
+  gather_facts: false
+  max_fail_percentage: 0
+
+  tasks:
+  - ansible.builtin.include_tasks: tasks/test_all_nodes.yaml

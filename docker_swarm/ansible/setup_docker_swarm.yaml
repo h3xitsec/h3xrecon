@@ -1,7 +1,7 @@
 - name: Setup Nodes for h3xrecon
   hosts: all
   become: true
-  gather_facts: false
+  gather_facts: true
   vars:
     tailscale_subnet_routes: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     docker_swarm_interface: "tailscale0"

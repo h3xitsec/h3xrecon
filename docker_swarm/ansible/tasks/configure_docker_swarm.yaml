@@ -43,6 +43,52 @@
   
 - name: Tag Swarm Nodes
   block:
+    - name: Calculate memory limit (70% of total memory)
+      ansible.builtin.set_fact:
+        worker_memory_limit: "{{ (ansible_memtotal_mb * 0.7)|int }}M"
+        worker_memory_reservation: "{{ (ansible_memtotal_mb * 0.1)|int }}M"
+    
+    - name: Create slice
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=Slice that limits docker resources
+          Before=slices.target
+
+          [Slice]
+          CPUAccounting=true
+          CPUQuota=75%
+          MemoryAccounting=true
+          MemoryMax={{ worker_memory_limit }}
+        dest: /etc/systemd/system/h3xrecon-worker.slice
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+    
+    - name: Set docker to use the slice
+      ansible.builtin.copy:
+        content: |
+          {
+            "cgroup-parent": "limit-docker-memory.slice"
+          }
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+    
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      become: true
+    
+    - name: Restart Docker service
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+        enabled: yes
+    
     - name: Tag processor node
       ansible.builtin.shell: docker node update --label-add H3XRECON_SWARM_ROLE=processor {{ groups['processor'][0] }}
       when: 
@@ -50,7 +96,8 @@
       delegate_to: "{{ groups['processor'][0] }}"
 
     - name: Tag worker nodes
-      ansible.builtin.shell: docker node update --label-add H3XRECON_SWARM_ROLE=worker {{ item }}
+      ansible.builtin.shell: |
+        docker node update --label-add H3XRECON_SWARM_ROLE=worker {{ item }}
       loop: "{{ groups['workers'] }}"
       run_once: true
       when: 

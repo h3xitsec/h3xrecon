@@ -1,0 +1,17 @@
+- name: Get nodes status
+  hosts: all
+  gather_facts: false
+  max_fail_percentage: 0
+
+  tasks:
+  - ansible.builtin.shell: |
+      echo "Node Status"
+      docker stats --no-stream
+
+      echo -e "\nSystem Resource Usage:"
+      free -h | awk '/^Mem:/ {print "Memory Usage: " $3 "/" $2}'
+      top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print "CPU Usage: " 100 - $1 "%"}'
+      uptime | awk -F'[a-z]:' '{print "Load Averages: " $2}'
+    register: node_status
+  - ansible.builtin.debug:
+      msg: "{{ node_status.stdout_lines }}"

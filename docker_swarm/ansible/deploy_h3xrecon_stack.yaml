@@ -1,57 +1,60 @@
-- name: Clean up worker drives
-  hosts: workers
+- name: Start h3xrecon stack
+  hosts: all
   tasks:
+
     - name: Pull h3xrecon project Docker images
       ansible.builtin.shell: docker pull {{ item }}
       loop:
         - ghcr.io/h3xitsec/h3xrecon/worker:nightly
+      when: inventory_hostname in groups['workers']
+
     - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
 
-#- ansible.builtin.import_playbook: remove_h3xrecon_stack.yaml
+    # Deploy stack on processor
+    - when: inventory_hostname in groups['processor']
+      block:
+      - name: Create target directory
+        ansible.builtin.file:
+          path: "{{ h3xrecon_target_directory }}"
+          state: directory
 
-#- ansible.builtin.import_playbook: remove_h3xrecon_stack.yaml
+      - name: Copy compose files
+        ansible.builtin.copy:
+          src: "{{ file['src'] }}"
+          dest: "{{ file['dest'] }}"
+        loop:
+          - src: ../../docker/grafana
+            dest: "{{ h3xrecon_target_directory }}"
+          - src: ../../docker/pgbouncer
+            dest: "{{ h3xrecon_target_directory }}"
+          - src: "{{ inventory_dir }}/docker-compose.swarm.yaml"
+            dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
+          - src: "{{ inventory_dir }}/.env.compose"
+            dest: "{{ h3xrecon_target_directory }}.env"
+          - src: ../../docker/msgbroker
+            dest: "{{ h3xrecon_target_directory }}"
+        loop_control:
+          loop_var: file
 
-- name: Start h3xrecon stack
-  hosts: processor
-  tasks:
-    - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
-    - name: Create target directory
-      ansible.builtin.file:
-        path: "{{ h3xrecon_target_directory }}"
-        state: directory
+      - name: Pull h3xrecon project Docker images
+        ansible.builtin.shell: docker pull {{ item }}
+        loop:
+          - ghcr.io/h3xitsec/h3xrecon/server:nightly
+          - ghcr.io/h3xitsec/h3xrecon/database:nightly
 
-    - name: Copy compose files
-      ansible.builtin.copy:
-        src: "{{ file['src'] }}"
-        dest: "{{ file['dest'] }}"
-      loop:
-        - src: ../../docker/grafana
-          dest: "{{ h3xrecon_target_directory }}"
-        - src: ../../docker/pgbouncer
-          dest: "{{ h3xrecon_target_directory }}"
-        - src: "{{ inventory_dir }}/docker-compose.swarm.yaml"
-          dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
-        - src: "{{ inventory_dir }}/.env.compose"
-          dest: "{{ h3xrecon_target_directory }}.env"
-        - src: ../../docker/msgbroker
-          dest: "{{ h3xrecon_target_directory }}"
-      loop_control:
-        loop_var: file
-    - name: Pull h3xrecon project Docker images
-      ansible.builtin.shell: docker pull {{ item }}
-      loop:
-        - ghcr.io/h3xitsec/h3xrecon/server:nightly
-        - ghcr.io/h3xitsec/h3xrecon/database:nightly
-    - name: Create screenshot directory
-      ansible.builtin.file:
-        path: "{{ h3xrecon_target_directory }}/screenshots"
-        state: directory
-    - name: Deploy Docker stack
-      ansible.builtin.shell:
-        chdir: "{{ h3xrecon_target_directory }}"
-        cmd: |
-          export $(cat .env) > /dev/null 2>&1; docker stack deploy -c docker-compose.yaml h3xrecon
-      register: docker_stack_deploy
-    - name: Display Docker stack deploy result
-      ansible.builtin.debug:
-        var: docker_stack_deploy
+      - name: Create screenshot directory
+        ansible.builtin.file:
+          path: "{{ h3xrecon_target_directory }}/screenshots"
+          state: directory
+
+      - name: Deploy Docker stack
+        ansible.builtin.shell:
+          chdir: "{{ h3xrecon_target_directory }}"
+          cmd: |
+            export $(cat .env) > /dev/null 2>&1; docker stack deploy -c docker-compose.yaml h3xrecon
+        register: docker_stack_deploy
+
+      - name: Display Docker stack deploy result
+        ansible.builtin.debug:
+          var: docker_stack_deploy
+
