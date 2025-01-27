@@ -250,14 +250,14 @@ class DataWorker(Worker):
             return
 
         try:
-            await self.db.log_dataworker_operation(
-                component_id=self.component_id,
-                data_type=data_type,
-                program_id=program_id,
-                operation_type='trigger_job',
-                data={'result': result},
-                status='started'
-            )
+            # await self.db.log_dataworker_operation(
+            #     component_id=self.component_id,
+            #     data_type=data_type,
+            #     program_id=program_id,
+            #     operation_type='trigger_job',
+            #     data={'result': result},
+            #     status='started'
+            # )
             # TODO: Parse urls and check if host is in scope
             # Check if the data is in the program scope, if it is a domain
             if data_type == "domain":
@@ -266,16 +266,16 @@ class DataWorker(Worker):
                 is_in_scope = True
             if not is_in_scope:
                 logger.debug(f"Data {result} of type {data_type} is not in scope for program {program_id}. Skipping new jobs.")
-                await self.db.log_dataworker_operation(
-                    component_id=self.component_id,
-                    data_type=data_type,
-                    program_id=program_id,
-                    operation_type='trigger_job',
-                    data={'result': result},
-                    status='completed',
-                    result={'skipped': True, 'reason': 'out_of_scope'},
-                    completed_at=datetime.now(timezone.utc)
-                )
+                # await self.db.log_dataworker_operation(
+                #     component_id=self.component_id,
+                #     data_type=data_type,
+                #     program_id=program_id,
+                #     operation_type='trigger_job',
+                #     data={'result': result},
+                #     status='completed',
+                #     result={'skipped': True, 'reason': 'out_of_scope'},
+                #     completed_at=datetime.now(timezone.utc)
+                # )
                 return
 
             triggered_jobs = []
@@ -300,29 +300,29 @@ class DataWorker(Worker):
                             triggered_jobs.append(job.function_name)
                         except StreamUnavailableError as e:
                             logger.error(f"Failed to trigger job - stream unavailable: {str(e)}")
-                            await self.db.log_dataworker_operation(
-                                component_id=self.component_id,
-                                data_type=data_type,
-                                program_id=program_id,
-                                operation_type='trigger_job',
-                                data={'result': result},
-                                status='failed',
-                                error_message=str(e),
-                                completed_at=datetime.now(timezone.utc)
-                            )
+                            # await self.db.log_dataworker_operation(
+                            #     component_id=self.component_id,
+                            #     data_type=data_type,
+                            #     program_id=program_id,
+                            #     operation_type='trigger_job',
+                            #     data={'result': result},
+                            #     status='failed',
+                            #     error_message=str(e),
+                            #     completed_at=datetime.now(timezone.utc)
+                            # )
                             break
                         except Exception as e:
                             logger.error(f"Failed to trigger job: {str(e)}")
-                            await self.db.log_dataworker_operation(
-                                component_id=self.component_id,
-                                data_type=data_type,
-                                program_id=program_id,
-                                operation_type='trigger_job',
-                                data={'result': result},
-                                status='failed',
-                                error_message=str(e),
-                                completed_at=datetime.now(timezone.utc)
-                            )
+                            # await self.db.log_dataworker_operation(
+                            #     component_id=self.component_id,
+                            #     data_type=data_type,
+                            #     program_id=program_id,
+                            #     operation_type='trigger_job',
+                            #     data={'result': result},
+                            #     status='failed',
+                            #     error_message=str(e),
+                            #     completed_at=datetime.now(timezone.utc)
+                            # )
                             raise
                     else:
                         logger.debug(f"Job {job.function_name} not triggered for {result}: already executed recently")
@@ -335,30 +335,30 @@ class DataWorker(Worker):
                         break
 
             # Log successful job triggers
-            if triggered_jobs:
-                await self.db.log_dataworker_operation(
-                    component_id=self.component_id,
-                    data_type=data_type,
-                    program_id=program_id,
-                    operation_type='trigger_job',
-                    data={'result': result},
-                    status='completed',
-                    result={'triggered_jobs': triggered_jobs},
-                    completed_at=datetime.now(timezone.utc)
-                )
+            #if triggered_jobs:
+                # await self.db.log_dataworker_operation(
+                #     component_id=self.component_id,
+                #     data_type=data_type,
+                #     program_id=program_id,
+                #     operation_type='trigger_job',
+                #     data={'result': result},
+                #     status='completed',
+                #     result={'triggered_jobs': triggered_jobs},
+                #     completed_at=datetime.now(timezone.utc)
+                # )
 
         except Exception as e:
             logger.error(f"Error triggering new jobs: {e}")
-            await self.db.log_dataworker_operation(
-                component_id=self.component_id,
-                data_type=data_type,
-                program_id=program_id,
-                operation_type='trigger_job',
-                data={'result': result},
-                status='failed',
-                error_message=str(e),
-                completed_at=datetime.now(timezone.utc)
-            )
+            # await self.db.log_dataworker_operation(
+            #     component_id=self.component_id,
+            #     data_type=data_type,
+            #     program_id=program_id,
+            #     operation_type='trigger_job',
+            #     data={'result': result},
+            #     status='failed',
+            #     error_message=str(e),
+            #     completed_at=datetime.now(timezone.utc)
+            # )
 
     async def _delay_next_job(self, program_id: int, data_type: str, result: Any, next_job_index: int):
         """Helper method to handle delayed job triggering."""
@@ -460,14 +460,14 @@ class DataWorker(Worker):
         for ip in msg_data.get('data'):
             try:
                 ip_data = {'ip': ip, 'attributes': attributes}
-                await self.db.log_dataworker_operation(
-                    component_id=self.component_id,
-                    data_type='ip',
-                    program_id=msg_data.get('program_id'),
-                    operation_type='insert',
-                    data=ip_data,
-                    status='started'
-                )
+                # await self.db.log_dataworker_operation(
+                #     component_id=self.component_id,
+                #     data_type='ip',
+                #     program_id=msg_data.get('program_id'),
+                #     operation_type='insert',
+                #     data=ip_data,
+                #     status='started'
+                # )
 
                 ptr = attributes.get('ptr')
                 if isinstance(ptr, list):
@@ -480,16 +480,16 @@ class DataWorker(Worker):
                 # Log operation result
                 if result.get('inserted'):
                     logger.success(f"INSERTED IP: {ip_data}")
-                    await self.db.log_dataworker_operation(
-                        component_id=self.component_id,
-                        data_type='ip',
-                        program_id=msg_data.get('program_id'),
-                        operation_type='insert',
-                        data=ip_data,
-                        status='completed',
-                        result={'inserted': True, 'id': result.get('id')},
-                        completed_at=datetime.now(timezone.utc)
-                    )
+                    # await self.db.log_dataworker_operation(
+                    #     component_id=self.component_id,
+                    #     data_type='ip',
+                    #     program_id=msg_data.get('program_id'),
+                    #     operation_type='insert',
+                    #     data=ip_data,
+                    #     status='completed',
+                    #     result={'inserted': True, 'id': result.get('id')},
+                    #     completed_at=datetime.now(timezone.utc)
+                    # )
                     if msg_data.get('trigger_new_jobs'):
                         await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
                     else:
@@ -497,16 +497,16 @@ class DataWorker(Worker):
                 else:
                     logger.info(f"UPDATED IP: {ip}")
             except Exception as e:
-                await self.db.log_dataworker_operation(
-                    component_id=self.component_id,
-                    data_type='ip',
-                    program_id=msg_data.get('program_id'),
-                    operation_type='insert',
-                    data={'ip': ip, 'attributes': attributes},
-                    status='failed',
-                    error_message=str(e),
-                    completed_at=datetime.now(timezone.utc)
-                )
+                # await self.db.log_dataworker_operation(
+                #     component_id=self.component_id,
+                #     data_type='ip',
+                #     program_id=msg_data.get('program_id'),
+                #     operation_type='insert',
+                #     data={'ip': ip, 'attributes': attributes},
+                #     status='failed',
+                #     error_message=str(e),
+                #     completed_at=datetime.now(timezone.utc)
+                # )
                 logger.error(f"Error processing IP {ip}: {e}")
 
     async def process_screenshot(self, msg_data: Dict[str, Any]):

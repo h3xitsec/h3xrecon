@@ -351,15 +351,15 @@ class ReconWorker(Worker):
                     return
                 
                 # Log execution start
-                await self.db.log_reconworker_operation(
-                    execution_id=recon_job_request.execution_id,
-                    component_id=self.component_id,
-                    function_name=recon_job_request.function_name,
-                    program_id=recon_job_request.program_id,
-                    target=new_recon_job_request.params.get('target', 'unknown'),
-                    parameters=new_recon_job_request.params,
-                    status='started'
-                )              
+                # await self.db.log_reconworker_operation(
+                #     execution_id=recon_job_request.execution_id,
+                #     component_id=self.component_id,
+                #     function_name=recon_job_request.function_name,
+                #     program_id=recon_job_request.program_id,
+                #     target=new_recon_job_request.params.get('target', 'unknown'),
+                #     parameters=new_recon_job_request.params,
+                #     status='started'
+                # )
                 logger.debug(f"Running function {recon_job_request.function_name} on {new_recon_job_request.params.get('target')} ({recon_job_request.execution_id})")
                 await self.set_state(WorkerState.BUSY, f"{recon_job_request.function_name}:{new_recon_job_request.params.get('target')}:{recon_job_request.execution_id}")
                 try:

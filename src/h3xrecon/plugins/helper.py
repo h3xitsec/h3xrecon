@@ -9,27 +9,28 @@ from urllib.parse import urlparse
 def log_sent_data(func):
     async def wrapper(qm, data: str, program_id: int, *args, **kwargs):
         # Extract data_type from function name
-        data_type = func.__name__.replace('send_', '').replace('_data', '')
-        if data_type == "domain":
-            if is_valid_url(data):
-                data = get_domain_from_url(data)
-        # Build message
-        msg = {
-            "program_id": program_id,
-            "data_type": data_type,
-            "data": [data],
-            "trigger_new_jobs": kwargs.get('trigger_new_jobs', True),
-            "execution_id": kwargs.get('execution_id', None),
-            "response_id": kwargs.get('response_id', None)
-        }
-        
-        # Add attributes if provided
-        if kwargs.get('attributes'):
-            msg["attributes"] = kwargs['attributes']
-        # Publish message
-        await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=msg)
-        logger.info(f"SENT RECON DATA: {data_type} : {msg} : {msg.get('attributes', "No Attributes")}")
-        return msg
+        if data:
+            data_type = func.__name__.replace('send_', '').replace('_data', '')
+            if data_type == "domain":
+                if is_valid_url(data):
+                    data = get_domain_from_url(data)
+            # Build message
+            msg = {
+                "program_id": program_id,
+                "data_type": data_type,
+                "data": [data],
+                "trigger_new_jobs": kwargs.get('trigger_new_jobs', True),
+                "execution_id": kwargs.get('execution_id', None),
+                "response_id": kwargs.get('response_id', None)
+            }
+            
+            # Add attributes if provided
+            if kwargs.get('attributes'):
+                msg["attributes"] = kwargs['attributes']
+            # Publish message
+            await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=msg)
+            logger.info(f"SENT RECON DATA: {data_type} : {msg} : {msg.get('attributes', "No Attributes")}")
+            #return msg
     return wrapper
 
 @log_sent_data
