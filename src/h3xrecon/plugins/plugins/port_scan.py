@@ -76,9 +76,10 @@ class PortScan(ReconPlugin):
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         service = output_msg.get("data", [])
-        await send_service_data(qm=qm, data={
-            "ip": service.get('ip'),
-            "port": int(service.get('port')),
-            "protocol": service.get('protocol'),
-            "program_id": output_msg.get('program_id')
-        }, program_id=output_msg.get('program_id'))
+        if service:
+            await send_service_data(qm=qm, data={
+                "ip": service.get('ip'),
+                "port": int(service.get('port')),
+                "protocol": service.get('protocol'),
+                "program_id": output_msg.get('program_id')
+            }, program_id=output_msg.get('program_id'))

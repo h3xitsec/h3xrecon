@@ -104,32 +104,32 @@ class Nuclei(ReconPlugin):
             raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        #if output_msg.get('in_scope', False):
-        if output_msg.get("data", {}).get('type', "") == "http":
-            hostname = urlparse(output_msg.get("data", {}).get('url', "")).hostname            
-        else:
-            hostname = output_msg.get("data", {}).get('url', "").split(":")[0]
-        await send_domain_data(qm=qm, data=hostname, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
-        await send_ip_data(qm=qm, data=output_msg.get("data", {}).get('ip', ""), program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
-        await send_nuclei_data(qm=qm, data=output_msg.get("data", {}), program_id=output_msg.get('program_id'))
-        # Find scheme and protocol
-        scheme = None
-        protocol = None
-        if output_msg.get("data").get('type') == "http":
-            protocol = "tcp"
-            scheme = output_msg.get("data").get('scheme', "")
-        elif output_msg.get("data").get('type') == "tcp":
-            protocol = "tcp"
-            if output_msg.get("data").get('template_id') == "openssh-detect":
-                scheme = "ssh"
+        if output_msg.get("data", None):
+            if output_msg.get("data", {}).get('type', "") == "http":
+                hostname = urlparse(output_msg.get("data", {}).get('url', "")).hostname            
             else:
+                hostname = output_msg.get("data", {}).get('url', "").split(":")[0]
+            await send_domain_data(qm=qm, data=hostname, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+            await send_ip_data(qm=qm, data=output_msg.get("data", {}).get('ip', ""), program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+            await send_nuclei_data(qm=qm, data=output_msg.get("data", {}), program_id=output_msg.get('program_id'))
+            # Find scheme and protocol
+            scheme = None
+            protocol = None
+            if output_msg.get("data").get('type') == "http":
+                protocol = "tcp"
                 scheme = output_msg.get("data").get('scheme', "")
-        
-        service = {
-            "ip": output_msg.get("data", {}).get('ip', ""),
-            "port": int(output_msg.get("data", {}).get('port')) if "port" in output_msg.get("data", {}) else None,
-            "protocol": protocol,
-            "state": "open",
-            "service": scheme,
-        }
-        await send_service_data(qm=qm, data=service, program_id=output_msg.get('program_id'))
+            elif output_msg.get("data").get('type') == "tcp":
+                protocol = "tcp"
+                if output_msg.get("data").get('template_id') == "openssh-detect":
+                    scheme = "ssh"
+                else:
+                    scheme = output_msg.get("data").get('scheme', "")
+            
+            service = {
+                "ip": output_msg.get("data", {}).get('ip', ""),
+                "port": int(output_msg.get("data", {}).get('port')) if "port" in output_msg.get("data", {}) else None,
+                "protocol": protocol,
+                "state": "open",
+                "service": scheme,
+            }
+            await send_service_data(qm=qm, data=service, program_id=output_msg.get('program_id'))
