@@ -43,6 +43,8 @@ RUN cd /tmp && git clone https://github.com/blechschmidt/massdns --tag v1.1.0 &&
 
 RUN go install github.com/d3mondev/puredns/v2@latest
 
+RUN go install github.com/lc/gau/v2/cmd/gau@latest
+
 
 ## Final stage
 FROM python:3.12-slim
