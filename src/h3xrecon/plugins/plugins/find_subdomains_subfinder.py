@@ -65,4 +65,8 @@ class FindSubdomainsSubfinder(ReconPlugin):
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         for subdomain in output_msg.get("data", {}).get('subdomain', []):
-            await send_domain_data(qm=qm, data=subdomain, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+            await send_domain_data(qm=qm, 
+                                   data=subdomain, 
+                                   program_id=output_msg.get('program_id'), 
+                                   execution_id=output_msg.get('execution_id'), 
+                                   trigger_new_jobs=output_msg.get('trigger_new_jobs', True))

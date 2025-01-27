@@ -627,43 +627,51 @@ class DataWorker(Worker):
                 try:
                     _url = d.get('url')
                     parsed_website_and_path = parse_url(_url)
-                    base_url = parsed_website_and_path.get('website', {}).get('url')
-                    full_url = parsed_website_and_path.get('website_path', {}).get('url')
-                    parsed_url = urlparse(full_url)
-                    website_id = await self.db._fetch_value(f"SELECT id FROM websites WHERE url = '{base_url}'")
-                    logger.info(f"PROCESSING WEBSITE PATH: {d.get('url')}")
-                    result = await self.db.insert_website_path(
-                        program_id=msg.get('program_id'),
-                        website_id=website_id.data if website_id.data else 0,
-                        path=parsed_url.path if parsed_url.path else "/",
-                        final_path=d.get('final_url'),
-                        techs=d.get('techs', []),
-                        response_time=d.get('response_time'),
-                        lines=d.get('lines'),
-                        title=d.get('title'),
-                        words=d.get('words'),
-                        method=d.get('method'),
-                        scheme=d.get('scheme'),
-                        status_code=d.get('status_code'),
-                        content_type=d.get('content_type'),
-                        content_length=d.get('content_length'),
-                        chain_status_codes=d.get('chain_status_codes'),
-                        page_type=d.get('page_type'),
-                        body_preview=d.get('body_preview'),
-                        resp_header_hash=d.get('resp_header_hash'),
-                        resp_body_hash=d.get('resp_body_hash')
-                    )
-                    if result.success:
-                        if result.data.get('inserted'):
-                            logger.success(f"INSERTED WEBSITE PATH: {d.get('url')}")
-                            if msg.get('trigger_new_jobs'):
-                                await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website_path", result=d.get('url'))
+                    if parsed_website_and_path:
+                        base_url = parsed_website_and_path.get('website', {}).get('url')
+                        full_url = parsed_website_and_path.get('website_path', {}).get('url')
+                        parsed_url = urlparse(full_url)
+                        website_id = await self.db._fetch_value(f"SELECT id FROM websites WHERE url = '{base_url}'")
+                        logger.debug(f"Website ID: {website_id}")
+                        if not website_id.success or not website_id.data:
+                            logger.error(f"Failed to find website {base_url} in database")
+                            result = await self.db.insert_website(url=base_url, program_id=msg.get('program_id'))
+                            logger.debug(f"Inserted website {base_url} in database: {result}")
+                        website_id = await self.db._fetch_value(f"SELECT id FROM websites WHERE url = '{base_url}'")
+                        if website_id.success and website_id.data:
+                            logger.info(f"PROCESSING WEBSITE PATH: {d.get('url')}")
+                            result = await self.db.insert_website_path(
+                                program_id=msg.get('program_id'),
+                                website_id=website_id.data if website_id.data else 0,
+                                path=parsed_url.path if parsed_url.path else "/",
+                                final_path=d.get('final_url'),
+                                techs=d.get('techs', []),
+                                response_time=d.get('response_time'),
+                                lines=d.get('lines'),
+                                title=d.get('title'),
+                                words=d.get('words'),
+                                method=d.get('method'),
+                                scheme=d.get('scheme'),
+                                status_code=d.get('status_code'),
+                                content_type=d.get('content_type'),
+                                content_length=d.get('content_length'),
+                                chain_status_codes=d.get('chain_status_codes'),
+                                page_type=d.get('page_type'),
+                                body_preview=d.get('body_preview'),
+                                resp_header_hash=d.get('resp_header_hash'),
+                                resp_body_hash=d.get('resp_body_hash')
+                            )
+                            if result.success:
+                                if result.data.get('inserted'):
+                                    logger.success(f"INSERTED WEBSITE PATH: {d.get('url')}")
+                                    if msg.get('trigger_new_jobs'):
+                                        await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website_path", result=d.get('url'))
+                                    else:
+                                        logger.warning(f"JOB TRIGGERING DISABLED: {msg.get('data_type')} : {msg.get('data')} : {msg.get('execution_id', 'no execution id')}")
+                                else:
+                                    logger.info(f"UPDATED WEBSITE PATH: {d.get('url')}")
                             else:
-                                logger.warning(f"JOB TRIGGERING DISABLED: {msg.get('data_type')} : {msg.get('data')} : {msg.get('execution_id', 'no execution id')}")
-                        else:
-                            logger.info(f"UPDATED WEBSITE PATH: {d.get('url')}")
-                    else:
-                        logger.error(f"Failed to insert or update website path: {result.error}")
+                                logger.error(f"Failed to insert or update website path: {result.error}")
 
                 except Exception as e:
                     logger.error(f"Failed to process website path in program {msg.get('program_id')}: {e}")

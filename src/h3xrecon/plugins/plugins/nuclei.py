@@ -109,9 +109,21 @@ class Nuclei(ReconPlugin):
                 hostname = urlparse(output_msg.get("data", {}).get('url', "")).hostname            
             else:
                 hostname = output_msg.get("data", {}).get('url', "").split(":")[0]
-            await send_domain_data(qm=qm, data=hostname, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
-            await send_ip_data(qm=qm, data=output_msg.get("data", {}).get('ip', ""), program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
-            await send_nuclei_data(qm=qm, data=output_msg.get("data", {}), program_id=output_msg.get('program_id'))
+            await send_domain_data(qm=qm, 
+                                   data=hostname, 
+                                   program_id=output_msg.get('program_id'), 
+                                   execution_id=output_msg.get('execution_id'), 
+                                   trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+            await send_ip_data(qm=qm, 
+                               data=output_msg.get("data", {}).get('ip', ""), 
+                               program_id=output_msg.get('program_id'), 
+                               execution_id=output_msg.get('execution_id'), 
+                               trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+            await send_nuclei_data(qm=qm, 
+                                   data=output_msg.get("data", {}), 
+                                   program_id=output_msg.get('program_id'), 
+                                   execution_id=output_msg.get('execution_id'), 
+                                   trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
             # Find scheme and protocol
             scheme = None
             protocol = None
@@ -132,4 +144,8 @@ class Nuclei(ReconPlugin):
                 "state": "open",
                 "service": scheme,
             }
-            await send_service_data(qm=qm, data=service, program_id=output_msg.get('program_id'))
+            await send_service_data(qm=qm, 
+                                    data=service, 
+                                    program_id=output_msg.get('program_id'),
+                                    execution_id=output_msg.get('execution_id', ""),
+                                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True))

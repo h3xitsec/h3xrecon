@@ -28,7 +28,7 @@ def log_sent_data(func):
             msg["attributes"] = kwargs['attributes']
         # Publish message
         await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=msg)
-        logger.info(f"SENT RECON DATA: {data_type} : {data} : {msg.get('attributes', "No Attributes")}")
+        logger.info(f"SENT RECON DATA: {data_type} : {msg} : {msg.get('attributes', "No Attributes")}")
         return msg
     return wrapper
 

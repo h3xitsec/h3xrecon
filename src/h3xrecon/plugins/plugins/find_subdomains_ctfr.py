@@ -2,6 +2,7 @@ from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from loguru import logger
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
+from h3xrecon.plugins.helpers import send_domain_data
 import asyncio
 import os
 class FindSubdomainsCTFR(ReconPlugin):
@@ -62,9 +63,11 @@ class FindSubdomainsCTFR(ReconPlugin):
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         domain_msg = {
-            "program_id": output_msg.get('program_id'),
-            "data_type": "domain",
-            "in_scope": output_msg.get('in_scope'),
             "data": output_msg.get("data", {}).get('subdomain')
         }
         await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=domain_msg)
+        await send_domain_data(qm=qm, 
+                                data=output_msg.get("data", {}).get('subdomain'), 
+                                program_id=output_msg.get('program_id'), 
+                                execution_id=output_msg.get('execution_id'), 
+                                trigger_new_jobs=output_msg.get('trigger_new_jobs', True))

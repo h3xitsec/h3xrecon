@@ -97,7 +97,11 @@ class TestHTTP(ReconPlugin):
             website_msg['techs'] = output_msg.get("data", {}).get('tech', [])
             website_msg['favicon_hash'] = output_msg.get("data", {}).get('favicon', "")
             website_msg['favicon_url'] = output_msg.get("data", {}).get('favicon_url', "")
-            await send_website_data(qm, website_msg, output_msg.get('program_id', ""))
+            await send_website_data(qm=qm, 
+                                    data=website_msg, 
+                                    program_id=output_msg.get('program_id', ""),
+                                    execution_id=output_msg.get('execution_id', ""),
+                                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
 
             # Send website path data with full URL
             website_path_msg = parsed_website_and_path.get('website_path')
@@ -115,7 +119,10 @@ class TestHTTP(ReconPlugin):
             website_path_msg['body_preview'] = output_msg.get("data", {}).get('body_preview')
             website_path_msg['resp_header_hash'] = output_msg.get("data", {}).get('hash', {}).get('header_sha256', "")
             website_path_msg['resp_body_hash'] = output_msg.get("data", {}).get('hash', {}).get('body_sha256', "")
-            await send_website_path_data(qm, website_path_msg, output_msg.get('program_id', ""))
+            await send_website_path_data(qm=qm, 
+                                         data=website_path_msg, 
+                                         program_id=output_msg.get('program_id', ""),
+                                         trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
             # Extract domain names from the httpx output to send to data worker
             # All domains specified in response body, all FQDNs and all subject alternative names
             domains_to_add = (output_msg.get("data", {}).get('body_domains', []) + 
@@ -127,30 +134,39 @@ class TestHTTP(ReconPlugin):
                 for domain in domains_to_add:
                     if is_valid_hostname(domain):
                         logger.debug(f"Sending domain data for {domain}")
-                        await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id', ""), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+                        await send_domain_data(qm=qm, 
+                                               data=domain, 
+                                               program_id=output_msg.get('program_id'), 
+                                               execution_id=output_msg.get('execution_id', ""), 
+                                               trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
 
             # Parse and send service data
             await send_service_data(qm=qm, data={
                     "ip": output_msg.get("data").get('host'), 
                     "port": int(output_msg.get("data").get('port')), 
                     "protocol": "tcp",
-                    "scheme": output_msg.get("data").get('scheme', "")
+                    "scheme": output_msg.get("data").get('scheme', ""),
+                    "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
                 }, program_id=output_msg.get('program_id'))
 
             # If a HTTPS response is parsed, send certificate data
             if output_msg.get("data").get('tls', {}).get('subject_dn', "") != "":
-                await send_certificate_data(qm=qm,data={
-                    "url": output_msg.get("data", {}).get('url', ""),
-                    "cert": {   
-                        "subject_dn": output_msg.get("data").get('tls', {}).get('subject_dn', ""),
-                        "subject_cn": output_msg.get("data").get('tls', {}).get('subject_cn', ""),
-                        "subject_an": output_msg.get("data").get('tls', {}).get('subject_an', ""),
-                        "valid_date": output_msg.get("data").get('tls', {}).get('not_before', ""),
-                        "expiry_date": output_msg.get("data").get('tls', {}).get('not_after', ""),
-                        "issuer_dn": output_msg.get("data").get('tls', {}).get('issuer_dn', ""),
-                        "issuer_cn": output_msg.get("data").get('tls', {}).get('issuer_cn', ""),
-                        "issuer_org": output_msg.get("data").get('tls', {}).get('issuer_org', ""),
-                        "serial": output_msg.get("data").get('tls', {}).get('serial', ""),
-                        "fingerprint_hash": output_msg.get("data").get('tls', {}).get('fingerprint_hash', {}).get('sha256', "")
-                    }
-                }, program_id=output_msg.get('program_id'))
+                await send_certificate_data(qm=qm,
+                                            data={
+                                                "url": output_msg.get("data", {}).get('url', ""),
+                                                "cert": {   
+                                                    "subject_dn": output_msg.get("data").get('tls', {}).get('subject_dn', ""),
+                                                    "subject_cn": output_msg.get("data").get('tls', {}).get('subject_cn', ""),
+                                                    "subject_an": output_msg.get("data").get('tls', {}).get('subject_an', ""),
+                                                    "valid_date": output_msg.get("data").get('tls', {}).get('not_before', ""),
+                                                    "expiry_date": output_msg.get("data").get('tls', {}).get('not_after', ""),
+                                                    "issuer_dn": output_msg.get("data").get('tls', {}).get('issuer_dn', ""),
+                                                    "issuer_cn": output_msg.get("data").get('tls', {}).get('issuer_cn', ""),
+                                                    "issuer_org": output_msg.get("data").get('tls', {}).get('issuer_org', ""),
+                                                    "serial": output_msg.get("data").get('tls', {}).get('serial', ""),
+                                                    "fingerprint_hash": output_msg.get("data").get('tls', {}).get('fingerprint_hash', {}).get('sha256', "")
+                                                }
+                                            }, 
+                                            program_id=output_msg.get('program_id'),
+                                            execution_id=output_msg.get('execution_id', ""),
+                                            trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
