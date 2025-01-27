@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.helper import send_ip_data, send_domain_data, parse_dns_record, send_dns_data, send_website_path_data
-from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
+from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url, is_valid_url
 from loguru import logger
 import asyncio
 import json
@@ -28,20 +28,59 @@ class GauPlugin(ReconPlugin):
         command = f"echo {params.get("target", {})} | gau --subs"
         logger.debug(f"Running command: {command}")
         process = await self._create_subprocess_shell(command)
-        
         async for output in self._read_subprocess_output(process):
             if output:
                 yield {"url": output}
+                break
 
         await process.wait()
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:    
         logger.debug(f"Processing output: {output_msg}")
-        website_path_msg = {
-            "path": output_msg.get('data', {}).get('url', ""),
-        }
-        await send_website_path_data(qm=qm, data=website_path_msg, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'))
-        domain_msg = {
-            "domain": get_domain_from_url(output_msg.get('data', {}).get('url', ""))
-        }
-        await send_domain_data(qm=qm, data=domain_msg, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'))
+        if not is_valid_url(output_msg.get('data', {}).get('url', "")):
+            logger.warning(f"Invalid URL: {output_msg.get('data', {}).get('url', '')}")
+        else:
+            # Send website_path and domain data
+            website_path_msg = {
+                "url": output_msg.get('data', {}).get('url', ""),
+                'host': output_msg.get('data', {}).get('host', ""),
+                'port': output_msg.get('data', {}).get('port', ""),
+                'scheme': output_msg.get('data', {}).get('scheme', ""),
+                'techs': output_msg.get('data', {}).get('techs', []),
+                'favicon_hash': output_msg.get('data', {}).get('favicon_hash', ""),
+                'favicon_url': output_msg.get('data', {}).get('favicon_url', ""),
+            }
+            await send_website_path_data(qm=qm, data=website_path_msg, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'))
+            domain = get_domain_from_url(output_msg.get('data', {}).get('url', ""))
+            if domain:
+                await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'))
+                # Trigger puredns and dnsx jobs
+                logger.info(f"RECON JOB REQUESTED: puredns for {domain}")
+                await qm.publish_message(
+                    subject="recon.input.puredns",
+                    stream="RECON_INPUT",
+                    message={
+                        "function_name": "puredns",
+                        "program_id": output_msg.get("program_id"),
+                        "params": {"target": domain, "mode": "resolve"},
+                        "force": False,
+                        "execution_id": output_msg.get('execution_id', None),
+                        "trigger_new_jobs": False
+                    }
+                )
+            # Trigger test_http job
+            logger.info(f"RECON JOB REQUESTED: test_http for {output_msg.get('data', {}).get('url', '')}")
+            await qm.publish_message(
+                subject="recon.input.test_http",
+                stream="RECON_INPUT",
+                message={
+                    "function_name": "test_http",
+                    "program_id": output_msg.get("program_id"),
+                    "params": {"target": output_msg.get("data").get("url")},
+                    "force": False,
+                    "execution_id": output_msg.get('execution_id', None),
+                    "trigger_new_jobs": False
+                }
+            )
+
+        
