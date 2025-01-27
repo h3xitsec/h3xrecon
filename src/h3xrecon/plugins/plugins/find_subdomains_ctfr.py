@@ -2,7 +2,7 @@ from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from loguru import logger
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
-from h3xrecon.plugins.helpers import send_domain_data
+from h3xrecon.plugins.helper import send_domain_data
 import asyncio
 import os
 class FindSubdomainsCTFR(ReconPlugin):

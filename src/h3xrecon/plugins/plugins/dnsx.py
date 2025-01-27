@@ -71,18 +71,18 @@ class DnsxPlugin(ReconPlugin):
                     except Exception as e:
                         logger.error(f"Error processing NS {ns}: {str(e)}")
             #if output_msg.get('data', {}).get('cnames'):
-            await send_domain_data(
-                qm=qm,
-                data=output_msg.get('source', {}).get('params', {}).get('target'),
-                execution_id=output_msg.get('execution_id'),    
-                program_id=output_msg.get('program_id'),
-                attributes={"cnames": output_msg.get('data', {}).get('cnames'), "ips": output_msg.get('data', {}).get('a')},
-                trigger_new_jobs=output_msg.get('trigger_new_jobs', True),
-                response_id=None
-            )
-            logger.debug(f"Sent domain {output_msg.get('source', {}).get('params', {}).get('target')} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
-            #else:
-            #    logger.info(f"Domain {output_msg.get('data').get('host')} is not part of program {output_msg.get('program_id')}. Skipping processing.")
+            dom_attr = {"cnames": output_msg.get('data', {}).get('cnames', []), "ips": output_msg.get('data', {}).get('a', [])}
+            if (len(dom_attr.get("cnames")) + len(dom_attr.get("ips"))) > 0:
+                await send_domain_data(
+                    qm=qm,
+                    data=output_msg.get('source', {}).get('params', {}).get('target'),
+                    execution_id=output_msg.get('execution_id'),    
+                    program_id=output_msg.get('program_id'),
+                    attributes=dom_attr,
+                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True),
+                    response_id=None
+                )
+                logger.debug(f"Sent domain {output_msg.get('source', {}).get('params', {}).get('target')} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
         except Exception as e:
             logger.error(f"Error in process_resolved_domain: {str(e)}")
             #logger.exception(e)
