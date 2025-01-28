@@ -7,6 +7,9 @@ import asyncio
 import json
 import os
 
+FILES_PATH = os.environ.get('H3XRECON_RECON_FILES_PATH')
+RESOLVERS_FILE = f"{FILES_PATH}/resolvers-trusted.txt"
+
 class DnsxPlugin(ReconPlugin):
     @property
     def name(self) -> str:
@@ -25,7 +28,7 @@ class DnsxPlugin(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
-        command = f"echo {params.get("target", {})} | dnsx -nc -resp -recon -silent -j"
+        command = f"echo {params.get("target", {})} | dnsx -nc -resp -recon -silent -j -r {RESOLVERS_FILE}"
         logger.debug(f"Running command: {command}")
         process = await self._create_subprocess_shell(command)
         
