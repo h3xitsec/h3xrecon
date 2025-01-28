@@ -31,7 +31,6 @@ class GauPlugin(ReconPlugin):
         async for output in self._read_subprocess_output(process):
             if output:
                 yield {"url": output}
-                break
 
         await process.wait()
 
