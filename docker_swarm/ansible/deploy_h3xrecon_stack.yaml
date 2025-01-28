@@ -25,8 +25,6 @@
         loop:
           - src: ../../docker/grafana
             dest: "{{ h3xrecon_target_directory }}"
-          - src: ../../docker/pgbouncer
-            dest: "{{ h3xrecon_target_directory }}"
           - src: "{{ inventory_dir }}/docker-compose.swarm.yaml"
             dest: "{{ h3xrecon_target_directory }}/docker-compose.yaml"
           - src: "{{ inventory_dir }}/.env.compose"
@@ -46,7 +44,14 @@
         ansible.builtin.file:
           path: "{{ h3xrecon_target_directory }}/screenshots"
           state: directory
-
+      - name: Calculate dynamic workers count
+        ansible.builtin.set_fact:
+          dynamic_workers_count: "{{ (groups['workers'] | length) * 2}}"
+      - name: Write dynamic workers count to .env file
+        ansible.builtin.lineinfile:
+          path: "{{ h3xrecon_target_directory }}.env"
+          regexp: '^H3XRECON_WORKERS_COUNT='
+          line: "H3XRECON_WORKERS_COUNT={{ dynamic_workers_count }}"
       - name: Deploy Docker stack
         ansible.builtin.shell:
           chdir: "{{ h3xrecon_target_directory }}"

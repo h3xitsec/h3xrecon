@@ -86,10 +86,18 @@ class WebFuzz(ReconPlugin):
         data = output_msg.get("data", {})
         parsed_website_and_path = parse_url(data.get('url', {}))
         website_msg = parsed_website_and_path.get('website', {})
-        await send_website_data(qm, website_msg, output_msg.get('program_id', None))
+        await send_website_data(qm=qm, 
+                               data=website_msg, 
+                               program_id=output_msg.get('program_id', None), 
+                               execution_id=output_msg.get('execution_id', ""),
+                               trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
         website_path_msg = parsed_website_and_path.get('website_path', {})
         website_path_msg['content_type'] = data.get('content-type', "")
         website_path_msg['status_code'] = data.get('status', None)
         website_path_msg['content_length'] = data.get('length', None)
         website_path_msg['final_path'] = data.get('redirectlocation', None)
-        await send_website_path_data(qm, website_path_msg, output_msg.get('program_id', None))
+        await send_website_path_data(qm=qm, 
+                                     data=website_path_msg, 
+                                     program_id=output_msg.get('program_id', None), 
+                                     execution_id=output_msg.get('execution_id', ""),
+                                     trigger_new_jobs=output_msg.get('trigger_new_jobs', True))

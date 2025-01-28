@@ -97,10 +97,16 @@ class Screenshot(ReconPlugin):
                         return
                     if parsed_website_and_path.get('website'):
                         #logger.debug(f"Sending website data: {parsed_website_and_path.get('website')}")
-                        await send_website_data(qm, parsed_website_and_path.get('website'), output_msg.get('program_id', ""))
+                        await send_website_data(qm=qm, 
+                                                data=parsed_website_and_path.get('website'), 
+                                                program_id=output_msg.get('program_id', ""), 
+                                                trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
                     if parsed_website_and_path.get('website_path'):
                         #logger.debug(f"Sending website path data: {parsed_website_and_path.get('website_path')}")
-                        await send_website_path_data(qm, parsed_website_and_path.get('website_path'), output_msg.get('program_id', ""))
+                        await send_website_path_data(qm=qm, 
+                                                     data=parsed_website_and_path.get('website_path'), 
+                                                     program_id=output_msg.get('program_id', ""), 
+                                                     trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
                     # Send screenshots
                     #logger.debug(f"Found {len(screenshots)} screenshots")
                     for file in screenshots:
@@ -112,13 +118,21 @@ class Screenshot(ReconPlugin):
                                 "path": os.path.join(SCREENSHOT_STORAGE_PATH, file),
                             }
                             #logger.debug(f"Sending screenshot data: {screenshot_msg}")
-                            await send_screenshot_data(qm, screenshot_msg, output_msg.get('program_id', ""))
+                            await send_screenshot_data(qm=qm, 
+                                                       data=screenshot_msg, 
+                                                       program_id=output_msg.get('program_id', ""), 
+                                                       execution_id=output_msg.get('execution_id', ""), 
+                                                       trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
                     
                     # Send domain data
                     try:
                         hostname = parsed_website_and_path.get('website').get('url')
                         domain_msg = hostname
-                        await send_domain_data(qm, domain_msg, output_msg.get('program_id', ""), execution_id=output_msg.get('execution_id', ""), trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+                        await send_domain_data(qm=qm, 
+                                               data=domain_msg, 
+                                               program_id=output_msg.get('program_id', ""), 
+                                               execution_id=output_msg.get('execution_id', ""), 
+                                               trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
                     except Exception as e:
                         logger.warning(f"Error extracting domain: {str(e)}")
                 except Exception as e:

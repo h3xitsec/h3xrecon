@@ -639,7 +639,7 @@ class DatabaseManager():
             logger.exception(e)
             return DbResult(success=False, error=f"Error inserting or updating domain in database: {str(e)}")
         
-    async def insert_website(self, url: str, host: str, port: int, scheme: str, techs: List[str], favicon_hash: str, favicon_url: str, program_id: int):
+    async def insert_website(self, url: str, host: str = None, port: int = None, scheme: str = None, techs: List[str] = None, favicon_hash: str = None, favicon_url: str = None, program_id: int = None):
         await self.ensure_connected()
         try:
             # Validate URL
@@ -722,22 +722,22 @@ class DatabaseManager():
             program_id: int,
             website_id: int, 
             path: str, 
-            final_path: str, 
-            techs: List[str], 
-            response_time: str, 
-            lines: int, 
-            title: str, 
-            words: int, 
-            method: str, 
-            scheme: str, 
-            status_code: int, 
-            content_type: str, 
-            content_length: int, 
-            chain_status_codes: List[int], 
-            page_type: str, 
-            body_preview: str,
-            resp_header_hash: str,
-            resp_body_hash: str):
+            final_path: str = None, 
+            techs: List[str] = None, 
+            response_time: str = None, 
+            lines: int = None, 
+            title: str = None, 
+            words: int = None, 
+            method: str = None, 
+            scheme: str = None, 
+            status_code: int = None, 
+            content_type: str = None, 
+            content_length: int = None, 
+            chain_status_codes: List[int] = None, 
+            page_type: str = None, 
+            body_preview: str = None,
+            resp_header_hash: str = None,
+            resp_body_hash: str = None):
         await self.ensure_connected()
         try:
             if self.pool is None:

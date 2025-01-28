@@ -41,7 +41,9 @@ class ExpandCIDR(ReconPlugin):
                     "function_name": output_msg.get("data").get("function_name"),
                     "program_id": output_msg.get("program_id"),
                     "params": {"target": ip},
-                    "force": False
+                    "force": False,
+                    "trigger_new_jobs": output_msg.get('trigger_new_jobs', True),
+                    "execution_id": output_msg.get('execution_id')
                 }
             )
         return {}

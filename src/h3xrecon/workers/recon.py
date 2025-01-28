@@ -351,15 +351,15 @@ class ReconWorker(Worker):
                     return
                 
                 # Log execution start
-                await self.db.log_reconworker_operation(
-                    execution_id=recon_job_request.execution_id,
-                    component_id=self.component_id,
-                    function_name=recon_job_request.function_name,
-                    program_id=recon_job_request.program_id,
-                    target=new_recon_job_request.params.get('target', 'unknown'),
-                    parameters=new_recon_job_request.params,
-                    status='started'
-                )              
+                # await self.db.log_reconworker_operation(
+                #     execution_id=recon_job_request.execution_id,
+                #     component_id=self.component_id,
+                #     function_name=recon_job_request.function_name,
+                #     program_id=recon_job_request.program_id,
+                #     target=new_recon_job_request.params.get('target', 'unknown'),
+                #     parameters=new_recon_job_request.params,
+                #     status='started'
+                # )
                 logger.debug(f"Running function {recon_job_request.function_name} on {new_recon_job_request.params.get('target')} ({recon_job_request.execution_id})")
                 await self.set_state(WorkerState.BUSY, f"{recon_job_request.function_name}:{new_recon_job_request.params.get('target')}:{recon_job_request.execution_id}")
                 try:
@@ -406,23 +406,22 @@ class ReconWorker(Worker):
                         except StopAsyncIteration:
                             break
                     # Send end of job message
-                    
-                    message = {
-                        "program_id": recon_job_request.program_id,
-                        "execution_id": recon_job_request.execution_id,
-                        "trigger_new_jobs": recon_job_request.trigger_new_jobs,
-                        "response_id": recon_job_request.response_id,
-                        "source": {
-                            "function_name": recon_job_request.function_name,
-                            "params": new_recon_job_request.params,
-                            "force": recon_job_request.force
-                        },
-                        "data": {},
-                        "timestamp": datetime.now().isoformat()
-                    }
                     if recon_job_request.debug_id:
                         await self._send_jobrequest_response(recon_job_request.execution_id, recon_job_request.debug_id, status=debug_results)
-                    else:
+                    elif recon_job_request.response_id:
+                        message = {
+                            "program_id": recon_job_request.program_id,
+                            "execution_id": recon_job_request.execution_id,
+                            "trigger_new_jobs": recon_job_request.trigger_new_jobs,
+                            "response_id": recon_job_request.response_id,
+                            "source": {
+                                "function_name": recon_job_request.function_name,
+                                "params": new_recon_job_request.params,
+                                "force": recon_job_request.force
+                            },
+                            "data": "END_OF_JOB",
+                            "timestamp": datetime.now().isoformat()
+                        }
                         logger.debug(f"Sending end of job message: {message}")
                         await self.qm.publish_message(
                             subject=f"parsing.input",
