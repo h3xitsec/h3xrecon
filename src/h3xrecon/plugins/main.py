@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Dict, Any, List
-from h3xrecon.core.utils import is_valid_url, is_valid_hostname, get_domain_from_url, is_valid_ip, is_valid_cidr, parse_url
+from h3xrecon.core.utils import is_valid_url, is_valid_hostname, get_domain_from_url, is_valid_ip, is_valid_cidr
 from loguru import logger
 import asyncio
 import inspect

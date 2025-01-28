@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_ip_data, send_domain_data, parse_dns_record, send_dns_data
-from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
+from h3xrecon.plugins.helper import send_ip_data, send_domain_data, send_dns_data
+from h3xrecon.core.utils import is_valid_hostname
 from loguru import logger
 import os
 import random
@@ -44,7 +44,7 @@ class PureDNSPlugin(ReconPlugin):
             pass
     
     def read_puredns_output(self):
-        logger.debug(f"Reading puredns output")
+        logger.debug("Reading puredns output")
         logger.debug(f"Output before: {self.output}")
         output_file_map = {
             "resolved": "/tmp/puredns_massdns.txt",

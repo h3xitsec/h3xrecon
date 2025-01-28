@@ -2,17 +2,15 @@ from h3xrecon.core.worker import Worker, WorkerState
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import Config
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
-from datetime import datetime, timezone
-from typing import Dict, Any, Callable, List, Optional
+from datetime import datetime
+from typing import Dict, Any, Callable, Optional
 from loguru import logger
-from dataclasses import dataclass
 import importlib
 import pkgutil
 import json
 import traceback
 import asyncio
 import sys
-from uuid import UUID
 import uuid
 from h3xrecon.core.models import ReconJobOutput
 

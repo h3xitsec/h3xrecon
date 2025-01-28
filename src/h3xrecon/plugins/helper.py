@@ -4,7 +4,6 @@ from h3xrecon.core.utils import is_valid_url, get_domain_from_url
 from ipwhois import IPWhois
 import requests
 from loguru import logger
-from urllib.parse import urlparse
 
 def log_sent_data(func):
     async def wrapper(qm, data: str, program_id: int, *args, **kwargs):

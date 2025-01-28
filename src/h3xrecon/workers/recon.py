@@ -8,10 +8,8 @@ from h3xrecon.core.utils import check_last_execution
 from h3xrecon.core.models import ReconJobRequest
 from h3xrecon.plugins import ReconPlugin
 from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
-from dataclasses import dataclass
 from h3xrecon.core.utils import debug_trace
 from typing import Dict, Any, Optional, Callable, AsyncGenerator
-import uuid
 from datetime import datetime, timezone, timedelta
 import json
 import importlib
@@ -424,7 +422,7 @@ class ReconWorker(Worker):
                         }
                         logger.debug(f"Sending end of job message: {message}")
                         await self.qm.publish_message(
-                            subject=f"parsing.input",
+                            subject="parsing.input",
                             stream="PARSING_INPUT",
                             message=message
                         )

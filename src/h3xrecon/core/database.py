@@ -1,7 +1,6 @@
 import asyncpg
 import re
 import asyncio
-import uuid
 from typing import List, Dict, Any
 from collections import defaultdict
 from loguru import logger

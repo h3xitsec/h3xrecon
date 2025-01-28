@@ -6,7 +6,6 @@ from loguru import logger
 import asyncio
 import json
 import os
-import urllib.parse
 
 class TestHTTP(ReconPlugin):
     @property

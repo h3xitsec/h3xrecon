@@ -1,7 +1,6 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from loguru import logger
-import asyncio
 import os
 
 class ExpandCIDR(ReconPlugin):

@@ -445,7 +445,7 @@ class Worker:
         logger.debug(f"{self.component_id}: Sending job request response with execution_id {execution_id} and response_id {response_id}")
         await self.qm.publish_message(
             subject=f"control.response.jobrequest.{response_id}",
-            stream=f"CONTROL_RESPONSE_JOBREQUEST",
+            stream="CONTROL_RESPONSE_JOBREQUEST",
             message={
                 "component_id": self.component_id,
                 "execution_id": execution_id,
