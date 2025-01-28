@@ -52,7 +52,7 @@ class Nuclei(ReconPlugin):
         return ["domain", "ip", "url"]
 
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         function_params = asdict(FunctionParams(**params))
         logger.debug(f"Function params: {function_params}")
         command = f"nuclei -or -u {function_params.get('target', {})} -j {" ".join(function_params.get('extra_params', []))}"

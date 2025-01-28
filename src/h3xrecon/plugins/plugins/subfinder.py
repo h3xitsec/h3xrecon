@@ -5,7 +5,7 @@ from loguru import logger
 import asyncio
 import os
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
-class FindSubdomainsSubfinder(ReconPlugin):
+class SubfinderPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
@@ -29,7 +29,7 @@ class FindSubdomainsSubfinder(ReconPlugin):
                 params["target"] = params.get("target", {})
         return params
     
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         command = f"subfinder -d {params.get('target', {})}"
         logger.debug(f"Running {self.name} on {params.get('target', {})} with command: {command}")
 

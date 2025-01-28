@@ -6,7 +6,7 @@ import asyncio
 import os
 import xml.etree.ElementTree as ET
 
-class PortScan(ReconPlugin):
+class NmapPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
@@ -19,7 +19,7 @@ class PortScan(ReconPlugin):
         return ["ip", "domain"]
 
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         cloud_provider = await db.get_cloud_provider(params.get("target", {}))
         if cloud_provider:
             logger.info(f"JOB SKIPPED: not running port scan for cloud provider {cloud_provider}")

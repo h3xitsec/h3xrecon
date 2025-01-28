@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 
-class CIDRIntel(ReconPlugin):
+class AmassPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
@@ -18,25 +18,8 @@ class CIDRIntel(ReconPlugin):
     def timeout(self) -> int:
         """Timeout in seconds for the plugin execution. Default is 300 seconds (5 minutes)."""
         return 300
-    @property
-    def sample_output(self) -> Dict[str, Any]:
-        output_data = {
-            "program_id": 1,
-            "execution_id": "123",
-            "source": {
-                "function_name": "cidr_intel",
-                "target": "1.1.0.0/16",
-                "force": False
-            },
-            "data": {
-                "domain": "example.com",
-                "ip": "1.1.1.1"
-            },
-            "timestamp": "2024-01-01T00:00:00Z"
-        }
-        return output_data
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
         command = f"amass intel -active -cidr {params.get("target", {})} -ipv4"
         logger.debug(f"Running command: {command}")

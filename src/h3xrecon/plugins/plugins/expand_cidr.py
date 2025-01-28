@@ -12,37 +12,57 @@ class ExpandCIDR(ReconPlugin):
     def target_types(self) -> List[str]:
         return ["cidr"]
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Expands the CIDR to individual IP addresses using prips and dispatches reverse_resolve_ip tasks.
         
         :param target: The CIDR range (e.g., "192.168.1.0/24")
         """
         logger.debug(f"Running {self.name} on CIDR: {params.get('target', {})}")
+        logger.debug("Dispatching amass task for the CIDR")
+        # Dispatch amass task for the CIDR
+        await qm.publish_message(
+            subject=f"recon.input.amass",
+            stream="RECON_INPUT",
+            message={
+                "function_name": "amass",
+                "program_id": program_id,
+                "params": {"target": params.get("target", {})},
+                "force": False,
+                "trigger_new_jobs": False,
+                "execution_id": execution_id
+            }
+        )
         command = f"prips {params.get('target', {})} && cat /tmp/prips.log"
-        output = self._create_subprocess_shell_sync(
-            command
-        ).split()
-        message = {
-            "function_name": "reverse_resolve_ip",
-            "target": output
-        }
-        logger.debug(f"Yielding message: {message}")
-        yield message
-    
-    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        logger.debug(f"Processing output: {output_msg}")
-        for ip in output_msg.get("data").get("target"):
+        # Split the output into a list of IP addresses
+        output = self._create_subprocess_shell_sync(command).split()
+        # Dispatch reverse_resolve_ip tasks for each IP of the CIDR
+        for ip in output:
             await qm.publish_message(
-                subject=f"recon.input.{output_msg.get("data").get("function_name")}",
+                subject=f"recon.input.reverse_resolve_ip",
                 stream="RECON_INPUT",
                 message={
-                    "function_name": output_msg.get("data").get("function_name"),
-                    "program_id": output_msg.get("program_id"),
+                    "function_name": "reverse_resolve_ip",
+                    "program_id": program_id,
                     "params": {"target": ip},
                     "force": False,
-                    "trigger_new_jobs": output_msg.get('trigger_new_jobs', True),
-                    "execution_id": output_msg.get('execution_id')
+                    "trigger_new_jobs": False,
+                    "execution_id": execution_id
                 }
             )
+        # message = {
+        #     "function_name": "reverse_resolve_ip",
+        #     "target": output
+        # }
+        # logger.debug(f"Yielding message: {message}")
+        # yield message
+        # # Make the parsing worker dispatch "amass" job for the CIDR
+        # message = {
+        #     "function_name": "amass",
+        #     "target": params.get("target", {})
+        # }
+        # logger.debug(f"Yielding message: {message}")
+        yield {}
+    
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         return {}

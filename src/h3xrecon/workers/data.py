@@ -34,16 +34,16 @@ JOB_MAPPING: Dict[str, List[JobConfig]] = {
     "domain": [
        #JobConfig(function_name="test_domain_catchall", param_map=lambda result: {"target": result.lower()}),
        JobConfig(function_name="puredns", param_map=lambda result: {"target": result.lower(), "mode": "resolve"}),
-       JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="httpx", param_map=lambda result: {"target": result.lower()}),
        JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
     ],
     "ip": [
        JobConfig(function_name="reverse_resolve_ip", param_map=lambda result: {"target": result.lower()}),
-       JobConfig(function_name="port_scan", param_map=lambda result: {"target": result.lower()})
+       JobConfig(function_name="nmap", param_map=lambda result: {"target": result.lower()})
     ],
     "website": [
-       JobConfig(function_name="screenshot", param_map=lambda result: {"target": result.lower()}),
-       JobConfig(function_name="test_http", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="gowitness", param_map=lambda result: {"target": result.lower()}),
+       JobConfig(function_name="httpx", param_map=lambda result: {"target": result.lower()}),
        JobConfig(function_name="nuclei", param_map=lambda result: {"target": result.lower(), "extra_params": ["-as"]}),
     ]
 }

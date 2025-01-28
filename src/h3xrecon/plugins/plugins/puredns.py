@@ -85,21 +85,24 @@ class PureDNSPlugin(ReconPlugin):
 
     def resolve_target(self, target: str):
         # First resolve the target with a random number to test if the target is a wildcard domain
-        command = self._get_resolve_command(f"{random.randint(1000000000, 9999999999)}.{target}")
+        randomized_subdomain = f"{random.randint(1000000000, 9999999999)}.{target}"
+        command = self._get_resolve_command(randomized_subdomain)
         cmd_output = self._create_subprocess_shell_sync(command)
         logger.debug(f"Command output: {cmd_output}")
         self.read_puredns_output()
-        # If the target is a wildcard domain, return the output
+        # If the target is a wildcard domain, remove the randomized subdomain from the resolved output
         if target in self.output.get("wildcards", []):
-            pass
-        # If the target is not a wildcard domain, resolve it again with the actual target
+            for record in self.output.get("resolved", []):
+                if record.startswith(randomized_subdomain):
+                    self.output["resolved"].remove(record)
+        # Resolve the actual target
         command = self._get_resolve_command(target)
         cmd_output = self._create_subprocess_shell_sync(command)
         logger.debug(f"Command output: {cmd_output}")
         self.read_puredns_output()
 
     
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         if not params.get("mode"):
             logger.error("Run mode not specified")
             return
@@ -111,7 +114,8 @@ class PureDNSPlugin(ReconPlugin):
 
         
         self.clean_tmp_files()
-
+        
+        # Bruteforce mode
         if self.run_mode == "bruteforce":
             domain = await db.get_domain(target)
             logger.debug(f"Domain: {domain}")
@@ -127,6 +131,7 @@ class PureDNSPlugin(ReconPlugin):
                 self.resolve_target(target)
                 if target in self.output.get("wildcards", []):
                     logger.info(f"JOB SKIPPED: {target} is a wildcard domain")
+                    return
                 else:
                     command = self._get_bruteforce_command(target)
                     self._create_subprocess_shell_sync(command)
@@ -146,7 +151,7 @@ class PureDNSPlugin(ReconPlugin):
         elif self.run_mode == "resolve":
             # Resolve mode
             self.resolve_target(target)
-            self.read_puredns_output()
+            #self.read_puredns_output()
         
         else:
             raise ValueError(f"Invalid mode: {self.run_mode}")
@@ -165,7 +170,7 @@ class PureDNSPlugin(ReconPlugin):
         try:
             self.run_mode = output_msg.get('source', {}).get('params', {}).get('mode', None)
             logger.debug(f"Run mode: {self.run_mode}")
-            # Get the raw output string
+            # Get the raw output data
             data = output_msg.get("data", {})
             resolved = data.get('resolved', [])
             wildcards = data.get('wildcards', [])
@@ -246,18 +251,6 @@ class PureDNSPlugin(ReconPlugin):
                     trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
                 )
                 logger.debug(f"Sent domain {name} to data processor queue")
-                # if not name in wildcards:
-                #     await send_domain_data(
-                #         qm=qm,
-                #         data=name,
-                #         execution_id=output_msg.get('execution_id'),
-                #         attributes={
-                #             "is_catchall": True
-                #         },
-                #         program_id=output_msg.get('program_id'),
-                #         trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
-                #     )
-                #     logger.debug(f"Sent domain {wildcards} to data processor queue")
 
         except Exception as e:
             logger.error(f"Error in process_output: {str(e)}")

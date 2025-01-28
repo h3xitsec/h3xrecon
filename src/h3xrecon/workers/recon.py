@@ -361,8 +361,8 @@ class ReconWorker(Worker):
                 logger.debug(f"Running function {recon_job_request.function_name} on {new_recon_job_request.params.get('target')} ({recon_job_request.execution_id})")
                 await self.set_state(WorkerState.BUSY, f"{recon_job_request.function_name}:{new_recon_job_request.params.get('target')}:{recon_job_request.execution_id}")
                 try:
-                    # Pass self as worker to the plugin's execute method
-                    execution = plugin['execute'](new_recon_job_request.params, recon_job_request.program_id, recon_job_request.execution_id, self.db)
+                    # Pass self as worker to the plugin's execute methodl
+                    execution = plugin['execute'](new_recon_job_request.params, recon_job_request.program_id, recon_job_request.execution_id, self.db, self.qm)
                     if recon_job_request.debug_id:
                         debug_results = []
                     while True:
