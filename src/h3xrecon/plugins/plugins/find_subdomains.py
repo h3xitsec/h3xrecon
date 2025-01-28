@@ -31,7 +31,7 @@ class FindSubdomainsPlugin(ReconPlugin):
                 params["target"] = params.get("target", {})
         return params
 
-    async def execute(self, params: Dict[str, Any], program_id: int, execution_id: str, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int, execution_id: str, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Execute the meta plugin by dispatching multiple subdomain discovery jobs
         """
@@ -46,25 +46,20 @@ class FindSubdomainsPlugin(ReconPlugin):
         ]
         # Send jobs for each tool and yield dispatched job information
         for tool in subdomain_tools:
-            job = {
-                "function_name": tool,
-                "target": params.get("target", {}),
-            }
-            logger.info(f"Dispatching job: {job}")
-            logger.debug(f"Dispatching job: {job}")
-            
-            yield job
+            logger.info(f"Dispatching job: {tool}")
+            await qm.publish_message(
+                subject=f"recon.input.{tool}",
+                stream="RECON_INPUT",
+                message={
+                    "function_name": tool,
+                    "program_id": program_id,
+                    "params": {"target": params.get("target", {})},
+                    "force": False,
+                    "trigger_new_jobs": False,
+                    "execution_id": execution_id
+                }
+            )
+        yield {}
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        await qm.publish_message(
-            subject=f"recon.input.{output_msg.get("data").get("function_name")}",
-            stream="RECON_INPUT",
-            message={
-                "function_name": output_msg.get("data").get("function_name"),
-                "program_id": output_msg.get("program_id"),
-                "params": {"target": output_msg.get("data").get("target")},
-                "force": output_msg.get("source", {}).get("force", False),
-                "trigger_new_jobs": output_msg.get("trigger_new_jobs"),
-                "execution_id": output_msg.get("execution_id")
-            }
-        )
+        return {}
