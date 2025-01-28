@@ -85,13 +85,16 @@ class PureDNSPlugin(ReconPlugin):
 
     def resolve_target(self, target: str):
         # First resolve the target with a random number to test if the target is a wildcard domain
-        command = self._get_resolve_command(f"{random.randint(1000000000, 9999999999)}.{target}")
+        randomized_subdomain = f"{random.randint(1000000000, 9999999999)}.{target}"
+        command = self._get_resolve_command(randomized_subdomain)
         cmd_output = self._create_subprocess_shell_sync(command)
         logger.debug(f"Command output: {cmd_output}")
         self.read_puredns_output()
-        # If the target is a wildcard domain, return the output
+        # If the target is a wildcard domain, remove the randomized subdomain from the resolved output
         if target in self.output.get("wildcards", []):
-            pass
+            for record in self.output.get("resolved", []):
+                if record.startswith(randomized_subdomain):
+                    self.output["resolved"].remove(record)
         # If the target is not a wildcard domain, resolve it again with the actual target
         command = self._get_resolve_command(target)
         cmd_output = self._create_subprocess_shell_sync(command)
@@ -99,7 +102,7 @@ class PureDNSPlugin(ReconPlugin):
         self.read_puredns_output()
 
     
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         if not params.get("mode"):
             logger.error("Run mode not specified")
             return
@@ -146,7 +149,7 @@ class PureDNSPlugin(ReconPlugin):
         elif self.run_mode == "resolve":
             # Resolve mode
             self.resolve_target(target)
-            self.read_puredns_output()
+            #self.read_puredns_output()
         
         else:
             raise ValueError(f"Invalid mode: {self.run_mode}")

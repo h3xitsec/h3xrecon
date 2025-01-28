@@ -182,7 +182,7 @@ class ParsingWorker(Worker):
             await self.log_or_update_function_execution(msg)
             function_name = recon_output.source.get("function_name")
             
-            if function_name:
+            if function_name and recon_output.data:
                 processing_result = {}
                 actions_taken = []
                 try:
