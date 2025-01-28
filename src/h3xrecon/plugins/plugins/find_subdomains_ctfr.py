@@ -45,7 +45,7 @@ class FindSubdomainsCTFR(ReconPlugin):
                         
                         output = line.decode().strip()
                         if output:
-                            yield {"subdomain": [output]}
+                            yield {"subdomain": output}
                             
                     except asyncio.TimeoutError:
                         continue
