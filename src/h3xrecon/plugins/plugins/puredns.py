@@ -95,7 +95,7 @@ class PureDNSPlugin(ReconPlugin):
             for record in self.output.get("resolved", []):
                 if record.startswith(randomized_subdomain):
                     self.output["resolved"].remove(record)
-        # If the target is not a wildcard domain, resolve it again with the actual target
+        # Resolve the actual target
         command = self._get_resolve_command(target)
         cmd_output = self._create_subprocess_shell_sync(command)
         logger.debug(f"Command output: {cmd_output}")
@@ -114,7 +114,8 @@ class PureDNSPlugin(ReconPlugin):
 
         
         self.clean_tmp_files()
-
+        
+        # Bruteforce mode
         if self.run_mode == "bruteforce":
             domain = await db.get_domain(target)
             logger.debug(f"Domain: {domain}")
@@ -130,6 +131,7 @@ class PureDNSPlugin(ReconPlugin):
                 self.resolve_target(target)
                 if target in self.output.get("wildcards", []):
                     logger.info(f"JOB SKIPPED: {target} is a wildcard domain")
+                    return
                 else:
                     command = self._get_bruteforce_command(target)
                     self._create_subprocess_shell_sync(command)
@@ -168,7 +170,7 @@ class PureDNSPlugin(ReconPlugin):
         try:
             self.run_mode = output_msg.get('source', {}).get('params', {}).get('mode', None)
             logger.debug(f"Run mode: {self.run_mode}")
-            # Get the raw output string
+            # Get the raw output data
             data = output_msg.get("data", {})
             resolved = data.get('resolved', [])
             wildcards = data.get('wildcards', [])
@@ -249,18 +251,6 @@ class PureDNSPlugin(ReconPlugin):
                     trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
                 )
                 logger.debug(f"Sent domain {name} to data processor queue")
-                # if not name in wildcards:
-                #     await send_domain_data(
-                #         qm=qm,
-                #         data=name,
-                #         execution_id=output_msg.get('execution_id'),
-                #         attributes={
-                #             "is_catchall": True
-                #         },
-                #         program_id=output_msg.get('program_id'),
-                #         trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
-                #     )
-                #     logger.debug(f"Sent domain {wildcards} to data processor queue")
 
         except Exception as e:
             logger.error(f"Error in process_output: {str(e)}")
