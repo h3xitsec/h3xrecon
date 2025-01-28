@@ -7,7 +7,7 @@ import asyncio
 import json
 import os
 
-class TestHTTP(ReconPlugin):
+class HTTPXPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]

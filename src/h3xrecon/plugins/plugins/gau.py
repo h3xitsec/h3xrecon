@@ -65,13 +65,13 @@ class GauPlugin(ReconPlugin):
                         "trigger_new_jobs": False
                     }
                 )
-            # Trigger test_http job
-            logger.info(f"RECON JOB REQUESTED: test_http for {output_msg.get('data', {}).get('url', '')}")
+            # Trigger httpx job
+            logger.info(f"RECON JOB REQUESTED: httpx for {output_msg.get('data', {}).get('url', '')}")
             await qm.publish_message(
-                subject="recon.input.test_http",
+                subject="recon.input.httpx",
                 stream="RECON_INPUT",
                 message={
-                    "function_name": "test_http",
+                    "function_name": "httpx",
                     "program_id": output_msg.get("program_id"),
                     "params": {"target": output_msg.get("data").get("url")},
                     "force": False,

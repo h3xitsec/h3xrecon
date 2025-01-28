@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 
-class CIDRIntel(ReconPlugin):
+class AmassPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
@@ -24,7 +24,7 @@ class CIDRIntel(ReconPlugin):
             "program_id": 1,
             "execution_id": "123",
             "source": {
-                "function_name": "cidr_intel",
+                "function_name": "amass",
                 "target": "1.1.0.0/16",
                 "force": False
             },

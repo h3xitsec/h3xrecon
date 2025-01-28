@@ -5,7 +5,7 @@ from loguru import logger
 import asyncio
 import os
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
-class FindSubdomainsSubfinder(ReconPlugin):
+class SubfinderPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]

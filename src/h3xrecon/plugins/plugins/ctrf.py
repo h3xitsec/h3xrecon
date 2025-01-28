@@ -5,7 +5,7 @@ from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 from h3xrecon.plugins.helper import send_domain_data
 import asyncio
 import os
-class FindSubdomainsCTFR(ReconPlugin):
+class CTFRPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]

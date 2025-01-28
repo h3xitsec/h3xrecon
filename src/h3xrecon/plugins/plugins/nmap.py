@@ -6,7 +6,7 @@ import asyncio
 import os
 import xml.etree.ElementTree as ET
 
-class PortScan(ReconPlugin):
+class NmapPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]

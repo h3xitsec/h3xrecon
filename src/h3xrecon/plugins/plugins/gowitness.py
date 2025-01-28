@@ -10,7 +10,7 @@ import tempfile
 import re
 import shutil
 
-class Screenshot(ReconPlugin):
+class GowitnessPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]

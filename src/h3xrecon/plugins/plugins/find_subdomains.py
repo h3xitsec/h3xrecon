@@ -41,8 +41,8 @@ class FindSubdomainsPlugin(ReconPlugin):
         self.qm = QueueManager(self.config.nats)
         # List of subdomain discovery tools to trigger
         subdomain_tools = [
-            "find_subdomains_subfinder",
-            "find_subdomains_ctfr"
+            "subfinder",
+            "ctfr"
         ]
         # Send jobs for each tool and yield dispatched job information
         for tool in subdomain_tools:

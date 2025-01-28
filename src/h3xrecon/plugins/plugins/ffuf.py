@@ -9,7 +9,7 @@ import os
 import requests
 import uuid
 
-class WebFuzz(ReconPlugin):
+class FfufPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
