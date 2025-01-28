@@ -25,7 +25,7 @@ class FfufPlugin(ReconPlugin):
     async def is_input_valid(self, params: Dict[str, Any]) -> bool:
         return is_valid_url(params.get("target", {}))
     
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         parsed_url = parse_url(params.get('target', {}))
         target_url = parsed_url.get('website_path', {}).get('url')
         wordlist = params.get('wordlist', "/app/Worker/files/webcontent_test.txt")

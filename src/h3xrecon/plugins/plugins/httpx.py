@@ -21,7 +21,7 @@ class HTTPXPlugin(ReconPlugin):
     def timeout(self) -> int:
         return 300  # 5 minutes timeout
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get('target', {})}")
         command = (
             f"httpx -u {params.get('target', {})} "
