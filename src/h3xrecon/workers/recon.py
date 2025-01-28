@@ -406,23 +406,22 @@ class ReconWorker(Worker):
                         except StopAsyncIteration:
                             break
                     # Send end of job message
-                    
-                    message = {
-                        "program_id": recon_job_request.program_id,
-                        "execution_id": recon_job_request.execution_id,
-                        "trigger_new_jobs": recon_job_request.trigger_new_jobs,
-                        "response_id": recon_job_request.response_id,
-                        "source": {
-                            "function_name": recon_job_request.function_name,
-                            "params": new_recon_job_request.params,
-                            "force": recon_job_request.force
-                        },
-                        "data": {},
-                        "timestamp": datetime.now().isoformat()
-                    }
                     if recon_job_request.debug_id:
                         await self._send_jobrequest_response(recon_job_request.execution_id, recon_job_request.debug_id, status=debug_results)
-                    else:
+                    elif recon_job_request.response_id:
+                        message = {
+                            "program_id": recon_job_request.program_id,
+                            "execution_id": recon_job_request.execution_id,
+                            "trigger_new_jobs": recon_job_request.trigger_new_jobs,
+                            "response_id": recon_job_request.response_id,
+                            "source": {
+                                "function_name": recon_job_request.function_name,
+                                "params": new_recon_job_request.params,
+                                "force": recon_job_request.force
+                            },
+                            "data": "END_OF_JOB",
+                            "timestamp": datetime.now().isoformat()
+                        }
                         logger.debug(f"Sending end of job message: {message}")
                         await self.qm.publish_message(
                             subject=f"parsing.input",

@@ -153,7 +153,7 @@ class ParsingWorker(Worker):
 
         try:
             # Log message receipt
-            message_id = msg.get('execution_id', str(uuid.uuid4()))
+            # message_id = msg.get('execution_id', str(uuid.uuid4()))
             # await self.db.log_parsingworker_operation(
             #     component_id=self.component_id,
             #     message_id=message_id,
@@ -174,6 +174,12 @@ class ParsingWorker(Worker):
                 response_id=msg.get('response_id', None)
             )
             logger.info(f"RECEIVED RECON OUTPUT: {recon_output}")
+            if recon_output.data == "END_OF_JOB":
+                logger.info(f"END OF JOB: {recon_output.execution_id}")
+                if recon_output.response_id:
+                    logger.debug(f"Sending job completion response for {recon_output.execution_id}")
+                    await self._send_jobrequest_response(recon_output.execution_id, recon_output.response_id, status="completed")
+                return
             # Log or update function execution in database
             await self.log_or_update_function_execution(msg)
             function_name = recon_output.source.get("function_name")
@@ -184,9 +190,6 @@ class ParsingWorker(Worker):
                 try:
                     self.current_task = asyncio.create_task(self.process_function_output(msg))
                     await self.current_task
-                    if recon_output.response_id:
-                        logger.debug(f"Sending job completion response for {recon_output.execution_id}")
-                        await self._send_jobrequest_response(recon_output.execution_id, recon_output.response_id, status="completed")
                     processing_result['status'] = 'success'
                     actions_taken.append(f"Processed output from {function_name}")
                     # Log successful processing
@@ -243,7 +246,7 @@ class ParsingWorker(Worker):
             error_msg = f"Error in {file_name}:{line_number} - {type(e).__name__}: {str(e)}"
             logger.error(error_msg)
             
-            if 'message_id' in locals():
+            #if 'message_id' in locals():
                 # await self.db.log_parsingworker_operation(
                 #     component_id=self.component_id,
                 #     message_id=message_id,
@@ -254,7 +257,7 @@ class ParsingWorker(Worker):
                 #     error_message=error_msg,
                 #     processed_at=datetime.now(timezone.utc)
                 # )
-                pass
+                # pass
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
