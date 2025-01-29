@@ -1,9 +1,136 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 import ipaddress
 from h3xrecon.core.utils import is_valid_url, get_domain_from_url
 from ipwhois import IPWhois
 import requests
 from loguru import logger
+import aiohttp
+import json
+import random
+import string
+
+async def is_wildcard(subdomain):
+    RECORD_TYPE_CODES = {
+        "A": 1,
+        "AAAA": 28,
+        "TXT": 16,
+        "NS": 2,
+        "CNAME": 5,
+        "MX": 15
+    }
+    DNS_API_URL = "https://cloudflare-dns.com/dns-query"
+    async def query_dns_records(session,subdomain, record_type):
+            try:
+                async with session.get(DNS_API_URL, params={'name': subdomain, 'type': record_type}, headers={'Accept': 'application/dns-json'}) as response:
+                    if response.status == 200:
+                        raw_response = await response.text()
+                        try:
+                            result = json.loads(raw_response)
+                            has_answer = "Answer" in result
+                            answers = result.get("Answer", []) if has_answer else []
+                            # Look at the first answer's type, as this represents the actual record type
+                            # before any CNAME resolution
+                            if answers:
+                                first_answer_type = answers[0].get("type")
+                                # Convert type code back to string for easier comparison
+                                first_record_type = next(
+                                    (rtype for rtype, code in RECORD_TYPE_CODES.items()
+                                        if code == first_answer_type), None
+                                )
+                                return bool(answers), answers, first_record_type
+
+                            if not has_answer and "Authority" in result:
+                                return False, [], None
+
+                            return bool(answers), answers, None
+                        except json.JSONDecodeError as e:
+                            return False, [], None
+            except Exception as e:
+                return False, [], None
+
+    async def wildcard_check(session, subdomain, record_type):
+        try:
+            record_type_code = RECORD_TYPE_CODES.get(record_type.upper())
+            if not record_type_code:
+                return False, None
+
+            valid_base, base_answers, base_actual_type = await query_dns_records(session, subdomain, record_type)
+
+            if not valid_base or not base_answers:
+                return False, None
+
+            # Split the subdomain into parts
+            parts = subdomain.split('.')
+            pattern_tests = []
+
+            # Test each position for potential wildcards
+            for i in range(len(parts) - 1):  # -1 to avoid testing the TLD
+                # Create a test subdomain with a random part at position i
+                test_parts = parts.copy()
+                random_label = ''.join(random.choices(string.ascii_lowercase, k=10))
+                test_parts[i] = random_label
+                test_subdomain = '.'.join(test_parts)
+                pattern_tests.append(test_subdomain)
+
+                # Create a second test to confirm the pattern
+                test_parts[i] = ''.join(random.choices(string.ascii_lowercase, k=8))
+                pattern_tests.append('.'.join(test_parts))
+
+            # Test all generated patterns
+            for test_subdomain in pattern_tests:
+                valid_garbage, garbage_answers, garbage_actual_type = await query_dns_records(
+                    session, test_subdomain, record_type
+                )
+                
+                # If any test succeeds with the same record type, it's a wildcard
+                if valid_garbage and base_actual_type == garbage_actual_type:
+                    return True, base_actual_type
+
+            return False, None
+
+        except Exception as e:
+            print(f"[!] Error during wildcard check: {str(e)}")
+            return False, None
+
+    async def process_subdomain(subdomain):
+        async with aiohttp.ClientSession() as session:
+            record_types = ["A", "AAAA", "NS", "CNAME", "TXT", "MX"]
+            try:
+                for record_type in record_types:
+                    has_records, _, actual_type = await query_dns_records(session, subdomain, record_type)
+                    if has_records:
+                        is_wildcard, wildcard_type = await wildcard_check(session, subdomain, record_type)
+                        if is_wildcard:
+                            return (True, f"wildcard_{wildcard_type}")
+                        else:
+                            return (False, None)
+                return (False, "no_records")
+            except Exception as e:
+                logger.exception(f"Error processing subdomain {subdomain}: {e}")
+                return (False, "error")
+    
+    return await process_subdomain(subdomain)
+
+
+def unclutter_url_list(url_list: List[str]) -> List[str]:
+    """Remove parameters and hashes from URLs and return unique cleaned URLs.
+    
+    Args:
+        url_list: List of URLs to process
+        
+    Returns:
+        List of unique URLs in format scheme://hostname:port/path
+    """
+    cleaned_urls = set()
+    for url in url_list:
+        if not url:
+            continue
+        # Split on ? to remove parameters and # to remove hash
+        base_url = url.split('?')[0].split('#')[0]
+        # Ensure we have at least scheme and host
+        if '://' in base_url:
+            cleaned_urls.add(base_url)
+    return list(cleaned_urls)
 
 def log_sent_data(func):
     async def wrapper(qm, data: str, program_id: int, *args, **kwargs):

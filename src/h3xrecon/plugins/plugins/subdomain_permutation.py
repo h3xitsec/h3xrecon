@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from h3xrecon.plugins.plugins.puredns import PureDNSPlugin
-from h3xrecon.plugins.helper import send_domain_data
+from h3xrecon.plugins.helper import send_domain_data, is_wildcard
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 from loguru import logger
 import asyncio
@@ -29,12 +29,18 @@ class SubdomainPermutation(ReconPlugin):
     
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug("Checking if the target is a dns catchall domain")
-        
+        wildcard, wildcard_type = await is_wildcard(params.get("target", {}))
+        if wildcard:
+            logger.info(f"JOB SKIPPED: Target {params.get("target", {})} is a wildcard domain (Record type: {wildcard_type.replace("wildcard_","")}), skipping subdomain permutation processing.")
+            return
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
         
         wordlist = params.get("wordlist", "/app/Worker/files/permutations.txt")
         if not wordlist:
             wordlist = "/app/Worker/files/permutations.txt"
+        if not os.path.exists(wordlist):
+            logger.error(f"Wordlist {wordlist} not found")
+            return
         logger.debug(f"Using permutation file {wordlist}")
         command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {wordlist} -depth 1 -numbers 10 -mindup -adv -md"
         logger.debug(f"Running command {command}")

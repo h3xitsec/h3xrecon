@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_ip_data, send_domain_data, send_dns_data
+from h3xrecon.plugins.helper import send_ip_data, send_domain_data, send_dns_data, is_wildcard
 from h3xrecon.core.utils import is_valid_hostname
 from loguru import logger
 import os
@@ -117,27 +117,17 @@ class PureDNSPlugin(ReconPlugin):
         
         # Bruteforce mode
         if self.run_mode == "bruteforce":
-            domain = await db.get_domain(target)
-            logger.debug(f"Domain: {domain}")
             if params.get("wordlist"):
                 self.wordlist = params.get("wordlist")
             else:
                 self.wordlist = BRUTEFORCE_WORDLIST
-            
-            # If the domain is not in the database or if the wildcard status is not known, run resolve mode first
-            if domain is None or domain.get("is_catchall") is None:
-                logger.debug(f"Can't get {target}'s wildcard status, running resolve mode first")
-                self.clean_tmp_files()
-                self.resolve_target(target)
-                if target in self.output.get("wildcards", []):
-                    logger.info(f"JOB SKIPPED: {target} is a wildcard domain")
-                    return
-                else:
-                    command = self._get_bruteforce_command(target)
-                    self._create_subprocess_shell_sync(command)
-                    self.read_puredns_output()
-            elif domain.get("is_catchall") is True:
-                logger.info(f"JOB SKIPPED: {target} is already known to be a wildcard domain")
+            if not os.path.exists(self.wordlist):
+                logger.error(f"Wordlist {self.wordlist} not found")
+                return
+            # Check if the target is a wildcard domain
+            wildcard, wildcard_type = await is_wildcard(params.get("target", {}))
+            if wildcard:
+                logger.info(f"JOB SKIPPED: Target {params.get("target", {})} is a wildcard domain (Record type: {wildcard_type.replace("wildcard_","")}), skipping subdomain permutation processing.")
                 return
             else:
                 logger.debug(f"Domain {target} is not a wildcard domain, proceeding with bruteforce")
@@ -156,9 +146,8 @@ class PureDNSPlugin(ReconPlugin):
         else:
             raise ValueError(f"Invalid mode: {self.run_mode}")
 
-        
+        logger.debug(f"Output: {self.output}")
         if len(self.output.get("resolved", [])) > 0 or len(self.output.get("wildcards", [])) > 0:
-            logger.debug(f"Output: {self.output}")
             yield self.output
         
         # Cleanup temporary files
