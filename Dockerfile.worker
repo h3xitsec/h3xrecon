@@ -45,6 +45,8 @@ RUN go install github.com/d3mondev/puredns/v2@latest
 
 RUN go install github.com/lc/gau/v2/cmd/gau@latest
 
+RUN go install github.com/tomnomnom/unfurl@latest
+
 ## Final stage
 FROM python:3.12-slim
 
@@ -76,15 +78,15 @@ RUN ARCH=$(dpkg --print-architecture) && \
 
 ENV PATH="$PATH:/usr/local/go/bin:/usr/local/bin"
 
-RUN ARCH=$(dpkg --print-architecture) && \
-    case ${ARCH} in \
-        amd64) GOARCH="amd64" ;; \
-        arm64) GOARCH="arm64" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    wget "https://github.com/tomnomnom/unfurl/releases/download/v0.4.3/unfurl-linux-${GOARCH}-0.4.3.tgz" -O /tmp/unfurl.tar.gz && \
-    tar -C /usr/local/bin -xzf /tmp/unfurl.tar.gz && \
-    rm /tmp/unfurl.tar.gz
+# RUN ARCH=$(dpkg --print-architecture) && \
+#     case ${ARCH} in \
+#         amd64) GOARCH="amd64" ;; \
+#         arm64) GOARCH="arm64" ;; \
+#         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+#     esac && \
+#     wget "https://github.com/tomnomnom/unfurl/releases/download/v0.4.3/unfurl-linux-${GOARCH}-0.4.3.tgz" -O /tmp/unfurl.tar.gz && \
+#     tar -C /usr/local/bin -xzf /tmp/unfurl.tar.gz && \
+#     rm /tmp/unfurl.tar.gz
 
 
 RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
