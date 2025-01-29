@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="$PATH:/usr/local/go/bin"
+ENV PATH="$PATH:/root/go/bin:/usr/local/go/bin"
 
 RUN ARCH=$(dpkg --print-architecture) && \
     case ${ARCH} in \
