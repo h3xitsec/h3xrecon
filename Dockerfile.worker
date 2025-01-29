@@ -45,7 +45,7 @@ RUN go install github.com/d3mondev/puredns/v2@latest
 
 RUN go install github.com/lc/gau/v2/cmd/gau@latest
 
-RUN go install github.com/tomnomnom/unfurl@latest
+#RUN go install github.com/tomnomnom/unfurl@latest
 
 ## Final stage
 FROM python:3.12-slim
