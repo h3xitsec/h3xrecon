@@ -20,9 +20,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
 
-ENV PATH="$PATH:/usr/local/go/bin"
+ENV PATH="$PATH:/usr/local/go/bin:/root/go/bin"
 
-RUN /usr/local/go/bin/go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
+RUN go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
     pdtm -i subfinder && \
     pdtm -i httpx && \
     pdtm -i dnsx && \
@@ -43,9 +43,6 @@ RUN cd /tmp && git clone https://github.com/blechschmidt/massdns --tag v1.1.0 &&
 
 RUN go install github.com/d3mondev/puredns/v2@latest
 
-RUN go install github.com/lc/gau/v2/cmd/gau@latest
-
-#RUN go install github.com/tomnomnom/unfurl@latest
 
 ## Final stage
 FROM python:3.12-slim
@@ -66,7 +63,7 @@ RUN apt-get update && apt-get install -y \
     chromium \
     && rm -rf /var/lib/apt/lists/*
 
-    RUN ARCH=$(dpkg --print-architecture) && \
+RUN ARCH=$(dpkg --print-architecture) && \
     case ${ARCH} in \
         amd64) GOARCH="amd64" ;; \
         arm64) GOARCH="arm64" ;; \
@@ -77,17 +74,6 @@ RUN apt-get update && apt-get install -y \
     rm /tmp/go.tar.gz
 
 ENV PATH="$PATH:/usr/local/go/bin"
-
-# RUN ARCH=$(dpkg --print-architecture) && \
-#     case ${ARCH} in \
-#         amd64) GOARCH="amd64" ;; \
-#         arm64) GOARCH="arm64" ;; \
-#         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-#     esac && \
-#     wget "https://github.com/tomnomnom/unfurl/releases/download/v0.4.3/unfurl-linux-${GOARCH}-0.4.3.tgz" -O /tmp/unfurl.tar.gz && \
-#     tar -C /usr/local/bin -xzf /tmp/unfurl.tar.gz && \
-#     rm /tmp/unfurl.tar.gz
-
 
 RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
     cd /opt/ctfr && \
@@ -103,9 +89,7 @@ COPY --from=builder /root/.pdtm/go/bin/* /usr/local/bin/
 COPY --from=builder /usr/local/bin/massdns /usr/local/bin/massdns
 
 # Copy recon worker files
-COPY ./docker/worker/*.txt /app/Worker/files/
-
-COPY ./docker/worker/.gau.toml /root/
+COPY ./docker/worker/* /app/Worker/files/
 
 COPY ./src/h3xrecon/__about__.py /app/
 
