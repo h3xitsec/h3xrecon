@@ -22,7 +22,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
 
 ENV PATH="$PATH:/usr/local/go/bin"
 
-RUN go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
+RUN /usr/local/go/bin/go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
     pdtm -i subfinder && \
     pdtm -i httpx && \
     pdtm -i dnsx && \
