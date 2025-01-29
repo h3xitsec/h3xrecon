@@ -1,9 +1,10 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_domain_data, send_website_path_data
+from h3xrecon.plugins.helper import send_domain_data, send_website_path_data, unclutter_url_list
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url, is_valid_url
 from loguru import logger
 import os
+from time import sleep
 
 class GauPlugin(ReconPlugin):
     @property
@@ -23,61 +24,63 @@ class GauPlugin(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
-        command = f"echo {params.get("target", {})} | gau --subs"
-        logger.debug(f"Running command: {command}")
-        process = await self._create_subprocess_shell(command)
-        async for output in self._read_subprocess_output(process):
-            if output:
-                yield {"url": output}
-
-        await process.wait()
-
-    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:    
-        logger.debug(f"Processing output: {output_msg}")
-        if not is_valid_url(output_msg.get('data', {}).get('url', "")):
-            logger.warning(f"Invalid URL: {output_msg.get('data', {}).get('url', '')}")
-        else:
-            # Send website_path and domain data
-            website_path_msg = {
-                "url": output_msg.get('data', {}).get('url', ""),
-                'host': output_msg.get('data', {}).get('host', ""),
-                'port': output_msg.get('data', {}).get('port', ""),
-                'scheme': output_msg.get('data', {}).get('scheme', ""),
-                'techs': output_msg.get('data', {}).get('techs', []),
-                'favicon_hash': output_msg.get('data', {}).get('favicon_hash', ""),
-                'favicon_url': output_msg.get('data', {}).get('favicon_url', ""),
-            }
-            await send_website_path_data(qm=qm, data=website_path_msg, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'))
-            domain = get_domain_from_url(output_msg.get('data', {}).get('url', ""))
-            if domain:
-                await send_domain_data(qm=qm, data=domain, program_id=output_msg.get('program_id'), execution_id=output_msg.get('execution_id'))
-                # Trigger puredns and dnsx jobs
-                logger.info(f"RECON JOB REQUESTED: puredns for {domain}")
-                await qm.publish_message(
-                    subject="recon.input.puredns",
-                    stream="RECON_INPUT",
-                    message={
-                        "function_name": "puredns",
-                        "program_id": output_msg.get("program_id"),
-                        "params": {"target": domain, "mode": "resolve"},
-                        "force": False,
-                        "execution_id": output_msg.get('execution_id', None),
-                        "trigger_new_jobs": False
-                    }
-                )
-            # Trigger httpx job
-            logger.info(f"RECON JOB REQUESTED: httpx for {output_msg.get('data', {}).get('url', '')}")
+        tmp_file = f"/tmp/{execution_id}_{self.name}.txt"
+        command = f"echo {params.get("target", {})} | gau --subs --o {tmp_file} && cat {tmp_file}"
+        urls = self._create_subprocess_shell_sync(command).splitlines()
+        urls = unclutter_url_list(urls)
+        command = f"cat {tmp_file}|unfurl domains|sort -u"
+        domains = self._create_subprocess_shell_sync(command).splitlines()
+        logger.debug(domains)
+        logger.info(f"DISPATCHING JOBS: httpx for {len(urls)} urls")
+        for url in urls:
+        # Dispatch httpx jobs for each url
             await qm.publish_message(
                 subject="recon.input.httpx",
                 stream="RECON_INPUT",
                 message={
                     "function_name": "httpx",
-                    "program_id": output_msg.get("program_id"),
-                    "params": {"target": output_msg.get("data").get("url")},
+                    "program_id": program_id,
+                    "params": {"target": url},
                     "force": False,
-                    "execution_id": output_msg.get('execution_id', None),
+                    "execution_id": execution_id,
                     "trigger_new_jobs": False
                 }
             )
-
+            sleep(0.5)
+        # Dispatch puredns and dnsx jobs for each domain
+        for domain in domains:
+            logger.info(f"DISPATCHING JOB: puredns for {domain}")
+            await qm.publish_message(
+                subject="recon.input.puredns",
+                stream="RECON_INPUT",
+                message={
+                    "function_name": "puredns",
+                    "program_id": program_id,
+                    "params": {"target": domain, "mode": "resolve"},
+                    "force": False,
+                    "execution_id": execution_id,
+                    "trigger_new_jobs": False
+                }
+            )
+            sleep(0.5)
+        for domain in domains:
+            logger.info(f"DISPATCHING JOB: dnsx for {domain}")
+            qm.publish_message(
+                subject="recon.input.dnsx",
+                stream="RECON_INPUT",
+                message={
+                    "function_name": "dnsx",
+                    "program_id": program_id,
+                    "params": {"target": domain},
+                    "force": False,
+                    "execution_id": execution_id,
+                    "trigger_new_jobs": False
+                }
+            )
+            sleep(0.5)
+        yield {}
         
+        
+
+    async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:    
+        return {}

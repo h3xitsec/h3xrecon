@@ -142,17 +142,17 @@ class ReconWorker(Worker):
                 function_valid = await self.validate_recon_job_request(recon_job_request)
                 if not function_valid:
                     logger.info(f"JOB SKIPPED: {recon_job_request.function_name} : invalid function request")
-                    await self.db.log_reconworker_operation(
-                        execution_id=recon_job_request.execution_id,
-                        component_id=self.component_id,
-                        function_name=recon_job_request.function_name,
-                        program_id=recon_job_request.program_id,
-                        target=recon_job_request.params.get('target', 'unknown'),
-                        parameters=recon_job_request.params,
-                        status='failed',
-                        error_message='Invalid function request',
-                        completed_at=datetime.now(timezone.utc)
-                    )
+                    # await self.db.log_reconworker_operation(
+                    #     execution_id=recon_job_request.execution_id,
+                    #     component_id=self.component_id,
+                    #     function_name=recon_job_request.function_name,
+                    #     program_id=recon_job_request.program_id,
+                    #     target=recon_job_request.params.get('target', 'unknown'),
+                    #     parameters=recon_job_request.params,
+                    #     status='failed',
+                    #     error_message='Invalid function request',
+                    #     completed_at=datetime.now(timezone.utc)
+                    # )
                     await raw_msg.ack()
                     return
                 
@@ -169,18 +169,18 @@ class ReconWorker(Worker):
         except Exception as e:
             logger.error(f"Error in message handler: {e}")
             #logger.exception(e)
-            if 'recon_job_request' in locals():
-                await self.db.log_reconworker_operation(
-                    execution_id=recon_job_request.execution_id,
-                    component_id=self.component_id,
-                    function_name=recon_job_request.function_name,
-                    program_id=recon_job_request.program_id,
-                    target=recon_job_request.params.get('target', 'unknown'),
-                    parameters=recon_job_request.params,
-                    status='failed',
-                    error_message=str(e),
-                    completed_at=datetime.now(timezone.utc)
-                )
+            # if 'recon_job_request' in locals():
+            #     await self.db.log_reconworker_operation(
+            #         execution_id=recon_job_request.execution_id,
+            #         component_id=self.component_id,
+            #         function_name=recon_job_request.function_name,
+            #         program_id=recon_job_request.program_id,
+            #         target=recon_job_request.params.get('target', 'unknown'),
+            #         parameters=recon_job_request.params,
+            #         status='failed',
+            #         error_message=str(e),
+            #         completed_at=datetime.now(timezone.utc)
+            #     )
         finally:
             if not raw_msg._ackd:
                 await raw_msg.ack()
@@ -209,49 +209,49 @@ class ReconWorker(Worker):
         try:
             async for result in self.execute_function(msg_data):
                 if asyncio.current_task().cancelled():
-                    await self.db.log_reconworker_operation(
-                        execution_id=msg_data.execution_id,
-                        component_id=self.component_id,
-                        function_name=msg_data.function_name,
-                        program_id=msg_data.program_id,
-                        target=msg_data.params.get('target', 'unknown'),
-                        parameters=msg_data.params,
-                        status='failed',
-                        error_message='Execution cancelled',
-                        completed_at=datetime.now(timezone.utc)
-                    )
+                    # await self.db.log_reconworker_operation(
+                    #     execution_id=msg_data.execution_id,
+                    #     component_id=self.component_id,
+                    #     function_name=msg_data.function_name,
+                    #     program_id=msg_data.program_id,
+                    #     target=msg_data.params.get('target', 'unknown'),
+                    #     parameters=msg_data.params,
+                    #     status='failed',
+                    #     error_message='Execution cancelled',
+                    #     completed_at=datetime.now(timezone.utc)
+                    # )
                     return  # Exit the function to prevent further processing
                 
                 #logger.debug(f"Execution {msg_data.execution_id}: Result #{result_count}: {result}")
             #logger.success(f"JOB COMPLETED: {msg_data.function_name} : {msg_data.params.get('target')} : {result_count} results")
             # Log successful completion
-            await self.db.log_reconworker_operation(
-                execution_id=msg_data.execution_id,
-                component_id=self.component_id,
-                function_name=msg_data.function_name,
-                program_id=msg_data.program_id,
-                target=msg_data.params.get('target', 'unknown'),
-                parameters=msg_data.params,
-                status='completed',
-                completed_at=datetime.now(timezone.utc)
-            )
+            # await self.db.log_reconworker_operation(
+            #     execution_id=msg_data.execution_id,
+            #     component_id=self.component_id,
+            #     function_name=msg_data.function_name,
+            #     program_id=msg_data.program_id,
+            #     target=msg_data.params.get('target', 'unknown'),
+            #     parameters=msg_data.params,
+            #     status='completed',
+            #     completed_at=datetime.now(timezone.utc)
+            # )
                 
         except asyncio.CancelledError:
             logger.warning(f"JOB CANCELLED: {msg_data.execution_id}:{msg_data.function_name} : {msg_data.params.get('target')}")
             return
         except Exception as e:
             logger.error(f"Error executing function {msg_data.execution_id}: {e}")
-            await self.db.log_reconworker_operation(
-                execution_id=msg_data.execution_id,
-                component_id=self.component_id,
-                function_name=msg_data.function_name,
-                program_id=msg_data.program_id,
-                target=msg_data.params.get('target', 'unknown'),
-                parameters=msg_data.params,
-                status='failed',
-                error_message=str(e),
-                completed_at=datetime.now(timezone.utc)
-            )
+            # await self.db.log_reconworker_operation(
+            #     execution_id=msg_data.execution_id,
+            #     component_id=self.component_id,
+            #     function_name=msg_data.function_name,
+            #     program_id=msg_data.program_id,
+            #     target=msg_data.params.get('target', 'unknown'),
+            #     parameters=msg_data.params,
+            #     status='failed',
+            #     error_message=str(e),
+            #     completed_at=datetime.now(timezone.utc)
+            # )
             raise
             
 
