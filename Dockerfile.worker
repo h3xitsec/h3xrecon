@@ -10,8 +10,6 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="$PATH:/root/go/bin:/usr/local/go/bin"
-
 RUN ARCH=$(dpkg --print-architecture) && \
     case ${ARCH} in \
         amd64) GOARCH="amd64" ;; \
@@ -21,6 +19,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
     wget "https://go.dev/dl/go1.23.4.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
+
+ENV PATH="$PATH:/usr/local/go/bin"
 
 RUN go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
     pdtm -i subfinder && \
@@ -66,7 +66,7 @@ RUN apt-get update && apt-get install -y \
     chromium \
     && rm -rf /var/lib/apt/lists/*
 
-RUN ARCH=$(dpkg --print-architecture) && \
+    RUN ARCH=$(dpkg --print-architecture) && \
     case ${ARCH} in \
         amd64) GOARCH="amd64" ;; \
         arm64) GOARCH="arm64" ;; \
@@ -76,7 +76,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
 
-ENV PATH="$PATH:/usr/local/go/bin:/usr/local/bin"
+ENV PATH="$PATH:/usr/local/go/bin"
 
 # RUN ARCH=$(dpkg --print-architecture) && \
 #     case ${ARCH} in \
