@@ -9,7 +9,7 @@ import json
 import random
 import string
 
-async def is_wildcard(subdomain):
+async def is_wildcard(subdomain: str):
     RECORD_TYPE_CODES = {
         "A": 1,
         "AAAA": 28,
@@ -55,29 +55,14 @@ async def is_wildcard(subdomain):
                 return False, None
 
             valid_base, base_answers, base_actual_type = await query_dns_records(session, subdomain, record_type)
-
             if not valid_base or not base_answers:
                 return False, None
 
-            # Split the subdomain into parts
-            parts = subdomain.split('.')
-            pattern_tests = []
-
-            # Test each position for potential wildcards
-            for i in range(len(parts) - 1):  # -1 to avoid testing the TLD
-                # Create a test subdomain with a random part at position i
-                test_parts = parts.copy()
-                random_label = ''.join(random.choices(string.ascii_lowercase, k=10))
-                test_parts[i] = random_label
-                test_subdomain = '.'.join(test_parts)
-                pattern_tests.append(test_subdomain)
-
-                # Create a second test to confirm the pattern
-                test_parts[i] = ''.join(random.choices(string.ascii_lowercase, k=8))
-                pattern_tests.append('.'.join(test_parts))
-
+            random_label = ''.join(random.choices(string.ascii_lowercase, k=10))
+            test_patterns = []
+            test_patterns.append(f"{random_label}.{subdomain}")
             # Test all generated patterns
-            for test_subdomain in pattern_tests:
+            for test_subdomain in test_patterns:
                 valid_garbage, garbage_answers, garbage_actual_type = await query_dns_records(
                     session, test_subdomain, record_type
                 )

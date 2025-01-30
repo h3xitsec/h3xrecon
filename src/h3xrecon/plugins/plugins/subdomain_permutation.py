@@ -29,10 +29,14 @@ class SubdomainPermutation(ReconPlugin):
     
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug("Checking if the target is a dns catchall domain")
-        wildcard, wildcard_type = await is_wildcard(params.get("target", {}))
-        if wildcard:
-            logger.info(f"JOB SKIPPED: Target {params.get("target", {})} is a wildcard domain (Record type: {wildcard_type.replace("wildcard_","")}), skipping subdomain permutation processing.")
+        target_wildcard, target_wildcard_type = await is_wildcard(params.get("target", {}))
+        if target_wildcard:
+            logger.info(f"JOB SKIPPED: Target {params.get("target", {})} is a wildcard domain (Record type: {target_wildcard_type.replace("wildcard_","")}), skipping subdomain permutation processing.")
             return
+        parent_domain = ".".join(params.get("target", {}).split(".")[1:])
+        parent_wildcard, parent_wildcard_type = await is_wildcard(parent_domain)
+        if parent_wildcard:
+            logger.debug(f"Parent domain {parent_domain} is a wildcard domain (Record type: {parent_wildcard_type.replace("wildcard_","")}), permutation list will be processed accordingly")
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
         
         wordlist = params.get("wordlist", "/app/Worker/files/permutations.txt")
@@ -42,107 +46,71 @@ class SubdomainPermutation(ReconPlugin):
             logger.error(f"Wordlist {wordlist} not found")
             return
         logger.debug(f"Using permutation file {wordlist}")
-        command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {wordlist} -depth 1 -numbers 10 -mindup -adv -md"
+        command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {wordlist} -depth 1 -numbers 10 -mindup -adv"
         logger.debug(f"Running command {command}")
-        process = await self._create_subprocess_shell(command)
-        to_test = []
-        async for output in self._read_subprocess_output(process):
-            # Prepare the message for reverse_resolve_ip
-            to_test.append(output)
-        
+        to_test = self._create_subprocess_shell_sync(command).splitlines()
+        if parent_wildcard:
+            to_test = [t for t in to_test if t.endswith(f".{params.get('target', '')}")]
         message = {
             "target": params.get("target", {}),
-            "to_test": to_test
+            "to_test": to_test,
+            "target_wildcard": target_wildcard,
+            "parent_wildcard": parent_wildcard,
+            "parent_domain": parent_domain
         }
         logger.debug(f"Publishing message: {message}")
         yield message
 
-        await process.wait()
-
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        # Use puredns plugin to resolve the target and check if it is a wildcard domain
-        if output_msg.get("data", {}).get("target"):
-            logger.debug(f"Resolving target {output_msg.get('data').get('target')} with puredns")
-            puredns = PureDNSPlugin()
-            puredns.resolve_target(output_msg.get("data").get("target"))
-            parent_domain = ".".join(output_msg.get("data").get('target').split(".")[1:])
-            logger.debug(f"Puredns output: {puredns.output}")
-            
-            # Get the domain's db entry to check if it is a wildcard domain
-            is_catchall = output_msg.get("data").get("target") in puredns.output.get("wildcards", []) #await db._fetch_records("SELECT domain, is_catchall FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
-            domain = await db._fetch_records("SELECT * FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
-            domain = domain.data
-            # If the domain is not in the database, request for insertion via the data worker and wait for insertion
-            if len(domain) == 0:
-                logger.info(f"Domain {output_msg.get("data").get('target')} not found in database. Requesting for insertion.")
-                await send_domain_data(
-                        qm=qm,
-                        data=output_msg.get("data").get("target"),
-                        execution_id=output_msg.get('execution_id'),
-                        program_id=output_msg.get('program_id'),
-                        attributes={
-                            "is_catchall": is_catchall
-                        },
-                        trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
+            # Send the target and parent domain to data worker with the wildcard status
+            await send_domain_data(
+                qm=qm,
+                data=output_msg.get("data").get("target"),
+                execution_id=output_msg.get('execution_id'),
+                program_id=output_msg.get('program_id'),
+                attributes={
+                    "is_catchall": output_msg.get("data", {}).get("target_wildcard")
+                },
+                trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
+            )
+            await send_domain_data(
+                qm=qm,
+                data=output_msg.get("data").get("parent_domain"),
+                execution_id=output_msg.get('execution_id'),
+                program_id=output_msg.get('program_id'),
+                attributes={
+                    "is_catchall": output_msg.get("data", {}).get("parent_wildcard")
+                },
+                trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
+            )
+            # Dispatch puredns and dnsx jobs for the subdomains to test
+            if len(output_msg.get("data").get("to_test")) > 0:
+                logger.info(f"TRIGGERING JOB: puredns for {len(output_msg.get("data").get("to_test"))} subdomains to test")
+                for t in output_msg.get("data").get("to_test"):
+                    await qm.publish_message(
+                        subject="recon.input.puredns",
+                        stream="RECON_INPUT",
+                        message={
+                            "function_name": "puredns",
+                            "program_id": output_msg.get("program_id"),
+                            "params": {"target": t, "mode": "resolve"},
+                            "force": True,
+                            "execution_id": output_msg.get('execution_id', ""),
+                            "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
+                        }
                     )
-                # Wait for domain to be inserted (max 30 seconds)
-                start_time = datetime.now()
-                while True:
-                    logger.debug(f"Checking if domain {output_msg.get('data').get('target')} is inserted in database")
-                    domain = await db._fetch_records("SELECT * FROM domains WHERE domain = $1", output_msg.get("data").get("target"))
-                    domain = domain.data
-                    if len(domain) > 0:
-                        logger.debug(f"Domain {output_msg.get('data').get('target')} inserted in database")
-                        break
-                    if (datetime.now() - start_time).total_seconds() > 30:
-                        logger.warning(f"Timeout waiting for domain {output_msg.get('data').get('target')} to be inserted")
-                        break
-                    await asyncio.sleep(2)
-                await qm.publish_message(
-                    subject="recon.input.subdomain_permutation",
+
+                logger.info(f"TRIGGERING JOBS: dnsx for {len(output_msg.get("data").get("to_test"))} subdomains to test")
+                for t in output_msg.get("data").get("to_test"):
+                    await qm.publish_message(
+                    subject="recon.input.dnsx",
                     stream="RECON_INPUT",
                     message={
-                        "function_name": "subdomain_permutation",
+                        "function_name": "dnsx",
                         "program_id": output_msg.get("program_id"),
-                        "params": {"target": output_msg.get("source", {}).get("params", {}).get("target"), "wordlist": output_msg.get("source", {}).get("params", {}).get("wordlist", "/app/Worker/files/permutations.txt")},
+                        "params": {"target": t},
                         "force": True,
-                        "execution_id": output_msg.get('execution_id', None),
+                        "execution_id": output_msg.get('execution_id', ""),
                         "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
                     }
                 )
-            else:
-                if is_catchall:
-                    logger.info(f"JOB SKIPPED: Target {output_msg.get("data").get('target')} is a wildcard domain, skipping subdomain permutation processing.")
-                    return
-
-                else:
-                    if len(output_msg.get("data").get("to_test")) > 0:
-                        logger.info(f"TRIGGERING JOB: puredns for {len(output_msg.get("data").get("to_test"))} subdomains to test")
-                        for t in output_msg.get("data").get("to_test"):
-                            await qm.publish_message(
-                                subject="recon.input.puredns",
-                                stream="RECON_INPUT",
-                                message={
-                                    "function_name": "puredns",
-                                    "program_id": output_msg.get("program_id"),
-                                    "params": {"target": t, "mode": "resolve"},
-                                    "force": True,
-                                    "execution_id": output_msg.get('execution_id', ""),
-                                    "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
-                                }
-                            )
-        
-                        logger.info(f"TRIGGERING JOBS: dnsx for {len(output_msg.get("data").get("to_test"))} subdomains to test")
-                        for t in output_msg.get("data").get("to_test"):
-                            await qm.publish_message(
-                            subject="recon.input.dnsx",
-                            stream="RECON_INPUT",
-                            message={
-                                "function_name": "dnsx",
-                                "program_id": output_msg.get("program_id"),
-                                "params": {"target": t},
-                                "force": True,
-                                "execution_id": output_msg.get('execution_id', ""),
-                                "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
-                            }
-                        )
