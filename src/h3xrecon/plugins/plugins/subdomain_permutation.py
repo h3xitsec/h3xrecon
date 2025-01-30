@@ -1,12 +1,9 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.plugins.puredns import PureDNSPlugin
 from h3xrecon.plugins.helper import send_domain_data, is_wildcard
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 from loguru import logger
-import asyncio
 import os
-from datetime import datetime
 class SubdomainPermutation(ReconPlugin):
     @property
     def name(self) -> str:

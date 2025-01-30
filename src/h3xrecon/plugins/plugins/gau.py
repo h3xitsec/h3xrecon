@@ -1,7 +1,7 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_domain_data, send_website_path_data, unclutter_url_list
-from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url, is_valid_url
+from h3xrecon.plugins.helper import unclutter_url_list
+from h3xrecon.core.utils import is_valid_hostname
 from loguru import logger
 import os
 from time import sleep

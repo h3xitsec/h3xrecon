@@ -22,7 +22,7 @@ class ExpandCIDR(ReconPlugin):
         logger.debug("Dispatching amass task for the CIDR")
         # Dispatch amass task for the CIDR
         await qm.publish_message(
-            subject=f"recon.input.amass",
+            subject="recon.input.amass",
             stream="RECON_INPUT",
             message={
                 "function_name": "amass",
@@ -39,7 +39,7 @@ class ExpandCIDR(ReconPlugin):
         # Dispatch reverse_resolve_ip tasks for each IP of the CIDR
         for ip in output:
             await qm.publish_message(
-                subject=f"recon.input.reverse_resolve_ip",
+                subject="recon.input.reverse_resolve_ip",
                 stream="RECON_INPUT",
                 message={
                     "function_name": "reverse_resolve_ip",
