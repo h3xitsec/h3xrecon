@@ -28,17 +28,28 @@ class SubdomainPermutation(ReconPlugin):
         return params
     
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
-        logger.debug("Checking if the target is a dns catchall domain")
+        logger.debug("Checking if the target or its parent domain is a wildcard domain")
         target_wildcard, target_wildcard_type = await is_wildcard(params.get("target", {}))
-        if target_wildcard:
-            logger.info(f"JOB SKIPPED: Target {params.get("target", {})} is a wildcard domain (Record type: {target_wildcard_type.replace("wildcard_","")}), skipping subdomain permutation processing.")
-            return
         parent_domain = ".".join(params.get("target", {}).split(".")[1:])
         parent_wildcard, parent_wildcard_type = await is_wildcard(parent_domain)
-        if parent_wildcard:
-            logger.debug(f"Parent domain {parent_domain} is a wildcard domain (Record type: {parent_wildcard_type.replace("wildcard_","")}), permutation list will be processed accordingly")
+
+        # If the target is a wildcard domain, skip the subdomain permutation processing but send the target and parent domain informations
+        if target_wildcard:
+            logger.info(f"JOB SKIPPED: Target {params.get("target", {})} is a wildcard domain (Record type: {target_wildcard_type.replace("wildcard_","")}), skipping subdomain permutation processing.")
+            message = {
+                "target": params.get("target", {}),
+                "to_test": [],
+                "target_wildcard": target_wildcard,
+                "parent_wildcard": parent_wildcard,
+                "parent_domain": parent_domain
+            }
+            logger.debug(f"Publishing message: {message}")
+            yield message
+            return
+        
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
         
+        # Get the permutation wordlist
         wordlist = params.get("wordlist", "/app/Worker/files/permutations.txt")
         if not wordlist:
             wordlist = "/app/Worker/files/permutations.txt"
@@ -46,11 +57,17 @@ class SubdomainPermutation(ReconPlugin):
             logger.error(f"Wordlist {wordlist} not found")
             return
         logger.debug(f"Using permutation file {wordlist}")
+        
+        # Run gotator to get the permutation list
         command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {wordlist} -depth 1 -numbers 10 -mindup -adv"
         logger.debug(f"Running command {command}")
         to_test = self._create_subprocess_shell_sync(command).splitlines()
+
+        # If the parent domain is a wildcard domain, strip the parent's subdomains from the permutation list
         if parent_wildcard:
             to_test = [t for t in to_test if t.endswith(f".{params.get('target', '')}")]
+        
+        # Publish the message with the target, permutation list, and wildcard status
         message = {
             "target": params.get("target", {}),
             "to_test": to_test,
