@@ -65,3 +65,4 @@ docker_swarm/ansible/galaxy_cache/api.json
 .terraform/
 terraform.tfstate
 terraform.tfstate.backup
+docker/worker/uncover.yml
