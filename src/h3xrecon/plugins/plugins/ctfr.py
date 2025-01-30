@@ -62,10 +62,6 @@ class CTFRPlugin(ReconPlugin):
             raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        domain_msg = {
-            "data": output_msg.get("data", {}).get('subdomain')
-        }
-        await qm.publish_message(subject="data.input", stream="DATA_INPUT", message=domain_msg)
         await send_domain_data(qm=qm, 
                                 data=output_msg.get("data", {}).get('subdomain'), 
                                 program_id=output_msg.get('program_id'), 
