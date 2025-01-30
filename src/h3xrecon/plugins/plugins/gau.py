@@ -65,7 +65,7 @@ class GauPlugin(ReconPlugin):
             sleep(0.5)
         for domain in domains:
             logger.info(f"DISPATCHING JOB: dnsx for {domain}")
-            qm.publish_message(
+            await qm.publish_message(
                 subject="recon.input.dnsx",
                 stream="RECON_INPUT",
                 message={
