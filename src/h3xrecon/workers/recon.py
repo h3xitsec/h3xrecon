@@ -11,6 +11,7 @@ from nats.js.api import AckPolicy, DeliverPolicy, ReplayPolicy
 from h3xrecon.core.utils import debug_trace
 from typing import Dict, Any, Optional, Callable, AsyncGenerator
 from datetime import datetime, timezone, timedelta
+from time import sleep
 import json
 import importlib
 import pkgutil
@@ -142,6 +143,10 @@ class ReconWorker(Worker):
                 function_valid = await self.validate_recon_job_request(recon_job_request)
                 if not function_valid:
                     logger.info(f"JOB SKIPPED: {recon_job_request.function_name} : invalid function request")
+                    if recon_job_request.response_id or recon_job_request.debug_id:
+                        response_subject_id = recon_job_request.response_id
+                        sleep(5)
+                        await self._send_jobrequest_response(recon_job_request.execution_id, response_subject_id, status="error: invalid function request")
                     # await self.db.log_reconworker_operation(
                     #     execution_id=recon_job_request.execution_id,
                     #     component_id=self.component_id,
@@ -341,11 +346,17 @@ class ReconWorker(Worker):
                 if plugin.get('is_valid_input', None):
                     if not await plugin['is_valid_input'](new_recon_job_request.params):
                         logger.info(f"JOB SKIPPED: {recon_job_request.function_name} : invalid input")
+                        if recon_job_request.response_id or recon_job_request.debug_id:
+                            response_subject_id = recon_job_request.response_id
+                            await self._send_jobrequest_response(recon_job_request.execution_id, response_subject_id, status="error: invalid input")
                         return
                 
                 # Check if we should execute this function
                 if not recon_job_request.force and not await self._should_execute(new_recon_job_request):
                     logger.info(f"JOB SKIPPED: {recon_job_request.function_name} : recently executed")
+                    if recon_job_request.response_id or recon_job_request.debug_id:
+                        response_subject_id = recon_job_request.response_id
+                        await self._send_jobrequest_response(recon_job_request.execution_id, response_subject_id, status="skipped: executed recently")
                     return
                 
                 # Log execution start
@@ -417,7 +428,7 @@ class ReconWorker(Worker):
                                 "params": new_recon_job_request.params,
                                 "force": recon_job_request.force
                             },
-                            "data": "END_OF_JOB",
+                            "data": {"job_completed": True},
                             "timestamp": datetime.now().isoformat()
                         }
                         logger.debug(f"Sending end of job message: {message}")

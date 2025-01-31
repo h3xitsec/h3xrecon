@@ -172,7 +172,7 @@ class ParsingWorker(Worker):
                 response_id=msg.get('response_id', None)
             )
             logger.info(f"RECEIVED RECON OUTPUT: {recon_output}")
-            if recon_output.data == "END_OF_JOB":
+            if recon_output.data.get("job_completed"):
                 logger.info(f"END OF JOB: {recon_output.execution_id}")
                 if recon_output.response_id:
                     logger.debug(f"Sending job completion response for {recon_output.execution_id}")
