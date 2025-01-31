@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     make \
     gcc \
     wget \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -21,8 +22,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
     rm /tmp/go.tar.gz
 
 ENV PATH="$PATH:/usr/local/go/bin:/root/go/bin"
+ENV CGO_ENABLED=1
 
-RUN go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
+RUN GOBIN=/usr/local/bin go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
     pdtm -i subfinder && \
     pdtm -i httpx && \
     pdtm -i dnsx && \
