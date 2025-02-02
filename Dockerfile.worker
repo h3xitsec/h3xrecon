@@ -57,8 +57,6 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="$PATH:/root/go/bin:/root/.pdtm/go/bin:/usr/lib/go-1.15/bin"
-
 RUN apt-get update && apt-get install -y \
     jq \
     prips \
@@ -80,9 +78,6 @@ RUN ARCH=$(dpkg --print-architecture) && \
         export GOARCH=arm64 && \
         export CC=aarch64-linux-gnu-gcc; \
     fi
-
-
-ENV PATH="$PATH:/usr/local/go/bin"
 
 RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
     cd /opt/ctfr && \
