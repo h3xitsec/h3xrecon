@@ -347,10 +347,13 @@ class DatabaseManager():
                     dns_class = EXCLUDED.dns_class
                 RETURNING (xmax = 0) AS inserted, id
             ''', domain_id, program_id, hostname, ttl, dns_class, dns_type, value)
-            logger.debug(f"DNS record inserted: {result}")
             if result.success:
-                return DbResult(success=True, data=result.data[0])
+                if result.data.get('inserted') is True:
+                    logger.success(f"INSERTED DNS RECORD: {hostname} {dns_type} {value}")
+                else:
+                    logger.info(f"UPDATED DNS RECORD: {hostname} {dns_type} {value}")
             else:
+                logger.error(f"Failed to insert or update DNS record: {result.error}")
                 return DbResult(success=False, error=f"Error inserting or updating DNS record in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting DNS record: {str(e)}")
@@ -471,6 +474,10 @@ class DatabaseManager():
             )
             logger.debug(f"Insert result: {result}")
             if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                if result.data[0]['inserted']:
+                    logger.success(f"INSERTED SCREENSHOT: {filepath}")
+                else:
+                    logger.info(f"UPDATED SCREENSHOT: {filepath}")
                 return {
                     'inserted': result.data[0]['inserted'],
                     'id': result.data[0]['id']
@@ -512,8 +519,11 @@ class DatabaseManager():
         """
         try:
             result = await self._write_records(query, ip, ptr, cloud_provider, program_id)
-            logger.debug(f"Insert result: {result}")
             if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                if result.data[0]['inserted']:
+                    logger.success(f"INSERTED IP: {ip}")
+                else:
+                    logger.info(f"UPDATED IP: {ip}")
                 return {
                     'inserted': result.data[0]['inserted'],
                     'id': result.data[0]['id']
@@ -572,6 +582,10 @@ class DatabaseManager():
             
             # Handle nested DbResult for service record
             if result.success:
+                if result.data[0]['inserted']:
+                    logger.success(f"INSERTED SERVICE: {ip} {port} {protocol} {service}")
+                else:
+                    logger.info(f"UPDATED SERVICE: {ip} {port} {protocol} {service}")
                 return DbResult(success=True, data=result.data[0])
             else:
                 return DbResult(success=False, error=f"Error inserting or updating service in database: {result.error}")
@@ -626,13 +640,17 @@ class DatabaseManager():
                 logger.debug(f"Insert result: {result}")
                 
                 if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                    if result.data[0]['inserted']:
+                        logger.success(f"INSERTED DOMAIN: {domain}{f' IPs:{ips}' if ips else ''}{f' Cnames:{cnames}' if cnames else ''}{f' Wildcard:{is_catchall}' if is_catchall else ''}")
+                    else:
+                        logger.info(f"UPDATED DOMAIN: {domain}{f' IPs:{ips}' if ips else ''}{f' Cnames:{cnames}' if cnames else ''}{f' Wildcard:{is_catchall}' if is_catchall else ''}")
                     return DbResult(success=True, data={
                         'inserted': result.data[0]['inserted'],
                         'id': result.data[0]['id']
                     })
-                return DbResult(success=False, error=f"Error inserting or updating domain in database: {result.error}")
-            else:
-                return DbResult(success=False, error=f"Error inserting or updating domain in database: {result.error}")
+                else:
+                    logger.error(f"Failed to insert or update domain in database: {result.error}")
+                    return DbResult(success=False, error=f"Error inserting or updating domain in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating domain in database: {str(e)}")
             logger.exception(e)
@@ -709,6 +727,10 @@ class DatabaseManager():
             )
             
             if result.success:
+                if result.data[0]['inserted']:
+                    logger.success(f"INSERTED WEBSITE: {url}")
+                else:
+                    logger.info(f"UPDATED WEBSITE: {url}")
                 return DbResult(success=True, data=result.data[0])
             return DbResult(success=False, error=f"Error inserting or updating website in database: {result.error}")
         except Exception as e:
@@ -793,12 +815,15 @@ class DatabaseManager():
             
             # Handle nested DbResult objects
             if result.success:
+                if result.data[0]['inserted']:
+                    logger.success(f"INSERTED WEBSITE PATH: {path}")
+                else:
+                    logger.info(f"UPDATED WEBSITE PATH: {path}")
                 return DbResult(success=True, data=result.data[0])
             else:
                 return DbResult(success=False, error=f"Error inserting or updating website path in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating website path in database: {e}")
-            logger.exception(e)
             return DbResult(success=False, error=f"Error inserting or updating website path in database: {e}")
 
     async def insert_certificate(self, program_id: int, data: Dict[str, Any]):
@@ -903,6 +928,10 @@ class DatabaseManager():
             )
             
             if result.success:
+                if result.data[0]['inserted']:
+                    logger.success(f"INSERTED CERTIFICATE: {serial}")
+                else:
+                    logger.info(f"UPDATED CERTIFICATE: {serial}")
                 return DbResult(success=True, data=result.data[0])
             return DbResult(success=False, error=f"Error inserting or updating certificate in database: {result.error}")
         except Exception as e:
@@ -990,6 +1019,10 @@ class DatabaseManager():
             )
             
             if result.success:
+                if result.data[0]['inserted']:
+                    logger.success(f"INSERTED NUCLEI: {url} {template_id}")
+                else:
+                    logger.info(f"UPDATED NUCLEI: {url} {template_id}")
                 return DbResult(success=True, data=result.data[0])
             return DbResult(success=False, error=f"Error inserting or updating Nuclei hit in database: {result.error}")
         except Exception as e:

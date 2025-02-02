@@ -430,7 +430,6 @@ class DataWorker(Worker):
                     if result.success:
                         domain_id = result.data.get('id')
                     else:
-                        logger.error(f"Failed to insert domain {record.get('target_domain')}: {result.error}")
                         continue
                 
                 result = await self.db.insert_dns_record(
@@ -442,14 +441,6 @@ class DataWorker(Worker):
                     dns_type=record.get('dns_type'),
                     value=record.get('value')
                 )
-                logger.debug(f"result: {result}")
-                if result.success:
-                    if result.data.get('inserted') is True:
-                        logger.success(f"INSERTED DNS RECORD: {record.get('hostname')} {record.get('dns_type')} {record.get('value')}")
-                    else:
-                        logger.info(f"UPDATED DNS RECORD: {record.get('hostname')} {record.get('dns_type')} {record.get('value')}")
-                else:
-                    logger.error(f"Failed to insert or update DNS record: {result.error}")
 
     async def process_ip(self, msg_data: Dict[str, Any]):
         """Process IP data."""
@@ -479,7 +470,6 @@ class DataWorker(Worker):
                 
                 # Log operation result
                 if result.get('inserted'):
-                    logger.success(f"INSERTED IP: {ip_data}")
                     # await self.db.log_dataworker_operation(
                     #     component_id=self.component_id,
                     #     data_type='ip',
@@ -494,8 +484,6 @@ class DataWorker(Worker):
                         await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
                     else:
                         logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {ip} : {msg_data.get('execution_id', 'no execution id')}")
-                else:
-                    logger.info(f"UPDATED IP: {ip}")
             except Exception as e:
                 # await self.db.log_dataworker_operation(
                 #     component_id=self.component_id,
@@ -522,10 +510,7 @@ class DataWorker(Worker):
                 url=screenshot.get('url')
             )
             if result['inserted']:
-                logger.success(f"INSERTED SCREENSHOT: {screenshot.get('url')}")
                 return screenshot.get('url')
-            else:
-                logger.info(f"UPDATED SCREENSHOT: {screenshot.get('url')}")
 
     async def process_domain(self, msg_data: Dict[str, Any]):
         """Process domain data."""
@@ -556,15 +541,10 @@ class DataWorker(Worker):
                 )
                 if result.success:
                     if result.data.get('inserted'):
-                        logger.success(f"INSERTED DOMAIN: {domain_data}")
                         if msg_data.get('trigger_new_jobs'):
                             await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="domain", result=domain)
                         else:
                             logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {domain} : {msg_data.get('execution_id', 'no execution id')}")
-                    else:
-                        logger.info(f"UPDATED DOMAIN: {domain_data}")
-                else:
-                    logger.error(f"Failed to insert or update domain: {result.error}")
     
     async def process_website(self, msg: Dict[str, Any]):
         """Process website data."""
@@ -604,15 +584,10 @@ class DataWorker(Worker):
                     )
                     if result.success:
                         if result.data.get('inserted'):
-                            logger.success(f"INSERTED WEBSITE: {url}")
                             if msg.get('trigger_new_jobs'):
                                 await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website", result=url)
                             else:
                                 logger.warning(f"JOB TRIGGERING DISABLED: {msg.get('data_type')} : {msg.get('data')} : {msg.get('execution_id', 'no execution id')}")
-                        else:
-                            logger.info(f"UPDATED WEBSITE: {url}")
-                    else:
-                        logger.error(f"Failed to insert or update website: {result.error}")
 
                 except Exception as e:
                     logger.error(f"Failed to process website in program {msg.get('program_id')}: {e}")
@@ -636,7 +611,6 @@ class DataWorker(Worker):
                         if not website_id.success or not website_id.data:
                             logger.error(f"Failed to find website {base_url} in database")
                             result = await self.db.insert_website(url=base_url, program_id=msg.get('program_id'))
-                            logger.debug(f"Inserted website {base_url} in database: {result}")
                         website_id = await self.db._fetch_value(f"SELECT id FROM websites WHERE url = '{base_url}'")
                         if website_id.success and website_id.data:
                             logger.info(f"PROCESSING WEBSITE PATH: {d.get('url')}")
@@ -663,15 +637,10 @@ class DataWorker(Worker):
                             )
                             if result.success:
                                 if result.data.get('inserted'):
-                                    logger.success(f"INSERTED WEBSITE PATH: {d.get('url')}")
                                     if msg.get('trigger_new_jobs'):
                                         await self.trigger_new_jobs(program_id=msg.get('program_id'), data_type="website_path", result=d.get('url'))
                                     else:
                                         logger.warning(f"JOB TRIGGERING DISABLED: {msg.get('data_type')} : {msg.get('data')} : {msg.get('execution_id', 'no execution id')}")
-                                else:
-                                    logger.info(f"UPDATED WEBSITE PATH: {d.get('url')}")
-                            else:
-                                logger.error(f"Failed to insert or update website path: {result.error}")
 
                 except Exception as e:
                     logger.error(f"Failed to process website path in program {msg.get('program_id')}: {e}")
@@ -701,16 +670,11 @@ class DataWorker(Worker):
                             )
                             if result.success:
                                 if result.data.get('inserted') is True:
-                                    logger.success(f"INSERTED NUCLEI: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
-                                else:
-                                    logger.info(f"UPDATED NUCLEI: {d.get('matched_at', {})} | {d.get('template_id', {})} | {d.get('severity', {})}")
-                            else:
-                                logger.error(f"Failed to insert or update Nuclei hit: {result.error}")
+                                    pass
                         else:
                             logger.debug(f"Hostname {hostname} is not in scope for program {msg.get('program_id')}. Skipping.")
                 except Exception as e:
                     logger.error(f"Failed to process Nuclei result in program {msg.get('program_id')}: {e}")
-                    logger.exception(e)
 
     async def process_certificate(self, msg: Dict[str, Any]):
         """Process certificate data."""
@@ -725,14 +689,9 @@ class DataWorker(Worker):
                     )
                     if result.success:
                         if result.data.get('inserted'):
-                            logger.success(f"INSERTED CERTIFICATE: {d.get('cert', {}).get('serial', {})}")
-                        else:
-                            logger.info(f"UPDATED CERTIFICATE: {d.get('cert', {}).get('serial', {})}")
-                    else:
-                        logger.error(f"Failed to insert or update certificate: {result.error}")
+                            pass
                 except Exception as e:
                     logger.error(f"Failed to process certificate in program {msg.get('program_id')}: {e}")
-                    logger.exception(e)
 
     async def process_service(self, msg_data: Dict[str, Any]):
         """Process service data."""
@@ -749,11 +708,7 @@ class DataWorker(Worker):
             )
             if result.success:
                 if result.data.get('inserted'):
-                    logger.success(f"INSERTED SERVICE: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
-                else:
-                    logger.info(f"UPDATED SERVICE: {i.get('ip')}:{i.get('port')}/{i.get('protocol')}/{i.get('service')}")
-            else:
-                logger.error(f"Failed to insert or update service: {result.error}")
+                    pass
     async def _handle_killjob_command(self, msg: Dict[str, Any]):
         """Handle killjob command to cancel the running task."""
         pass
