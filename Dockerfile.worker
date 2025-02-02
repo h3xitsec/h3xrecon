@@ -1,5 +1,5 @@
 ## Builder stage
-FROM python:3.12-slim AS builder
+FROM golang:1.23-bullseye AS builder
 
 WORKDIR /app
 
@@ -8,21 +8,22 @@ RUN apt-get update && apt-get install -y \
     make \
     gcc \
     wget \
+    build-essential \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
+ENV CGO_ENABLED=1
+ENV GOBIN=/usr/local/go/bin
+
+# Install pdtm and tools with specific architecture handling
 RUN ARCH=$(dpkg --print-architecture) && \
-    case ${ARCH} in \
-        amd64) GOARCH="amd64" ;; \
-        arm64) GOARCH="arm64" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    wget "https://go.dev/dl/go1.23.4.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
-    tar -C /usr/local -xzf /tmp/go.tar.gz && \
-    rm /tmp/go.tar.gz
-
-ENV PATH="$PATH:/usr/local/go/bin:/root/go/bin"
-
-RUN /usr/local/go/bin/go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
+    if [ "$ARCH" = "arm64" ]; then \
+        export GOARCH=arm64 && \
+        export CC=aarch64-linux-gnu-gcc; \
+    fi && \
+    which go && \
+    /usr/local/go/bin/go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
     pdtm -i subfinder && \
     pdtm -i httpx && \
     pdtm -i dnsx && \
@@ -48,7 +49,7 @@ RUN /usr/local/go/bin/go install github.com/lc/gau/v2/cmd/gau@latest
 RUN /usr/local/go/bin/go install github.com/tomnomnom/unfurl@latest
 
 ## Final stage
-FROM python:3.12-slim
+FROM golang:1.23-bullseye
 
 WORKDIR /app
 
@@ -65,18 +66,21 @@ RUN apt-get update && apt-get install -y \
     wget \
     chromium \
     chromium-sandbox \
+    python3 \
+    python3-pip \
+    python3-venv \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
+ENV CGO_ENABLED=1
+ENV GOBIN=/usr/local/bin
+    
 RUN ARCH=$(dpkg --print-architecture) && \
-    case ${ARCH} in \
-        amd64) GOARCH="amd64" ;; \
-        arm64) GOARCH="arm64" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    wget "https://go.dev/dl/go1.23.4.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
-    tar -C /usr/local -xzf /tmp/go.tar.gz && \
-    rm /tmp/go.tar.gz
+    if [ "$ARCH" = "arm64" ]; then \
+        export GOARCH=arm64 && \
+        export CC=aarch64-linux-gnu-gcc; \
+    fi
+
 
 ENV PATH="$PATH:/usr/local/go/bin"
 
@@ -87,7 +91,7 @@ RUN git clone https://github.com/UnaPibaGeek/ctfr.git /opt/ctfr && \
 # Copy binaries from builder stage
 COPY --from=builder /usr/local/go/bin/* /usr/local/bin/
 
-COPY --from=builder /root/go/bin/* /usr/local/bin/
+#COPY --from=builder /root/go/bin/* /usr/local/bin/
 
 COPY --from=builder /root/.pdtm/go/bin/* /usr/local/bin/
 
