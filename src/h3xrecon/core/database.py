@@ -348,7 +348,7 @@ class DatabaseManager():
                 RETURNING (xmax = 0) AS inserted, id
             ''', domain_id, program_id, hostname, ttl, dns_class, dns_type, value)
             if result.success:
-                if result.data.get('inserted') is True:
+                if result.data[0].get('inserted') is True:
                     logger.success(f"INSERTED DNS RECORD: {hostname} {dns_type} {value}")
                 else:
                     logger.info(f"UPDATED DNS RECORD: {hostname} {dns_type} {value}")
