@@ -5,7 +5,7 @@
     - name: Pull h3xrecon project Docker images
       ansible.builtin.shell: docker pull {{ item }}
       loop:
-        - ghcr.io/h3xitsec/h3xrecon/worker:latest
+        - ghcr.io/h3xitsec/h3xrecon/worker:nightly
       when: inventory_hostname in groups['workers']
 
     - {"name": "Clean up drive", "ansible.builtin.include_tasks": "tasks/clean_node_drives.yaml"}
@@ -37,8 +37,8 @@
       - name: Pull h3xrecon project Docker images
         ansible.builtin.shell: docker pull {{ item }}
         loop:
-          - ghcr.io/h3xitsec/h3xrecon/server:latest
-          - ghcr.io/h3xitsec/h3xrecon/database:latest
+          - ghcr.io/h3xitsec/h3xrecon/server:nightly
+          - ghcr.io/h3xitsec/h3xrecon/database:nightly
 
       - name: Create screenshot directory
         ansible.builtin.file:
