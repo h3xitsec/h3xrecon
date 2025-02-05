@@ -141,9 +141,9 @@ services:
       - POSTGRESQL_USERNAME=${H3XRECON_DB_USER}
       - POSTGRESQL_PASSWORD=${H3XRECON_DB_PASS}
       - PGBOUNCER_AUTH_TYPE=md5
-    volumes:
-      - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
-      - ./docker/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    #volumes:
+     # - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+     # - ./docker/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
     ports:
       - "6432:6432"
     depends_on:

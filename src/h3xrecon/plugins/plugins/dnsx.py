@@ -116,7 +116,7 @@ class DnsxPlugin(ReconPlugin):
                 "is_catchall": output_msg.get('data', {}).get('target_wildcard', False)
             }
             # Send the domain data to the data processor queue if there are any cnames or ips along with the catchall flag
-            if (len(dom_attr.get("cnames")) + len(dom_attr.get("ips"))) > 0:
+            if (len(dom_attr.get("cnames")) + len(dom_attr.get("ips"))) > 0 or dom_attr.get("is_catchall"):
                 await send_domain_data(
                     qm=qm,
                     data=output_msg.get('source', {}).get('params', {}).get('target'),

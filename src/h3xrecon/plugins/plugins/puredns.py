@@ -6,7 +6,6 @@ from loguru import logger
 import os
 import random
 
-
 FILES_PATH = os.environ.get('H3XRECON_RECON_FILES_PATH')
 RESOLVERS_FILE = f"{FILES_PATH}/resolvers.txt"
 RESOLVERS_TRUSTED_FILE = f"{FILES_PATH}/resolvers-trusted.txt"
@@ -44,6 +43,9 @@ class PureDNSPlugin(ReconPlugin):
             pass
     
     def read_puredns_output(self):
+        """
+        Read the puredns output files and update the output dictionary
+        """
         logger.debug("Reading puredns output")
         logger.debug(f"Output before: {self.output}")
         output_file_map = {
@@ -65,6 +67,9 @@ class PureDNSPlugin(ReconPlugin):
         logger.debug(f"Output after: {self.output}")
 
     def _get_resolve_command(self, target: str) -> str:
+        """
+        Generate the puredns resolve command for a given target
+        """
         wrapper = f"echo {target} > /tmp/puredns_target.txt"
         return f"{wrapper} && puredns resolve /tmp/puredns_target.txt \
                 --resolvers {RESOLVERS_FILE} \
@@ -74,6 +79,9 @@ class PureDNSPlugin(ReconPlugin):
                 --write /tmp/puredns.txt"
 
     def _get_bruteforce_command(self, target: str) -> str:
+        """
+        Generate the puredns bruteforce command for a given target
+        """
         wrapper = f"echo {target} > /tmp/puredns_target.txt"
         return f"{wrapper} && puredns bruteforce {self.wordlist} \
                 -d /tmp/puredns_target.txt \
@@ -84,6 +92,9 @@ class PureDNSPlugin(ReconPlugin):
                 --write /tmp/puredns.txt"
 
     def resolve_target(self, target: str):
+        """
+        Resolve the target with puredns
+        """
         # First resolve the target with a random number to test if the target is a wildcard domain
         randomized_subdomain = f"{random.randint(1000000000, 9999999999)}.{target}"
         command = self._get_resolve_command(randomized_subdomain)
