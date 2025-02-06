@@ -408,7 +408,7 @@ class ReconWorker(Worker):
                                             message=output_data
                                         )
                                     logger.info(f"SENT JOB OUTPUT: {recon_job_request.function_name} : {new_recon_job_request.params.get('target')} : {output_data}")
-                                    result_count += 1
+                                    result_count += len(output_data.get('data', []))
                                 except StreamUnavailableError as e:
                                     logger.warning(f"Stream locked, dropping message: {str(e)}")
                                     continue  # Continue with the next result
