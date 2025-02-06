@@ -4,6 +4,13 @@ from h3xrecon.plugins import ReconPlugin
 from h3xrecon.core import Config, QueueManager
 from loguru import logger
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
+from h3xrecon.plugins.helper import send_domain_data
+import importlib
+import pkgutil
+import asyncio
+from h3xrecon.plugins.plugins.subfinder import SubfinderPlugin
+from h3xrecon.plugins.plugins.ctfr import CTFRPlugin
+from h3xrecon.plugins.plugins.assetfinder import AssetfinderPlugin
 
 __input_type__ = "domain"
 
@@ -33,33 +40,46 @@ class FindSubdomainsPlugin(ReconPlugin):
 
     async def execute(self, params: Dict[str, Any], program_id: int, execution_id: str, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Execute the meta plugin by dispatching multiple subdomain discovery jobs
+        Execute the meta plugin by directly running multiple subdomain discovery plugins
         """
         self.program_id = program_id
         self.execution_id = execution_id
         self.config = Config()
         self.qm = QueueManager(self.config.nats)
-        # List of subdomain discovery tools to trigger
-        subdomain_tools = [
-            "subfinder",
-            "ctfr"
+
+        # Initialize plugins
+        plugins = [
+            SubfinderPlugin(),
+            CTFRPlugin(),
+            AssetfinderPlugin()
         ]
-        # Send jobs for each tool and yield dispatched job information
-        for tool in subdomain_tools:
-            logger.info(f"Dispatching job: {tool}")
-            await qm.publish_message(
-                subject=f"recon.input.{tool}",
-                stream="RECON_INPUT",
-                message={
-                    "function_name": tool,
-                    "program_id": program_id,
-                    "params": {"target": params.get("target", {})},
-                    "force": False,
-                    "trigger_new_jobs": False,
-                    "execution_id": execution_id
-                }
-            )
-        yield {}
+
+        # Set to store unique subdomains
+        subdomains = set()
+
+        # Execute each plugin and collect results
+        for plugin in plugins:
+            try:
+                logger.info(f"Running {plugin.name} for {params.get('target', {})}")
+                async for result in plugin.execute(params, program_id, execution_id, db, qm):
+                    if result and "subdomain" in result:
+                        # Add subdomains to the set
+                        subdomains.update(result["subdomain"])
+                        logger.debug(f"Subdomains: {subdomains}")
+            except Exception as e:
+                logger.error(f"Error running {plugin.name}: {str(e)}")
+                continue
+
+        # Yield the accumulated unique subdomains
+        if subdomains:
+            yield {"subdomain": list(subdomains)}
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
+        for subdomain in output_msg.get("data", {}).get("subdomain", []):
+            logger.debug(f"Sending subdomain {subdomain} to data processor queue")
+            await send_domain_data(qm=qm, 
+                                data=subdomain, 
+                                program_id=output_msg.get('program_id'), 
+                                execution_id=output_msg.get('execution_id'), 
+                                trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
         return {}
