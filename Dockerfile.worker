@@ -15,11 +15,11 @@ ENV CGO_ENABLED=1
 ENV GOBIN=/usr/local/go/bin
 
 # Install pdtm and tools with specific architecture handling
-RUN go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
-    pdtm -i subfinder && \
-    pdtm -i httpx && \
-    pdtm -i dnsx && \
-    pdtm -i nuclei
+# RUN go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest && \
+#     pdtm -i subfinder && \
+#     pdtm -i httpx && \
+#     pdtm -i dnsx && \
+#     pdtm -i nuclei
 
 RUN go install github.com/Josue87/gotator@latest
 
