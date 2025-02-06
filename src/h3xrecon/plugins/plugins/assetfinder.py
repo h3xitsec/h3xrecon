@@ -5,7 +5,7 @@ from loguru import logger
 import asyncio
 import os
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
-class SubfinderPlugin(ReconPlugin):
+class AssetfinderPlugin(ReconPlugin):
     @property
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
@@ -16,7 +16,9 @@ class SubfinderPlugin(ReconPlugin):
     @property
     def target_types(self) -> List[str]:
         return ["domain"]
-
+    
+    def __init__(self):
+        self.run_mode = None
     
     async def is_input_valid(self, params: Dict[str, Any]) -> bool:
         return is_valid_hostname(params.get("target", {}))
@@ -30,19 +32,26 @@ class SubfinderPlugin(ReconPlugin):
         return params
     
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
-        command = f"subfinder -d {params.get('target', {})}"
+        run_mode = params.get("mode", None)
+        if run_mode == "subdomain":
+            command = f"echo {params.get('target', {})}| assetfinder -subs-only"
+        else:
+            command = f"echo {params.get('target', {})}| assetfinder"
+        
         logger.debug(f"Running {self.name} on {params.get('target', {})} with command: {command}")
 
         process = None
         try:
             stdout, stderr = self._create_subprocess_shell_sync(command)
+            logger.debug(f"stdout: {stdout}")
+            logger.debug(f"stderr: {stderr}")
             valid_subdomains = []
             for i in stdout.split("\n"):
                 if is_valid_hostname(i):
                     logger.debug(f"Output: {i}")
                     valid_subdomains.append(i)
             yield {"subdomain": valid_subdomains}
-  
+                                
         except Exception as e:
             logger.error(f"Error during {self.name} execution: {str(e)}")
             if process:
@@ -56,4 +65,3 @@ class SubfinderPlugin(ReconPlugin):
                                    program_id=output_msg.get('program_id'), 
                                    execution_id=output_msg.get('execution_id'), 
                                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
-        return {}

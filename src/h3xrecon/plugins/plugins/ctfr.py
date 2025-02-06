@@ -34,26 +34,13 @@ class CTFRPlugin(ReconPlugin):
         
         process = None
         try:
-            process = await self._create_subprocess_shell(command)
-            
-            try:
-                while True:
-                    try:                            
-                        line = await asyncio.wait_for(process.stdout.readline(), timeout=0.1)
-                        if not line:
-                            break
-                        
-                        output = line.decode().strip()
-                        if output:
-                            yield {"subdomain": output}
-                            
-                    except asyncio.TimeoutError:
-                        continue
-                        
-            except Exception as e:
-                raise
-                
-            await process.wait()
+            stdout, stderr = self._create_subprocess_shell_sync(command)
+            valid_subdomains = []
+            for i in stdout.split("\n"):
+                if is_valid_hostname(i):
+                    logger.debug(f"Output: {i}")
+                    valid_subdomains.append(i)
+            yield {"subdomain": valid_subdomains}
                 
         except Exception as e:
             logger.error(f"Error during {self.name} execution: {str(e)}")
@@ -62,8 +49,10 @@ class CTFRPlugin(ReconPlugin):
             raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        await send_domain_data(qm=qm, 
-                                data=output_msg.get("data", {}).get('subdomain'), 
-                                program_id=output_msg.get('program_id'), 
-                                execution_id=output_msg.get('execution_id'), 
-                                trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+        for subdomain in output_msg.get("data", {}).get('subdomain', []):
+            await send_domain_data(qm=qm, 
+                                   data=subdomain, 
+                                   program_id=output_msg.get('program_id'), 
+                                   execution_id=output_msg.get('execution_id'), 
+                                   trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+        return {}

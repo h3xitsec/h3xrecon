@@ -163,6 +163,6 @@ class ReconPlugin(ABC):
         # If we found a worker instance, track the process
         if frame and 'worker' in locals():
             worker.current_process = process
-        return process.stdout.decode()
+        return process.stdout.decode(), process.stderr.decode()
 
     
