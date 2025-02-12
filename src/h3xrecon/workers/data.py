@@ -596,6 +596,7 @@ class DataWorker(Worker):
     async def process_website_path(self, msg: Dict[str, Any]):
         """Process website path data."""
         if msg:
+            logger.debug(msg)
             msg_data = msg.get('data', {})
             # Extract hostname from the URL
             for d in msg_data:
