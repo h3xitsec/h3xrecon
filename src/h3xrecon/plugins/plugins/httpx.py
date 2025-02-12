@@ -62,7 +62,6 @@ class HTTPXPlugin(ReconPlugin):
                             break
                             
                         try:
-                            logger.debug(f"Line: {line.decode()}")
                             json_data = json.loads(line.decode())
                             yield json_data
                         except json.JSONDecodeError as e:

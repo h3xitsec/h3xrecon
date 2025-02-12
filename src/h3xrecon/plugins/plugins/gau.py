@@ -25,12 +25,25 @@ class GauPlugin(ReconPlugin):
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
         tmp_file = f"/tmp/{execution_id}_{self.name}.txt"
-        command = f"echo {params.get("target", {})} | gau --subs --o {tmp_file} && cat {tmp_file}"
-        urls = self._create_subprocess_shell_sync(command).splitlines()
+        # Get URLs
+        command = f"echo {params.get('target', {})} | gau --blacklist png,jpg,gif,jpeg,swf,woff,woff2,eot,ttf,svg,css,ico,tif,tiff --subs --o {tmp_file}"
+        logger.debug(f"Running command: {command}")
+        stdout, stderr = self._create_subprocess_shell_sync(command)
+        if stderr:
+            logger.warning(f"gau stderr output: {stderr}")
+        with open(tmp_file, "r") as f:
+            urls = [url.strip() for url in f.readlines()]
+        logger.debug(f"Gau found {len(urls)} urls")
         urls = unclutter_url_list(urls)
-        command = f"cat {tmp_file}|unfurl domains|sort -u"
-        domains = self._create_subprocess_shell_sync(command).splitlines()
-        logger.debug(domains)
+        logger.debug(f"Uncluttered urls: {len(urls)}")
+        # Extract domains from URLs
+        command = f"echo '{"\n".join(urls)}' | unfurl -u domains | sort -u"
+        logger.debug(f"Running command: {command}")
+        stdout, stderr = self._create_subprocess_shell_sync(command)
+        if stderr:
+            logger.warning(f"unfurl stderr output: {stderr}")
+        domains = stdout.splitlines()
+        logger.debug(f"Domains: {domains}")
         logger.info(f"DISPATCHING JOBS: httpx for {len(urls)} urls")
         for url in urls:
         # Dispatch httpx jobs for each url

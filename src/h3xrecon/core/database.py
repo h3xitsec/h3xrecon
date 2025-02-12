@@ -339,26 +339,93 @@ class DatabaseManager():
 
     async def insert_dns_record(self, domain_id: int, program_id: int, hostname: str, ttl: int, dns_class: str, dns_type: str, value: str):
         try:
-            result = await self._write_records('''
-                INSERT INTO dns_records (domain_id, program_id, hostname, ttl, dns_class, dns_type, value)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT (domain_id,hostname, dns_type, value) DO UPDATE
-                SET ttl = EXCLUDED.ttl,
-                    dns_class = EXCLUDED.dns_class
-                RETURNING (xmax = 0) AS inserted, id
-            ''', domain_id, program_id, hostname, ttl, dns_class, dns_type, value)
-            if result.success:
-                if result.data[0].get('inserted') is True:
-                    logger.success(f"INSERTED DNS RECORD: {hostname} {dns_type} {value}")
+            # Validate that value is not null or empty
+            if not value or value.strip() == '""' or value.strip() == "''":
+                logger.warning(f"RECORD SKIPPED [DNS]: {hostname} {dns_type} - Empty or null value")
+                return DbResult(success=False, error="DNS record value cannot be null or empty")
+
+            # First check if record exists and get current values
+            existing = await self._fetch_records(
+                '''
+                SELECT id, ttl, dns_class
+                FROM dns_records 
+                WHERE domain_id = $1 AND hostname = $2 AND dns_type = $3 AND value = $4
+                ''',
+                domain_id, hostname.lower(), dns_type, value
+            )
+            
+            if existing.success and existing.data:
+                current = existing.data[0]
+                # Check if any values would actually change
+                needs_update = False
+                update_fields = []
+                
+                if ttl is not None and current['ttl'] != ttl:
+                    needs_update = True
+                    update_fields.append(f"ttl: {current['ttl']} -> {ttl}")
+                
+                if dns_class is not None and current['dns_class'] != dns_class:
+                    needs_update = True
+                    update_fields.append(f"dns_class: {current['dns_class']} -> {dns_class}")
+                
+                if not needs_update:
+                    details = f"{hostname} {dns_type} {value}"
+                    logger.debug(f"RECORD UNCHANGED [DNS]: {details}")
+                    return DbResult(success=True, data={'id': current['id'], 'inserted': None})
+
+            result = await self._write_records(
+                '''
+                WITH dns_update AS (
+                    INSERT INTO dns_records (domain_id, program_id, hostname, ttl, dns_class, dns_type, value)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    ON CONFLICT (domain_id, hostname, dns_type, value) 
+                    DO UPDATE SET
+                        ttl = $4,
+                        dns_class = $5,
+                        program_id = $2
+                    WHERE 
+                        dns_records.ttl IS DISTINCT FROM $4 OR
+                        dns_records.dns_class IS DISTINCT FROM $5
+                    RETURNING id, 
+                        (xmax = 0) as is_insert,
+                        CASE 
+                            WHEN xmax = 0 THEN true
+                            WHEN xmax <> 0 AND (dns_records.ttl IS DISTINCT FROM $4 OR dns_records.dns_class IS DISTINCT FROM $5) THEN false
+                            ELSE null
+                        END as modified
+                )
+                SELECT * FROM dns_update
+                ''',
+                domain_id,
+                program_id,
+                hostname.lower(),
+                ttl,
+                dns_class,
+                dns_type,
+                value
+            )
+            
+            if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                details = f"{hostname} {dns_type} {value}"
+                logger.debug(f"Operation result for DNS record {details}: {result.data[0]}")
+                
+                if result.data[0].get('is_insert', False):
+                    logger.success(f"RECORD INSERTED [DNS]: {details}")
+                    return DbResult(success=True, data={'id': result.data[0]['id'], 'inserted': True})
+                elif result.data[0].get('modified', False):
+                    logger.info(f"RECORD UPDATED [DNS]: {details} - Changes: {', '.join(update_fields)}")
+                    return DbResult(success=True, data={'id': result.data[0]['id'], 'inserted': False})
                 else:
-                    logger.info(f"UPDATED DNS RECORD: {hostname} {dns_type} {value}")
+                    logger.debug(f"RECORD UNCHANGED [DNS]: {details}")
+                    return DbResult(success=True, data={'id': result.data[0]['id'], 'inserted': None})
             else:
-                logger.error(f"Failed to insert or update DNS record: {result.error}")
+                logger.error(f"Failed to insert or update DNS record in database: {result.error}")
                 return DbResult(success=False, error=f"Error inserting or updating DNS record in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting DNS record: {str(e)}")
             logger.exception(e)
-    
+            return DbResult(success=False, error=f"Error inserting DNS record in database: {str(e)}")
+
     async def insert_out_of_scope_domain(self, domain: str, program_id: int):
         try:
             # Validate domain before insertion
@@ -488,90 +555,145 @@ class DatabaseManager():
             return False
 
     async def insert_ip(self, ip: str, ptr: str, cloud_provider: str, program_id: int) -> Dict[str, Any]:
-        # Validate IP address is IPv4 or IPv6
-        import ipaddress
         try:
-            ip_obj = ipaddress.ip_address(ip)
-            if not isinstance(ip_obj, ipaddress.IPv4Address):
-                raise ValueError("IP address must be IPv4")
-        except ValueError as e:
-            logger.error(f"Invalid IP address: {ip}")
-            raise
+            # Validate IP address is IPv4 or IPv6
+            import ipaddress
+            try:
+                ip_obj = ipaddress.ip_address(ip)
+                if not isinstance(ip_obj, ipaddress.IPv4Address):
+                    return DbResult(success=False, error=f"IPv6 addresses are not supported: {ip}")
+            except ValueError as e:
+                return DbResult(success=False, error=f"Invalid IP address: {ip}")
 
-        query = """
-        INSERT INTO ips (ip, ptr, cloud_provider, program_id)
-        VALUES ($1, LOWER($2), $3, $4)
-        ON CONFLICT (ip) DO UPDATE
-        SET ptr = CASE
-                WHEN EXCLUDED.ptr IS NOT NULL AND EXCLUDED.ptr <> '' THEN EXCLUDED.ptr
-                ELSE ips.ptr
-            END,
-            cloud_provider = CASE
-                WHEN EXCLUDED.cloud_provider IS NOT NULL AND EXCLUDED.cloud_provider <> '' THEN EXCLUDED.cloud_provider
-                ELSE ips.cloud_provider
-            END,
-            program_id = CASE
-                WHEN EXCLUDED.program_id IS NOT NULL THEN EXCLUDED.program_id
-                ELSE ips.program_id
-            END,
-            discovered_at = CURRENT_TIMESTAMP
-        RETURNING (xmax = 0) AS inserted, id
-        """
-        try:
-            result = await self._write_records(query, ip, ptr, cloud_provider, program_id)
+            result = await self._write_records(
+                '''
+                WITH updated_ip AS (
+                    INSERT INTO ips (ip, ptr, cloud_provider, program_id)
+                    VALUES ($1, LOWER($2), $3, $4)
+                    ON CONFLICT (ip) DO UPDATE
+                    SET ptr = CASE
+                            WHEN EXCLUDED.ptr IS NOT NULL AND EXCLUDED.ptr <> '' AND EXCLUDED.ptr IS DISTINCT FROM ips.ptr THEN EXCLUDED.ptr
+                            ELSE ips.ptr
+                        END,
+                        cloud_provider = CASE
+                            WHEN EXCLUDED.cloud_provider IS NOT NULL AND EXCLUDED.cloud_provider <> '' AND EXCLUDED.cloud_provider IS DISTINCT FROM ips.cloud_provider THEN EXCLUDED.cloud_provider
+                            ELSE ips.cloud_provider
+                        END,
+                        program_id = CASE
+                            WHEN EXCLUDED.program_id IS NOT NULL AND EXCLUDED.program_id IS DISTINCT FROM ips.program_id THEN EXCLUDED.program_id
+                            ELSE ips.program_id
+                        END,
+                        discovered_at = CASE
+                            WHEN (EXCLUDED.ptr IS NOT NULL AND EXCLUDED.ptr <> '' AND EXCLUDED.ptr IS DISTINCT FROM ips.ptr) OR
+                                 (EXCLUDED.cloud_provider IS NOT NULL AND EXCLUDED.cloud_provider <> '' AND EXCLUDED.cloud_provider IS DISTINCT FROM ips.cloud_provider) OR
+                                 (EXCLUDED.program_id IS NOT NULL AND EXCLUDED.program_id IS DISTINCT FROM ips.program_id)
+                            THEN CURRENT_TIMESTAMP
+                            ELSE ips.discovered_at
+                        END
+                    WHERE
+                        (EXCLUDED.ptr IS NOT NULL AND EXCLUDED.ptr <> '' AND EXCLUDED.ptr IS DISTINCT FROM ips.ptr) OR
+                        (EXCLUDED.cloud_provider IS NOT NULL AND EXCLUDED.cloud_provider <> '' AND EXCLUDED.cloud_provider IS DISTINCT FROM ips.cloud_provider) OR
+                        (EXCLUDED.program_id IS NOT NULL AND EXCLUDED.program_id IS DISTINCT FROM ips.program_id)
+                    RETURNING *, xmax, (xmax = 0) as is_insert
+                ), existing_ip AS (
+                    SELECT id, ptr, cloud_provider, program_id, discovered_at
+                    FROM ips 
+                    WHERE ip = $1 
+                    AND NOT EXISTS (SELECT 1 FROM updated_ip)
+                )
+                SELECT 
+                    COALESCE(ui.id, ei.id) as id,
+                    CASE 
+                        WHEN ui.is_insert THEN true
+                        WHEN ui.xmax IS NOT NULL THEN false
+                        ELSE null
+                    END as inserted
+                FROM updated_ip ui
+                FULL OUTER JOIN existing_ip ei ON true
+                WHERE ui.id IS NOT NULL OR ei.id IS NOT NULL
+                LIMIT 1
+                ''',
+                ip,
+                ptr,
+                cloud_provider,
+                program_id
+            )
+            
             if result.success and isinstance(result.data, list) and len(result.data) > 0:
-                if result.data[0]['inserted']:
-                    logger.success(f"INSERTED IP: {ip}")
+                record = result.data[0]
+                details = f"{ip}{f' PTR:{ptr}' if ptr else ''}{f' Cloud:{cloud_provider}' if cloud_provider else ''}"
+                logger.debug(f"Operation result for IP {ip}: {record}")
+                
+                inserted = record.get('inserted')
+                if inserted is True:
+                    logger.success(f"RECORD INSERTED [IP]: {details}")
+                elif inserted is False:
+                    logger.info(f"RECORD UPDATED [IP]: {details}")
+                elif inserted is None:
+                    logger.debug(f"RECORD UNCHANGED [IP]: {details}")
                 else:
-                    logger.info(f"UPDATED IP: {ip}")
-                return {
-                    'inserted': result.data[0]['inserted'],
-                    'id': result.data[0]['id']
-                }
-            return {'inserted': False, 'id': None}
+                    logger.warning(f"UNEXPECTED STATUS FOR IP: {details} - Status: {inserted}")
+                
+                return DbResult(success=True, data={
+                    'id': record.get('id'),
+                    'inserted': inserted
+                })
+            else:
+                logger.error(f"Failed to insert or update IP in database: {result.error}")
+                return DbResult(success=False, error=f"Error inserting or updating IP in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating IP in database: {str(e)}")
             logger.exception(e)
-            return {'inserted': False, 'id': None}
+            return DbResult(success=False, error=f"Error inserting or updating IP in database: {str(e)}")
     
     async def insert_service(self, ip: str, program_id: int, port: int = None, protocol: str = None, service: str = None) -> bool:
         try:
             # First get or create the IP record
-            ip_record = await self._write_records(
-                '''
-                INSERT INTO ips (ip, program_id)
-                VALUES ($1, $2)
-                ON CONFLICT (ip) DO UPDATE 
-                SET program_id = EXCLUDED.program_id
-                RETURNING id
-                ''',
-                ip,
-                program_id
-            )
+            ip_record = await self.insert_ip(ip, None, None, program_id)
             
-            # Handle nested DbResult for IP record
-            if ip_record.success and isinstance(ip_record.data, DbResult):
-                ip_data = ip_record.data.data
-            else:
-                ip_data = ip_record.data
-
-            if not ip_data or not isinstance(ip_data, list) or len(ip_data) == 0:
-                raise Exception(f"Failed to insert or get IP record for {ip}")
+            if not ip_record.success:
+                logger.warning(ip_record.error)
+                return DbResult(success=False, error=ip_record.error)
                 
-            ip_id = ip_data[0]['id']
+            # Access the 'id' from the data dictionary inside the DbResult object
+            ip_id = ip_record.data.get('id')
+            if not ip_id:
+                return DbResult(success=False, error=f"No ID returned for IP record {ip}")
 
             # Use the ON CONFLICT for services with ports
             result = await self._write_records(
                 '''
-                INSERT INTO services (ip, port, protocol, service, program_id) 
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT ON CONSTRAINT unique_service_ip_port
-                DO UPDATE
-                SET protocol = EXCLUDED.protocol,
-                    service = EXCLUDED.service,
-                    program_id = EXCLUDED.program_id,
-                    discovered_at = CURRENT_TIMESTAMP
-                RETURNING (xmax = 0) AS inserted
+                WITH service_update AS (
+                    INSERT INTO services (ip, port, protocol, service, program_id) 
+                    VALUES ($1, $2, $3, $4, $5)
+                    ON CONFLICT ON CONSTRAINT unique_service_ip_port
+                    DO UPDATE
+                    SET protocol = CASE
+                            WHEN $3 IS NOT NULL AND $3 IS DISTINCT FROM services.protocol THEN $3
+                            ELSE services.protocol
+                        END,
+                        service = CASE
+                            WHEN $4 IS NOT NULL AND $4 IS DISTINCT FROM services.service THEN $4
+                            ELSE services.service
+                        END,
+                        program_id = CASE
+                            WHEN $5 IS NOT NULL AND $5 IS DISTINCT FROM services.program_id THEN $5
+                            ELSE services.program_id
+                        END,
+                        discovered_at = CASE
+                            WHEN ($3 IS NOT NULL AND $3 IS DISTINCT FROM services.protocol) OR
+                                 ($4 IS NOT NULL AND $4 IS DISTINCT FROM services.service) OR
+                                 ($5 IS NOT NULL AND $5 IS DISTINCT FROM services.program_id)
+                            THEN CURRENT_TIMESTAMP
+                            ELSE services.discovered_at
+                        END
+                    WHERE
+                        ($3 IS NOT NULL AND $3 IS DISTINCT FROM services.protocol) OR
+                        ($4 IS NOT NULL AND $4 IS DISTINCT FROM services.service) OR
+                        ($5 IS NOT NULL AND $5 IS DISTINCT FROM services.program_id)
+                    RETURNING *, (xmax = 0) as is_insert
+                )
+                SELECT * FROM service_update
                 ''',
                 ip_id,
                 port,
@@ -580,12 +702,15 @@ class DatabaseManager():
                 program_id
             )
             
-            # Handle nested DbResult for service record
-            if result.success:
-                if result.data[0]['inserted']:
-                    logger.success(f"INSERTED SERVICE: {ip} {port} {protocol} {service}")
+            if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                details = f"{ip} Port:{port} Protocol:{protocol} Service:{service}"
+                logger.debug(f"Operation result for service {details}: {result.data[0]}")
+                if result.data[0].get('is_insert', False):
+                    logger.success(f"RECORD INSERTED [SERVICE]: {details}")
+                elif result.data[0].get('modified', False):
+                    logger.info(f"RECORD UPDATED [SERVICE]: {details}")
                 else:
-                    logger.info(f"UPDATED SERVICE: {ip} {port} {protocol} {service}")
+                    logger.debug(f"RECORD UNCHANGED [SERVICE]: {details}")
                 return DbResult(success=True, data=result.data[0])
             else:
                 return DbResult(success=False, error=f"Error inserting or updating service in database: {result.error}")
@@ -604,32 +729,66 @@ class DatabaseManager():
                 if ips:
                     for ip in ips:
                         ip_id = await self._fetch_value('SELECT id FROM ips WHERE ip = $1', ip)
-                        if ip_id:
+                        if ip_id and ip_id.data is not None:
                             ip_ids.append(ip_id.data)
+                    logger.debug(f"IP IDs for domain {domain}: {ip_ids}")
 
                 result = await self._write_records(
                     '''
-                    INSERT INTO domains (domain, program_id, ips, cnames, is_catchall) 
-                    VALUES ($1, $2, $3, $4, $5::boolean) 
-                    ON CONFLICT (domain) DO UPDATE 
-                    SET program_id = EXCLUDED.program_id,
-                        ips = CASE
-                            WHEN EXCLUDED.ips IS NOT NULL THEN 
-                                CASE
-                                    WHEN domains.ips IS NULL THEN EXCLUDED.ips
-                                    ELSE (SELECT ARRAY(SELECT DISTINCT UNNEST(domains.ips || EXCLUDED.ips)))
-                                END
-                            ELSE domains.ips
-                        END,
-                        cnames = CASE
-                            WHEN EXCLUDED.cnames IS NOT NULL THEN EXCLUDED.cnames
-                            ELSE domains.cnames
-                        END,
-                        is_catchall = CASE
-                            WHEN EXCLUDED.is_catchall IS NOT NULL THEN EXCLUDED.is_catchall::boolean
-                            ELSE domains.is_catchall
-                        END
-                    RETURNING (xmax = 0) AS inserted, is_catchall, id
+                    WITH updated_domain AS (
+                        INSERT INTO domains (domain, program_id, ips, cnames, is_catchall) 
+                        VALUES ($1, $2, $3, $4, $5::boolean) 
+                        ON CONFLICT (domain) DO UPDATE 
+                        SET program_id = CASE
+                                WHEN EXCLUDED.program_id IS NOT NULL AND EXCLUDED.program_id IS DISTINCT FROM domains.program_id THEN EXCLUDED.program_id
+                                ELSE domains.program_id
+                            END,
+                            ips = CASE
+                                WHEN EXCLUDED.ips IS NOT NULL AND EXCLUDED.ips IS DISTINCT FROM domains.ips THEN 
+                                    CASE
+                                        WHEN domains.ips IS NULL THEN EXCLUDED.ips
+                                        ELSE (
+                                            SELECT ARRAY(
+                                                SELECT DISTINCT elem
+                                                FROM UNNEST(domains.ips || EXCLUDED.ips) AS elem
+                                                WHERE elem IS NOT NULL
+                                            )
+                                        )
+                                    END
+                                ELSE domains.ips
+                            END,
+                            cnames = CASE
+                                WHEN EXCLUDED.cnames IS NOT NULL AND EXCLUDED.cnames IS DISTINCT FROM domains.cnames THEN EXCLUDED.cnames
+                                ELSE domains.cnames
+                            END,
+                            is_catchall = CASE
+                                WHEN EXCLUDED.is_catchall IS NOT NULL AND EXCLUDED.is_catchall IS DISTINCT FROM domains.is_catchall THEN EXCLUDED.is_catchall::boolean
+                                ELSE domains.is_catchall
+                            END
+                        WHERE
+                            (EXCLUDED.program_id IS NOT NULL AND EXCLUDED.program_id IS DISTINCT FROM domains.program_id) OR
+                            (EXCLUDED.ips IS NOT NULL AND EXCLUDED.ips IS DISTINCT FROM domains.ips) OR
+                            (EXCLUDED.cnames IS NOT NULL AND EXCLUDED.cnames IS DISTINCT FROM domains.cnames) OR
+                            (EXCLUDED.is_catchall IS NOT NULL AND EXCLUDED.is_catchall IS DISTINCT FROM domains.is_catchall)
+                        RETURNING *, xmax, (xmax = 0) as is_insert
+                    ), existing_domain AS (
+                        SELECT id, is_catchall
+                        FROM domains 
+                        WHERE domain = $1 
+                        AND NOT EXISTS (SELECT 1 FROM updated_domain)
+                    )
+                    SELECT 
+                        COALESCE(ud.id, ed.id) as id,
+                        COALESCE(ud.is_catchall, ed.is_catchall) as is_catchall,
+                        CASE 
+                            WHEN ud.is_insert THEN true
+                            WHEN ud.xmax IS NOT NULL THEN false
+                            ELSE null
+                        END as inserted
+                    FROM updated_domain ud
+                    FULL OUTER JOIN existing_domain ed ON true
+                    WHERE ud.id IS NOT NULL OR ed.id IS NOT NULL
+                    LIMIT 1
                     ''',
                     domain.lower(),
                     program_id,
@@ -640,13 +799,20 @@ class DatabaseManager():
                 logger.debug(f"Insert result: {result}")
                 
                 if result.success and isinstance(result.data, list) and len(result.data) > 0:
-                    if result.data[0]['inserted']:
-                        logger.success(f"INSERTED DOMAIN: {domain}{f' IPs:{ips}' if ips else ''}{f' Cnames:{cnames}' if cnames else ''}{f' Wildcard:{is_catchall}' if is_catchall else ''}")
+                    details = f"{domain}{f' IPs:{ips}' if ips else ''}{f' Cnames:{cnames}' if cnames else ''}{f' Wildcard:{is_catchall}' if is_catchall else ''}"
+                    logger.debug(f"Operation result for domain {domain}: {result.data[0]}")
+                    if result.data[0]['inserted'] is True:
+                        logger.success(f"RECORD INSERTED [DOMAIN]: {details}")
+                    elif result.data[0]['inserted'] is False:
+                        logger.info(f"RECORD UPDATED [DOMAIN]: {details}")
+                    elif result.data[0]['inserted'] is None:
+                        logger.debug(f"RECORD UNCHANGED [DOMAIN]: {details}")
                     else:
-                        logger.info(f"UPDATED DOMAIN: {domain}{f' IPs:{ips}' if ips else ''}{f' Cnames:{cnames}' if cnames else ''}{f' Wildcard:{is_catchall}' if is_catchall else ''}")
+                        logger.warning(f"UNEXPECTED STATUS FOR DOMAIN: {details} - Status: {result.data[0]['inserted']}")
                     return DbResult(success=True, data={
                         'inserted': result.data[0]['inserted'],
-                        'id': result.data[0]['id']
+                        'id': result.data[0]['id'],
+                        'is_catchall': result.data[0]['is_catchall']
                     })
                 else:
                     logger.error(f"Failed to insert or update domain in database: {result.error}")
@@ -678,7 +844,8 @@ class DatabaseManager():
             
             result = await self._write_records(
                 '''
-                INSERT INTO websites (
+                WITH updated_website AS (
+                    INSERT INTO websites (
                         url, program_id, host, port, scheme, techs, favicon_hash, favicon_url
                     )
                     VALUES (
@@ -686,35 +853,89 @@ class DatabaseManager():
                     )
                     ON CONFLICT (url) DO UPDATE SET
                         host = CASE
-                            WHEN EXCLUDED.host IS NOT NULL THEN EXCLUDED.host
+                            WHEN EXCLUDED.host IS NOT NULL AND EXCLUDED.host IS DISTINCT FROM websites.host THEN EXCLUDED.host
                             ELSE websites.host
                         END,
                         port = CASE
-                            WHEN EXCLUDED.port IS NOT NULL THEN EXCLUDED.port
+                            WHEN EXCLUDED.port IS NOT NULL AND EXCLUDED.port IS DISTINCT FROM websites.port THEN EXCLUDED.port
                             ELSE websites.port
                         END,
                         scheme = CASE
-                            WHEN EXCLUDED.scheme IS NOT NULL THEN EXCLUDED.scheme
+                            WHEN EXCLUDED.scheme IS NOT NULL AND EXCLUDED.scheme IS DISTINCT FROM websites.scheme THEN EXCLUDED.scheme
                             ELSE websites.scheme
                         END,
                         techs = CASE
-                            WHEN EXCLUDED.techs IS NOT NULL THEN EXCLUDED.techs
+                            WHEN EXCLUDED.techs IS NOT NULL AND EXCLUDED.techs IS DISTINCT FROM websites.techs THEN 
+                                CASE
+                                    WHEN websites.techs IS NULL THEN EXCLUDED.techs
+                                    ELSE (
+                                        SELECT ARRAY(
+                                            SELECT DISTINCT elem
+                                            FROM UNNEST(websites.techs || EXCLUDED.techs) AS elem
+                                            WHERE elem IS NOT NULL
+                                        )
+                                    )
+                                END
                             ELSE websites.techs
                         END,
                         program_id = CASE
-                            WHEN EXCLUDED.program_id IS NOT NULL THEN EXCLUDED.program_id
+                            WHEN EXCLUDED.program_id IS NOT NULL AND EXCLUDED.program_id IS DISTINCT FROM websites.program_id THEN EXCLUDED.program_id
                             ELSE websites.program_id
                         END,
-                        discovered_at = CURRENT_TIMESTAMP,
+                        discovered_at = CASE
+                            WHEN EXCLUDED.host IS DISTINCT FROM websites.host OR
+                                 EXCLUDED.port IS DISTINCT FROM websites.port OR
+                                 EXCLUDED.scheme IS DISTINCT FROM websites.scheme OR
+                                 EXCLUDED.techs IS DISTINCT FROM websites.techs OR
+                                 EXCLUDED.program_id IS DISTINCT FROM websites.program_id OR
+                                 EXCLUDED.favicon_hash IS DISTINCT FROM websites.favicon_hash OR
+                                 EXCLUDED.favicon_url IS DISTINCT FROM websites.favicon_url
+                            THEN CURRENT_TIMESTAMP
+                            ELSE websites.discovered_at
+                        END,
                         favicon_hash = CASE
-                            WHEN EXCLUDED.favicon_hash IS NOT NULL THEN EXCLUDED.favicon_hash
+                            WHEN EXCLUDED.favicon_hash IS NOT NULL AND EXCLUDED.favicon_hash IS DISTINCT FROM websites.favicon_hash THEN EXCLUDED.favicon_hash
                             ELSE websites.favicon_hash
                         END,
                         favicon_url = CASE
-                            WHEN EXCLUDED.favicon_url IS NOT NULL THEN EXCLUDED.favicon_url
+                            WHEN EXCLUDED.favicon_url IS NOT NULL AND EXCLUDED.favicon_url IS DISTINCT FROM websites.favicon_url THEN EXCLUDED.favicon_url
                             ELSE websites.favicon_url
                         END
-                    RETURNING (xmax = 0) AS inserted
+                    WHERE
+                        (EXCLUDED.host IS NOT NULL AND EXCLUDED.host IS DISTINCT FROM websites.host) OR
+                        (EXCLUDED.port IS NOT NULL AND EXCLUDED.port IS DISTINCT FROM websites.port) OR
+                        (EXCLUDED.scheme IS NOT NULL AND EXCLUDED.scheme IS DISTINCT FROM websites.scheme) OR
+                        (EXCLUDED.techs IS NOT NULL AND EXCLUDED.techs IS DISTINCT FROM websites.techs) OR
+                        (EXCLUDED.program_id IS NOT NULL AND EXCLUDED.program_id IS DISTINCT FROM websites.program_id) OR
+                        (EXCLUDED.favicon_hash IS NOT NULL AND EXCLUDED.favicon_hash IS DISTINCT FROM websites.favicon_hash) OR
+                        (EXCLUDED.favicon_url IS NOT NULL AND EXCLUDED.favicon_url IS DISTINCT FROM websites.favicon_url)
+                    RETURNING *, xmax, (xmax = 0) as is_insert
+                ), existing_website AS (
+                    SELECT id, url, host, port, scheme, techs, program_id, discovered_at, favicon_hash, favicon_url
+                    FROM websites 
+                    WHERE url = $1 
+                    AND NOT EXISTS (SELECT 1 FROM updated_website)
+                )
+                SELECT 
+                    COALESCE(uw.id, ew.id) as id,
+                    COALESCE(uw.url, ew.url) as url,
+                    COALESCE(uw.host, ew.host) as host,
+                    COALESCE(uw.port, ew.port) as port,
+                    COALESCE(uw.scheme, ew.scheme) as scheme,
+                    COALESCE(uw.techs, ew.techs) as techs,
+                    COALESCE(uw.program_id, ew.program_id) as program_id,
+                    COALESCE(uw.discovered_at, ew.discovered_at) as discovered_at,
+                    COALESCE(uw.favicon_hash, ew.favicon_hash) as favicon_hash,
+                    COALESCE(uw.favicon_url, ew.favicon_url) as favicon_url,
+                    CASE 
+                        WHEN uw.is_insert THEN true
+                        WHEN uw.xmax IS NOT NULL THEN false
+                        ELSE null
+                    END as inserted
+                FROM updated_website uw
+                FULL OUTER JOIN existing_website ew ON true
+                WHERE uw.id IS NOT NULL OR ew.id IS NOT NULL
+                LIMIT 1
                 ''',
                 url.lower(),
                 program_id,
@@ -726,13 +947,21 @@ class DatabaseManager():
                 favicon_url
             )
             
-            if result.success:
-                if result.data[0]['inserted']:
-                    logger.success(f"INSERTED WEBSITE: {url}")
+            if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                details = f"{url}{f' Host:{host}' if host else ''}{f' Port:{port}' if port else ''}{f' Scheme:{scheme}' if scheme else ''}"
+                logger.debug(f"Operation result for website {url}: {result.data[0]}")
+                if result.data[0]['inserted'] is True:
+                    logger.success(f"RECORD INSERTED [WEBSITE]: {details}")
+                elif result.data[0]['inserted'] is False:
+                    logger.info(f"RECORD UPDATED [WEBSITE]: {details}")
+                elif result.data[0]['inserted'] is None:
+                    logger.debug(f"RECORD UNCHANGED [WEBSITE]: {details}")
                 else:
-                    logger.info(f"UPDATED WEBSITE: {url}")
+                    logger.warning(f"UNEXPECTED STATUS FOR WEBSITE: {details} - Status: {result.data[0]['inserted']}")
                 return DbResult(success=True, data=result.data[0])
-            return DbResult(success=False, error=f"Error inserting or updating website in database: {result.error}")
+            else:
+                logger.error(f"Failed to insert or update website in database: {result.error}")
+                return DbResult(success=False, error=f"Error inserting or updating website in database: {result.error}")
         except Exception as e:
             logger.error(f"Error inserting or updating website in database: {e}")
             logger.exception(e)
@@ -764,14 +993,85 @@ class DatabaseManager():
             if self.pool is None:
                 raise Exception("Database connection pool is not initialized")
             
+            # First check if record exists and get current values
+            existing = await self._fetch_records(
+                '''
+                SELECT *
+                FROM websites_paths 
+                WHERE website_id = $1 AND path = $2
+                ''',
+                website_id, path
+            )
+            
+            if existing.success and existing.data:
+                current = existing.data[0]
+                # Check if any values would actually change
+                needs_update = False
+                update_fields = []
+                
+                if final_path is not None and current['final_path'] != final_path:
+                    needs_update = True
+                    update_fields.append(f"final_path: {current['final_path']} -> {final_path}")
+                if techs is not None and current['techs'] != techs:
+                    needs_update = True
+                    update_fields.append(f"techs: {current['techs']} -> {techs}")
+                if response_time is not None and current['response_time'] != response_time:
+                    needs_update = True
+                    update_fields.append(f"response_time: {current['response_time']} -> {response_time}")
+                if lines is not None and current['lines'] != lines:
+                    needs_update = True
+                    update_fields.append(f"lines: {current['lines']} -> {lines}")
+                if title is not None and current['title'] != title:
+                    needs_update = True
+                    update_fields.append(f"title: {current['title']} -> {title}")
+                if words is not None and current['words'] != words:
+                    needs_update = True
+                    update_fields.append(f"words: {current['words']} -> {words}")
+                if method is not None and current['method'] != method:
+                    needs_update = True
+                    update_fields.append(f"method: {current['method']} -> {method}")
+                if scheme is not None and current['scheme'] != scheme:
+                    needs_update = True
+                    update_fields.append(f"scheme: {current['scheme']} -> {scheme}")
+                if status_code is not None and current['status_code'] != status_code:
+                    needs_update = True
+                    update_fields.append(f"status_code: {current['status_code']} -> {status_code}")
+                if content_type is not None and current['content_type'] != content_type:
+                    needs_update = True
+                    update_fields.append(f"content_type: {current['content_type']} -> {content_type}")
+                if content_length is not None and current['content_length'] != content_length:
+                    needs_update = True
+                    update_fields.append(f"content_length: {current['content_length']} -> {content_length}")
+                if chain_status_codes is not None and current['chain_status_codes'] != chain_status_codes:
+                    needs_update = True
+                    update_fields.append(f"chain_status_codes: {current['chain_status_codes']} -> {chain_status_codes}")
+                if page_type is not None and current['page_type'] != page_type:
+                    needs_update = True
+                    update_fields.append(f"page_type: {current['page_type']} -> {page_type}")
+                if body_preview is not None and current['body_preview'] != body_preview:
+                    needs_update = True
+                    update_fields.append(f"body_preview changed")
+                if resp_header_hash is not None and current['resp_header_hash'] != resp_header_hash:
+                    needs_update = True
+                    update_fields.append(f"resp_header_hash: {current['resp_header_hash']} -> {resp_header_hash}")
+                if resp_body_hash is not None and current['resp_body_hash'] != resp_body_hash:
+                    needs_update = True
+                    update_fields.append(f"resp_body_hash: {current['resp_body_hash']} -> {resp_body_hash}")
+                
+                if not needs_update:
+                    details = f"{path} Website:{website_id}"
+                    logger.debug(f"RECORD UNCHANGED [WEBSITE PATH]: {details}")
+                    return DbResult(success=True, data={'id': current['id'], 'inserted': None})
+
             result = await self._write_records(
                 '''
-                INSERT INTO websites_paths (
-                        website_id, path, final_path, techs, response_time, lines, title, words, method, scheme, status_code, content_type, content_length, chain_status_codes, page_type, body_preview, resp_header_hash, resp_body_hash, program_id
+                WITH updated_path AS (
+                    INSERT INTO websites_paths (
+                        website_id, path, final_path, techs, response_time, lines, title, words, method, scheme, 
+                        status_code, content_type, content_length, chain_status_codes, page_type, body_preview, 
+                        resp_header_hash, resp_body_hash, program_id
                     )
-                    VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
-                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                     ON CONFLICT (website_id, path) DO UPDATE SET
                         final_path = EXCLUDED.final_path,
                         techs = EXCLUDED.techs,
@@ -790,7 +1090,43 @@ class DatabaseManager():
                         resp_header_hash = EXCLUDED.resp_header_hash,
                         resp_body_hash = EXCLUDED.resp_body_hash,
                         program_id = EXCLUDED.program_id
-                    RETURNING (xmax = 0) AS inserted
+                    WHERE (
+                        EXCLUDED.final_path IS DISTINCT FROM websites_paths.final_path OR
+                        EXCLUDED.techs IS DISTINCT FROM websites_paths.techs OR
+                        EXCLUDED.response_time IS DISTINCT FROM websites_paths.response_time OR
+                        EXCLUDED.lines IS DISTINCT FROM websites_paths.lines OR
+                        EXCLUDED.title IS DISTINCT FROM websites_paths.title OR
+                        EXCLUDED.words IS DISTINCT FROM websites_paths.words OR
+                        EXCLUDED.method IS DISTINCT FROM websites_paths.method OR
+                        EXCLUDED.scheme IS DISTINCT FROM websites_paths.scheme OR
+                        EXCLUDED.status_code IS DISTINCT FROM websites_paths.status_code OR
+                        EXCLUDED.content_type IS DISTINCT FROM websites_paths.content_type OR
+                        EXCLUDED.content_length IS DISTINCT FROM websites_paths.content_length OR
+                        EXCLUDED.chain_status_codes IS DISTINCT FROM websites_paths.chain_status_codes OR
+                        EXCLUDED.page_type IS DISTINCT FROM websites_paths.page_type OR
+                        EXCLUDED.body_preview IS DISTINCT FROM websites_paths.body_preview OR
+                        EXCLUDED.resp_header_hash IS DISTINCT FROM websites_paths.resp_header_hash OR
+                        EXCLUDED.resp_body_hash IS DISTINCT FROM websites_paths.resp_body_hash OR
+                        EXCLUDED.program_id IS DISTINCT FROM websites_paths.program_id
+                    )
+                    RETURNING *, xmax, (xmax = 0) as is_insert
+                ), existing_path AS (
+                    SELECT id
+                    FROM websites_paths 
+                    WHERE website_id = $1 AND path = $2
+                    AND NOT EXISTS (SELECT 1 FROM updated_path)
+                )
+                SELECT 
+                    COALESCE(up.id, ep.id) as id,
+                    CASE 
+                        WHEN up.is_insert THEN true
+                        WHEN up.xmax IS NOT NULL THEN false
+                        ELSE null
+                    END as inserted
+                FROM updated_path up
+                FULL OUTER JOIN existing_path ep ON true
+                WHERE up.id IS NOT NULL OR ep.id IS NOT NULL
+                LIMIT 1
                 ''',
                 website_id,
                 path,
@@ -813,12 +1149,17 @@ class DatabaseManager():
                 program_id
             )
             
-            # Handle nested DbResult objects
-            if result.success:
-                if result.data[0]['inserted']:
-                    logger.success(f"INSERTED WEBSITE PATH: {path}")
+            if result.success and isinstance(result.data, list) and len(result.data) > 0:
+                details = f"{path} Website:{website_id}"
+                logger.debug(f"Operation result for website path {path}: {result.data[0]}")
+                
+                if result.data[0]['inserted'] is True:
+                    logger.success(f"RECORD INSERTED [WEBSITE PATH]: {details}")
+                elif result.data[0]['inserted'] is False:
+                    logger.info(f"RECORD UPDATED [WEBSITE PATH]: {details} - Changes: {', '.join(update_fields)}")
                 else:
-                    logger.info(f"UPDATED WEBSITE PATH: {path}")
+                    logger.debug(f"RECORD UNCHANGED [WEBSITE PATH]: {details}")
+                
                 return DbResult(success=True, data=result.data[0])
             else:
                 return DbResult(success=False, error=f"Error inserting or updating website path in database: {result.error}")
@@ -929,9 +1270,9 @@ class DatabaseManager():
             
             if result.success:
                 if result.data[0]['inserted']:
-                    logger.success(f"INSERTED CERTIFICATE: {serial}")
+                    logger.success(f"RECORD INSERTED [CERTIFICATE]: {serial}")
                 else:
-                    logger.info(f"UPDATED CERTIFICATE: {serial}")
+                    logger.info(f"RECORD UPDATED [CERTIFICATE]: {serial}")
                 return DbResult(success=True, data=result.data[0])
             return DbResult(success=False, error=f"Error inserting or updating certificate in database: {result.error}")
         except Exception as e:
@@ -1020,9 +1361,9 @@ class DatabaseManager():
             
             if result.success:
                 if result.data[0]['inserted']:
-                    logger.success(f"INSERTED NUCLEI: {url} {template_id}")
+                    logger.success(f"RECORD INSERTED [NUCLEI]: {url} {template_id}")
                 else:
-                    logger.info(f"UPDATED NUCLEI: {url} {template_id}")
+                    logger.info(f"RECORD UPDATED [NUCLEI]: {url} {template_id}")
                 return DbResult(success=True, data=result.data[0])
             return DbResult(success=False, error=f"Error inserting or updating Nuclei hit in database: {result.error}")
         except Exception as e:

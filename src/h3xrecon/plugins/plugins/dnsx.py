@@ -43,7 +43,10 @@ class DnsxPlugin(ReconPlugin):
         # Run dnsx
         command = f"echo {target} | dnsx -nc -resp -recon -silent -j -r {random_resolvers_str}"
         logger.debug(f"Running command: {command}")
-        dnsx_results = self._create_subprocess_shell_sync(command).splitlines()
+        stdout, stderr = self._create_subprocess_shell_sync(command)
+        if stderr:
+            logger.warning(f"dnsx stderr output: {stderr}")
+        dnsx_results = stdout.splitlines()
         results = []
         for r in dnsx_results:
             try:
@@ -63,8 +66,26 @@ class DnsxPlugin(ReconPlugin):
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:    
         try:
-            # Process DNS entries
             dnsx_results = output_msg.get('data', {}).get('dnsx_results', [])[0]
+            # Set the domain attributes
+            dom_attr = {
+                "cnames": dnsx_results.get('cnames', []), 
+                "ips": dnsx_results.get('a', []), 
+                "is_catchall": output_msg.get('data', {}).get('target_wildcard', False)
+            }
+            # Send the domain data to the data processor queue if there are any cnames or ips along with the catchall flag
+            if (len(dom_attr.get("cnames")) + len(dom_attr.get("ips"))) > 0 or dom_attr.get("is_catchall"):
+                await send_domain_data(
+                    qm=qm,
+                    data=output_msg.get('source', {}).get('params', {}).get('target'),
+                    execution_id=output_msg.get('execution_id'),    
+                    program_id=output_msg.get('program_id'),
+                    attributes=dom_attr,
+                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True),
+                    response_id=None
+                )
+                logger.debug(f"Sent domain {output_msg.get('source', {}).get('params', {}).get('target')} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
+            # Process DNS entries
             for r in dnsx_results.get('all', []):
                 parsed_record = parse_dns_record(r)
                 if parsed_record:
@@ -108,24 +129,5 @@ class DnsxPlugin(ReconPlugin):
                         logger.debug(f"Sent NS {ns} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
                     except Exception as e:
                         logger.error(f"Error processing NS {ns}: {str(e)}")
-            
-            # Set the domain attributes
-            dom_attr = {
-                "cnames": dnsx_results.get('cnames', []), 
-                "ips": dnsx_results.get('a', []), 
-                "is_catchall": output_msg.get('data', {}).get('target_wildcard', False)
-            }
-            # Send the domain data to the data processor queue if there are any cnames or ips along with the catchall flag
-            if (len(dom_attr.get("cnames")) + len(dom_attr.get("ips"))) > 0 or dom_attr.get("is_catchall"):
-                await send_domain_data(
-                    qm=qm,
-                    data=output_msg.get('source', {}).get('params', {}).get('target'),
-                    execution_id=output_msg.get('execution_id'),    
-                    program_id=output_msg.get('program_id'),
-                    attributes=dom_attr,
-                    trigger_new_jobs=output_msg.get('trigger_new_jobs', True),
-                    response_id=None
-                )
-                logger.debug(f"Sent domain {output_msg.get('source', {}).get('params', {}).get('target')} to data processor queue for domain {output_msg.get('source', {}).get('params',{}).get('target')}")
         except Exception as e:
             logger.error(f"Error in process_resolved_domain: {str(e)}")
