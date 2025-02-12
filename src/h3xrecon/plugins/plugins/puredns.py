@@ -98,8 +98,10 @@ class PureDNSPlugin(ReconPlugin):
         # First resolve the target with a random number to test if the target is a wildcard domain
         randomized_subdomain = f"{random.randint(1000000000, 9999999999)}.{target}"
         command = self._get_resolve_command(randomized_subdomain)
-        cmd_output = self._create_subprocess_shell_sync(command)
-        logger.debug(f"Command output: {cmd_output}")
+        stdout, stderr = self._create_subprocess_shell_sync(command)
+        if stderr:
+            logger.warning(f"puredns stderr output: {stderr}")
+        logger.debug(f"Command output: {stdout}")
         self.read_puredns_output()
         # If the target is a wildcard domain, remove the randomized subdomain from the resolved output
         if target in self.output.get("wildcards", []):
@@ -108,8 +110,10 @@ class PureDNSPlugin(ReconPlugin):
                     self.output["resolved"].remove(record)
         # Resolve the actual target
         command = self._get_resolve_command(target)
-        cmd_output = self._create_subprocess_shell_sync(command)
-        logger.debug(f"Command output: {cmd_output}")
+        stdout, stderr = self._create_subprocess_shell_sync(command)
+        if stderr:
+            logger.warning(f"puredns stderr output: {stderr}")
+        logger.debug(f"Command output: {stdout}")
         self.read_puredns_output()
 
     
@@ -144,8 +148,10 @@ class PureDNSPlugin(ReconPlugin):
                 logger.debug(f"Domain {target} is not a wildcard domain, proceeding with bruteforce")
                 self.clean_tmp_files()
                 command = self._get_bruteforce_command(target)
-                cmd_output = self._create_subprocess_shell_sync(command)
-                logger.debug(f"Command output: {cmd_output}")
+                stdout, stderr = self._create_subprocess_shell_sync(command)
+                if stderr:
+                    logger.warning(f"puredns bruteforce stderr output: {stderr}")
+                logger.debug(f"Command output: {stdout}")
                 self.read_puredns_output()
         
 

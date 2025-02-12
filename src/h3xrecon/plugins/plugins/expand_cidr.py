@@ -34,8 +34,11 @@ class ExpandCIDR(ReconPlugin):
             }
         )
         command = f"prips {params.get('target', {})} && cat /tmp/prips.log"
-        # Split the output into a list of IP addresses
-        output = self._create_subprocess_shell_sync(command).split()
+        logger.debug(f"Running command: {command}")
+        stdout, stderr = self._create_subprocess_shell_sync(command)
+        if stderr:
+            logger.warning(f"prips stderr output: {stderr}")
+        output = stdout.split()
         # Dispatch reverse_resolve_ip tasks for each IP of the CIDR
         for ip in output:
             await qm.publish_message(

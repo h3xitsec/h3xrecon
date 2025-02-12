@@ -469,21 +469,25 @@ class DataWorker(Worker):
                 result = await self.db.insert_ip(ip=ip, ptr=ptr, cloud_provider=cloud_provider, program_id=msg_data.get('program_id'))
                 
                 # Log operation result
-                if result.get('inserted'):
-                    # await self.db.log_dataworker_operation(
-                    #     component_id=self.component_id,
-                    #     data_type='ip',
-                    #     program_id=msg_data.get('program_id'),
-                    #     operation_type='insert',
-                    #     data=ip_data,
-                    #     status='completed',
-                    #     result={'inserted': True, 'id': result.get('id')},
-                    #     completed_at=datetime.now(timezone.utc)
-                    # )
-                    if msg_data.get('trigger_new_jobs'):
-                        await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
-                    else:
-                        logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {ip} : {msg_data.get('execution_id', 'no execution id')}")
+                if result.success and result.data:
+                    inserted = result.data.get('inserted')
+                    if inserted:
+                        # await self.db.log_dataworker_operation(
+                        #     component_id=self.component_id,
+                        #     data_type='ip',
+                        #     program_id=msg_data.get('program_id'),
+                        #     operation_type='insert',
+                        #     data=ip_data,
+                        #     status='completed',
+                        #     result={'inserted': True, 'id': result.data.get('id')},
+                        #     completed_at=datetime.now(timezone.utc)
+                        # )
+                        if msg_data.get('trigger_new_jobs'):
+                            await self.trigger_new_jobs(program_id=msg_data.get('program_id'), data_type="ip", result=ip)
+                        else:
+                            logger.warning(f"JOB TRIGGERING DISABLED: {msg_data.get('data_type')} : {ip} : {msg_data.get('execution_id', 'no execution id')}")
+                else:
+                    logger.error(f"Failed to process IP {ip}: {result.error}")
             except Exception as e:
                 # await self.db.log_dataworker_operation(
                 #     component_id=self.component_id,
