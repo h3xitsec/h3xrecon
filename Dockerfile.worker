@@ -1,9 +1,7 @@
 ## Builder stage
-FROM golang:1.23-bullseye AS builder
+FROM golang:1.23-bookworm AS builder
 
 WORKDIR /app
-
-ENV QEMU_UNAME="4.8.0"
 
 RUN apt-get update && \
     apt-get install -y git && \
