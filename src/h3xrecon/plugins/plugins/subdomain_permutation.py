@@ -56,8 +56,8 @@ class SubdomainPermutation(ReconPlugin):
         logger.debug(f"Using permutation file {wordlist}")
         
         # Run gotator to get the permutation list
-        command = f"gotator -sub {tmp_file} -perm {PERMUTATIONS_FILE} -depth 1 -numbers -mindup -adv -silent"
-        logger.debug(f"Running command: {command}")
+        command = f"echo \"{params.get("target", {})}\" > /tmp/gotator_input.txt && gotator -sub /tmp/gotator_input.txt -perm {wordlist} -depth 1 -numbers 10 -mindup -adv"
+        logger.debug(f"Running command {command}")
         stdout, stderr = self._create_subprocess_shell_sync(command)
         if stderr:
             logger.warning(f"gotator stderr output: {stderr}")
