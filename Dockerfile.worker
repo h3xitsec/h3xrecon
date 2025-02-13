@@ -3,13 +3,12 @@ FROM golang:1.23-bullseye AS builder
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    git \
-    make \
-    gcc \
-    wget \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+ENV QEMU_UNAME="4.8.0"
+
+RUN apt-get update && \
+    apt-get install -y git && \
+    apt-get install -y make gcc wget build-essential && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV CGO_ENABLED=1
 ENV GOBIN=/usr/local/go/bin
