@@ -76,7 +76,8 @@ class PureDNSPlugin(ReconPlugin):
                 --resolvers-trusted {RESOLVERS_TRUSTED_FILE} \
                 --write-massdns /tmp/puredns_massdns.txt \
                 --write-wildcards /tmp/puredns_wildcards.txt \
-                --write /tmp/puredns.txt"
+                --write /tmp/puredns.txt \
+                -q"
 
     def _get_bruteforce_command(self, target: str) -> str:
         """
@@ -89,7 +90,8 @@ class PureDNSPlugin(ReconPlugin):
                 --resolvers-trusted {RESOLVERS_TRUSTED_FILE} \
                 --write-massdns /tmp/puredns_massdns.txt \
                 --write-wildcards /tmp/puredns_wildcards.txt \
-                --write /tmp/puredns.txt"
+                --write /tmp/puredns.txt \
+                -q"
 
     def resolve_target(self, target: str):
         """
