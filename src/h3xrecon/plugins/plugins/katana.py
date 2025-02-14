@@ -8,7 +8,6 @@ import json
 import asyncio
 import hashlib
 from bs4 import BeautifulSoup
-import re
 
 class KatanaPlugin(ReconPlugin):
     @property

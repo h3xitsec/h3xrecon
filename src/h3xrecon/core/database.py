@@ -1050,7 +1050,7 @@ class DatabaseManager():
                     update_fields.append(f"page_type: {current['page_type']} -> {page_type}")
                 if body_preview is not None and current['body_preview'] != body_preview:
                     needs_update = True
-                    update_fields.append(f"body_preview changed")
+                    update_fields.append("body_preview changed")
                 if resp_header_hash is not None and current['resp_header_hash'] != resp_header_hash:
                     needs_update = True
                     update_fields.append(f"resp_header_hash: {current['resp_header_hash']} -> {resp_header_hash}")
