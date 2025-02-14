@@ -8,7 +8,7 @@ import aiohttp
 import json
 import random
 import string
-
+import os
 async def is_wildcard(subdomain: str):
     RECORD_TYPE_CODES = {
         "A": 1,
@@ -221,7 +221,63 @@ def fetch_aws_cidr():
     return ip_prefixes
 
 
-def fetch_ip_prefixes_by_service():
+def fetch_oci_cidr():
+    try:
+        url = 'https://docs.oracle.com/en-us/iaas/tools/public_ip_ranges.json'
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Initialize the result structure
+        result = {
+            "oracle_cloud": {
+                "cidr": []
+            }
+        }
+        
+        # Extract all CIDR ranges from all regions
+        for region in data.get('regions', []):
+            for cidr_obj in region.get('cidrs', []):
+                if 'cidr' in cidr_obj:
+                    result['oracle_cloud']['cidr'].append(cidr_obj['cidr'])
+        
+        return result
+    except requests.RequestException as e:
+        print(f"Error fetching OCI data: {e}")
+        return {"oracle_cloud": {"cidr": []}}
+
+def fetch_google_cloud_cidr():
+    try:
+        url = 'https://www.gstatic.com/ipranges/cloud.json'
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Initialize the result structure
+        grouped_prefixes = {}
+        
+        # Process all prefixes
+        for prefix in data.get('prefixes', []):
+            service = prefix.get('service', '').lower().replace(' ', '_')
+            
+            # Skip if no service defined
+            if not service:
+                continue
+                
+            # Initialize service entry if not exists
+            if service not in grouped_prefixes:
+                grouped_prefixes[service] = {"cidr": [], "asn": []}
+            
+            # Add IPv4 prefix if present
+            if 'ipv4Prefix' in prefix:
+                grouped_prefixes[service]["cidr"].append(prefix['ipv4Prefix'])
+                    
+        return grouped_prefixes
+    except requests.RequestException as e:
+        print(f"Error fetching Google Cloud data: {e}")
+        return {}
+
+def fetch_aws_cidr():
     try:
         # Fetch the JSON data
         url = 'https://ip-ranges.amazonaws.com/ip-ranges.json'
@@ -249,6 +305,10 @@ def fetch_ip_prefixes_by_service():
         return {}
 
 WAF_CDN_PROVIDERS = {
+    'azure': {
+        'asn': [],
+        'cidr': open(os.path.join(os.path.dirname(__file__), 'wafcdn_ipranges/azure.txt')).read().splitlines()
+    },
     'cloudflare': {
         'asn': ['13335'],
         'cidr': [
@@ -354,17 +414,12 @@ WAF_CDN_PROVIDERS = {
         'asn': ['139057','149981'],
         'cidr': []
     },
-    'cloudfront': {
-        'asn': ['14618', '16509'],
-        'cidr': [
-            '205.251.192.0/19',
-            '204.246.164.0/22'
-        ]
-    },
-    **fetch_ip_prefixes_by_service()
+    **fetch_aws_cidr(),
+    **fetch_oci_cidr(),
+    **fetch_google_cloud_cidr()
 }
 
-async def is_waf_cdn_ip(ip: str) -> Dict[str, Any]:
+def is_waf_cdn_ip(ip: str) -> Dict[str, Any]:
     """
     Check if an IP belongs to a WAF or CDN provider.
     

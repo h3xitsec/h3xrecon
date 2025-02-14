@@ -55,7 +55,7 @@ class ReverseResolveIP(ReconPlugin):
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
         logger.debug(WAF_CDN_PROVIDERS.keys())
-        wafcdn_result = await is_waf_cdn_ip(output_msg.get('source', []).get('params', {}).get('target'))
+        wafcdn_result = is_waf_cdn_ip(output_msg.get('source', []).get('params', {}).get('target'))
         if wafcdn_result.get('is_waf_cdn'):
             cloud_provider = wafcdn_result.get('provider')
         else:
