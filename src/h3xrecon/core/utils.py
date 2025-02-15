@@ -296,6 +296,10 @@ WAF_CDN_PROVIDERS = {
         'asn': [],
         'cidr': open(os.path.join(os.path.dirname(__file__), 'wafcdn_ipranges/azure.txt')).read().splitlines()
     },
+    'digitalocean': {
+        'asn': [],
+        'cidr': open(os.path.join(os.path.dirname(__file__), 'wafcdn_ipranges/digitalocean.txt')).read().splitlines()
+    },
     'cloudflare': {
         'asn': ['13335'],
         'cidr': [
