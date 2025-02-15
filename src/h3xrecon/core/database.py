@@ -10,7 +10,7 @@ import dateutil.parser
 from dataclasses import dataclass
 from typing import Optional
 from h3xrecon.__about__ import __version__
-from h3xrecon.core.utils import parse_url
+from h3xrecon.core.utils import parse_url, is_waf_cdn_ip
 import json
 
 @dataclass
@@ -564,7 +564,16 @@ class DatabaseManager():
                     return DbResult(success=False, error=f"IPv6 addresses are not supported: {ip}")
             except ValueError as e:
                 return DbResult(success=False, error=f"Invalid IP address: {ip}")
-
+            if not cloud_provider:
+                logger.debug(f"Checking if IP {ip} is a WAF/CDN IP")
+                wafcdn_result = await is_waf_cdn_ip(ip)
+                if wafcdn_result.get('is_waf_cdn'):
+                    logger.debug(f"IP {ip} is a WAF/CDN IP, setting cloud_provider to {wafcdn_result.get('provider')}")
+                    cloud_provider = wafcdn_result.get('provider')
+                else:
+                    logger.debug(f"IP {ip} is not a WAF/CDN IP, setting cloud_provider to None")
+                    cloud_provider = None
+                
             result = await self._write_records(
                 '''
                 WITH updated_ip AS (
