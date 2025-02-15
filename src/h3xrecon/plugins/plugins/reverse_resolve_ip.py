@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_ip_data, send_domain_data, is_waf_cdn_ip, WAF_CDN_PROVIDERS
+from h3xrecon.plugins.helper import send_ip_data, send_domain_data
 from loguru import logger
 import asyncio
 import os
@@ -54,16 +54,10 @@ class ReverseResolveIP(ReconPlugin):
             raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        logger.debug(WAF_CDN_PROVIDERS.keys())
-        wafcdn_result = is_waf_cdn_ip(output_msg.get('source', []).get('params', {}).get('target'))
-        if wafcdn_result.get('is_waf_cdn'):
-            cloud_provider = wafcdn_result.get('provider')
-        else:
-            cloud_provider = None
         ip_data = output_msg.get('source', []).get('params', {}).get('target')
         ip_attributes = {
             "ptr": output_msg.get("data", []).get('domain'),
-            "cloud_provider": cloud_provider
+            "cloud_provider": None
         }
         await send_domain_data(qm=qm, 
                                data=output_msg.get("data", []).get('domain'), 
