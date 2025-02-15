@@ -52,7 +52,7 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
-      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource,redis-datasource
+      - GF_INSTALL_PLUGINS=redis-datasource,yesoreyeram-infinity-datasource
       - H3XRECON_DB_NAME
       - H3XRECON_DB_USER
       - H3XRECON_DB_PASS

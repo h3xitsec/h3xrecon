@@ -54,6 +54,7 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_INSTALL_PLUGINS=redis-datasource,yesoreyeram-infinity-datasource
     configs:
       - source: grafana-dashboards
         target: /etc/grafana/provisioning/dashboards/logs-dashboard.json
