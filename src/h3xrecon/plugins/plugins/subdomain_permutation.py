@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import send_domain_data, is_wildcard
+from h3xrecon.plugins.helper import send_domain_data, is_wildcard, batch_dispatch_jobs
 from h3xrecon.core.utils import is_valid_hostname, get_domain_from_url
 from loguru import logger
 import os
@@ -100,34 +100,28 @@ class SubdomainPermutation(ReconPlugin):
                 },
                 trigger_new_jobs=output_msg.get('trigger_new_jobs', True)
             )
-            # Dispatch puredns and dnsx jobs for the subdomains to test
-            if len(output_msg.get("data").get("to_test")) > 0:
-                logger.info(f"TRIGGERING JOB: puredns for {len(output_msg.get("data").get("to_test"))} subdomains to test")
-                for t in output_msg.get("data").get("to_test"):
-                    await qm.publish_message(
-                        subject="recon.input.puredns",
-                        stream="RECON_INPUT",
-                        message={
-                            "function_name": "puredns",
-                            "program_id": output_msg.get("program_id"),
-                            "params": {"target": t, "mode": "resolve"},
-                            "force": True,
-                            "execution_id": output_msg.get('execution_id', ""),
-                            "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
-                        }
-                    )
+            
+            # Dispatch puredns and dnsx jobs for the subdomains to test in batches
+            to_test = output_msg.get("data").get("to_test", [])
+            if len(to_test) > 0:
+                # logger.info(f"TRIGGERING JOB: puredns for {len(to_test)} subdomains to test")
+                # await batch_dispatch_jobs(
+                #     qm=qm,
+                #     items=to_test,
+                #     function_name="puredns",
+                #     program_id=output_msg.get("program_id"),
+                #     execution_id=output_msg.get('execution_id', ""),
+                #     chunk_size=50,
+                #     delay=0.1
+                # )
 
-                logger.info(f"TRIGGERING JOBS: dnsx for {len(output_msg.get("data").get("to_test"))} subdomains to test")
-                for t in output_msg.get("data").get("to_test"):
-                    await qm.publish_message(
-                    subject="recon.input.dnsx",
-                    stream="RECON_INPUT",
-                    message={
-                        "function_name": "dnsx",
-                        "program_id": output_msg.get("program_id"),
-                        "params": {"target": t},
-                        "force": True,
-                        "execution_id": output_msg.get('execution_id', ""),
-                        "trigger_new_jobs": output_msg.get('trigger_new_jobs', True)
-                    }
+                logger.info(f"TRIGGERING JOBS: dnsx for {len(to_test)} subdomains to test")
+                await batch_dispatch_jobs(
+                    qm=qm,
+                    items=to_test,
+                    function_name="dnsx",
+                    program_id=output_msg.get("program_id"),
+                    execution_id=output_msg.get('execution_id', ""),
+                    chunk_size=50,
+                    delay=0.1
                 )

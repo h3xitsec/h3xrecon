@@ -2,6 +2,8 @@ from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
 from loguru import logger
 import os
+from itertools import islice
+import asyncio
 
 class ExpandCIDR(ReconPlugin):
     @property
@@ -9,8 +11,18 @@ class ExpandCIDR(ReconPlugin):
         return os.path.splitext(os.path.basename(__file__))[0]
     
     @property
+    def timeout(self) -> int:
+        """Timeout in seconds for the plugin execution. Default is 300 seconds (5 minutes)."""
+        return 9999
+
+    @property
     def target_types(self) -> List[str]:
         return ["cidr"]
+
+    def chunks(self, lst, n):
+        """Yield successive n-sized chunks from lst."""
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
 
     async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
@@ -39,32 +51,28 @@ class ExpandCIDR(ReconPlugin):
         if stderr:
             logger.warning(f"prips stderr output: {stderr}")
         output = stdout.split()
-        # Dispatch reverse_resolve_ip tasks for each IP of the CIDR
-        for ip in output:
-            await qm.publish_message(
-                subject="recon.input.reverse_resolve_ip",
-                stream="RECON_INPUT",
-                message={
-                    "function_name": "reverse_resolve_ip",
-                    "program_id": program_id,
-                    "params": {"target": ip},
-                    "force": False,
-                    "trigger_new_jobs": False,
-                    "execution_id": execution_id
-                }
-            )
-        # message = {
-        #     "function_name": "reverse_resolve_ip",
-        #     "target": output
-        # }
-        # logger.debug(f"Yielding message: {message}")
-        # yield message
-        # # Make the parsing worker dispatch "amass" job for the CIDR
-        # message = {
-        #     "function_name": "amass",
-        #     "target": params.get("target", {})
-        # }
-        # logger.debug(f"Yielding message: {message}")
+        
+        # Process IPs in chunks of 100
+        CHUNK_SIZE = 100
+        for ip_chunk in self.chunks(output, CHUNK_SIZE):
+            logger.debug(f"Dispatching reverse_resolve_ip tasks for {len(ip_chunk)} IPs")
+            for ip in ip_chunk:
+                logger.debug(f"Dispatching reverse_resolve_ip task for IP: {ip}")
+                await qm.publish_message(
+                    subject="recon.input.reverse_resolve_ip",
+                    stream="RECON_INPUT",
+                    message={
+                        "function_name": "reverse_resolve_ip",
+                        "program_id": program_id,
+                        "params": {"target": ip},
+                        "force": False,
+                        "trigger_new_jobs": False,
+                        "execution_id": execution_id
+                    }
+                )
+            # Add a small delay between chunks to prevent overwhelming the queue
+            await asyncio.sleep(0.1)
+        
         yield {}
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:

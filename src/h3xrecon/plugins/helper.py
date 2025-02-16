@@ -7,6 +7,7 @@ import json
 import random
 import string
 import os
+import asyncio
 
 async def is_wildcard(subdomain: str):
     RECORD_TYPE_CODES = {
@@ -210,3 +211,39 @@ def parse_dns_record(record_line: str) -> dict:
         }
     except (IndexError, ValueError):
         return None
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+async def batch_dispatch_jobs(qm, items: List[str], function_name: str, program_id: int, execution_id: str, chunk_size: int = 100, delay: float = 0.1):
+    """Dispatch jobs in batches to prevent overwhelming the queue.
+    
+    Args:
+        qm: Queue manager instance
+        items: List of items to process
+        function_name: Name of the function to dispatch
+        program_id: Program ID
+        execution_id: Execution ID
+        chunk_size: Size of each batch (default: 100)
+        delay: Delay between batches in seconds (default: 0.1)
+    """
+    for item_chunk in chunks(items, chunk_size):
+        logger.debug(f"Dispatching {function_name} tasks for {len(item_chunk)} items")
+        for item in item_chunk:
+            logger.debug(f"Dispatching {function_name} task for item: {item}")
+            await qm.publish_message(
+                subject=f"recon.input.{function_name}",
+                stream="RECON_INPUT",
+                message={
+                    "function_name": function_name,
+                    "program_id": program_id,
+                    "params": {"target": item},
+                    "force": False,
+                    "trigger_new_jobs": False,
+                    "execution_id": execution_id
+                }
+            )
+        # Add a small delay between chunks to prevent overwhelming the queue
+        await asyncio.sleep(delay)

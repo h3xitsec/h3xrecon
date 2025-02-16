@@ -1,10 +1,9 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
-from h3xrecon.plugins.helper import unclutter_url_list
+from h3xrecon.plugins.helper import unclutter_url_list, batch_dispatch_jobs
 from h3xrecon.core.utils import is_valid_hostname
 from loguru import logger
 import os
-from time import sleep
 
 class GauPlugin(ReconPlugin):
     @property
@@ -44,56 +43,20 @@ class GauPlugin(ReconPlugin):
             logger.warning(f"unfurl stderr output: {stderr}")
         domains = stdout.splitlines()
         logger.debug(f"Domains: {domains}")
+        
+        # Dispatch httpx jobs for URLs in batches
         logger.info(f"DISPATCHING JOBS: httpx for {len(urls)} urls")
-        for url in urls:
-        # Dispatch httpx jobs for each url
-            await qm.publish_message(
-                subject="recon.input.httpx",
-                stream="RECON_INPUT",
-                message={
-                    "function_name": "httpx",
-                    "program_id": program_id,
-                    "params": {"target": url},
-                    "force": False,
-                    "execution_id": execution_id,
-                    "trigger_new_jobs": False
-                }
-            )
-            sleep(0.5)
-        # Dispatch puredns and dnsx jobs for each domain
-        for domain in domains:
-            logger.info(f"DISPATCHING JOB: puredns for {domain}")
-            await qm.publish_message(
-                subject="recon.input.puredns",
-                stream="RECON_INPUT",
-                message={
-                    "function_name": "puredns",
-                    "program_id": program_id,
-                    "params": {"target": domain, "mode": "resolve"},
-                    "force": False,
-                    "execution_id": execution_id,
-                    "trigger_new_jobs": False
-                }
-            )
-            sleep(0.5)
-        for domain in domains:
-            logger.info(f"DISPATCHING JOB: dnsx for {domain}")
-            await qm.publish_message(
-                subject="recon.input.dnsx",
-                stream="RECON_INPUT",
-                message={
-                    "function_name": "dnsx",
-                    "program_id": program_id,
-                    "params": {"target": domain},
-                    "force": False,
-                    "execution_id": execution_id,
-                    "trigger_new_jobs": False
-                }
-            )
-            sleep(0.5)
+        await batch_dispatch_jobs(qm, urls, "httpx", program_id, execution_id)
+        
+        # Dispatch puredns jobs for domains in batches
+        logger.info(f"DISPATCHING JOBS: puredns for {len(domains)} domains")
+        await batch_dispatch_jobs(qm, domains, "puredns", program_id, execution_id, chunk_size=50)
+        
+        # Dispatch dnsx jobs for domains in batches
+        logger.info(f"DISPATCHING JOBS: dnsx for {len(domains)} domains")
+        await batch_dispatch_jobs(qm, domains, "dnsx", program_id, execution_id, chunk_size=50)
+        
         yield {}
-        
-        
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:    
         return {}
