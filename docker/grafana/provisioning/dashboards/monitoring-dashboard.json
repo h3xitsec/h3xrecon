@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 11,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -71,7 +71,7 @@
         },
         "showHeader": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.1",
       "targets": [
         {
           "columns": [
@@ -142,6 +142,7 @@
       "id": 1,
       "options": {
         "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
         "enableLogDetails": false,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
@@ -150,13 +151,14 @@
         "sortOrder": "Ascending",
         "wrapLogMessage": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.1",
       "targets": [
         {
           "datasource": {
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
+          "direction": "backward",
           "editorMode": "builder",
           "expr": "{service_name=~\".*h3xrecon[_-]recon.*\"} !~ `^$` |= `$_recon_filter` |~ `(?P<loglevel>$_log_level)`",
           "queryType": "range",
@@ -168,75 +170,46 @@
     },
     {
       "datasource": {
-        "type": "redis-datasource",
-        "uid": "P65570902A02A9609"
+        "type": "loki",
+        "uid": "P8E80F9AEF21F6940"
       },
       "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
+        "defaults": {},
         "overrides": []
       },
       "gridPos": {
-        "h": 3,
+        "h": 25,
         "w": 6,
         "x": 0,
         "y": 8
       },
-      "id": 5,
+      "id": 6,
       "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
-          ],
-          "show": false
-        },
-        "showHeader": true
+        "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
+        "enableLogDetails": false,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": false,
+        "sortOrder": "Ascending",
+        "wrapLogMessage": true
       },
-      "pluginVersion": "11.3.0",
-      "repeat": "_status_keys",
-      "repeatDirection": "v",
+      "pluginVersion": "11.5.1",
       "targets": [
         {
-          "command": "get",
           "datasource": {
-            "type": "redis-datasource",
-            "uid": "P65570902A02A9609"
+            "type": "loki",
+            "uid": "P8E80F9AEF21F6940"
           },
-          "keyName": "$_status_keys",
-          "query": "",
-          "refId": "A",
-          "type": "command"
+          "editorMode": "builder",
+          "expr": "{service_name=~\".*h3xrecon[_-]data.*\"} |~ `(?P<inserted>INSERTED)`",
+          "queryType": "range",
+          "refId": "A"
         }
       ],
-      "title": "",
-      "type": "table"
+      "title": "New Assets",
+      "type": "logs"
     },
     {
       "datasource": {
@@ -256,6 +229,7 @@
       "id": 2,
       "options": {
         "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
         "enableLogDetails": false,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
@@ -264,7 +238,7 @@
         "sortOrder": "Ascending",
         "wrapLogMessage": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.1",
       "targets": [
         {
           "datasource": {
@@ -298,6 +272,7 @@
       "id": 3,
       "options": {
         "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
         "enableLogDetails": false,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
@@ -306,7 +281,7 @@
         "sortOrder": "Ascending",
         "wrapLogMessage": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.1",
       "targets": [
         {
           "datasource": {
@@ -320,48 +295,6 @@
         }
       ],
       "title": "Data Worker Logs",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 6,
-        "x": 0,
-        "y": 23
-      },
-      "id": 6,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": false,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": false,
-        "sortOrder": "Ascending",
-        "wrapLogMessage": true
-      },
-      "pluginVersion": "11.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "builder",
-          "expr": "{service_name=~\".*h3xrecon[_-]data.*\"} |~ `(?P<inserted>INSERTED)`",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "New Assets",
       "type": "logs"
     }
   ],
@@ -490,6 +423,6 @@
   "timezone": "browser",
   "title": "Monitoring",
   "uid": "de4vkriavjz7kd",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
