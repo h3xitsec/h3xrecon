@@ -18,7 +18,7 @@ class ReverseResolveIP(ReconPlugin):
     def target_types(self) -> List[str]:
         return ["ip"]
     
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, trigger_new_jobs: bool = True, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get('target', {})}")
         command = f"echo \"{params.get('target', {})}\" | dnsx -silent -nc -ptr -resp -j|jq -cr '.ptr[]'"
         

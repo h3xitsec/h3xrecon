@@ -28,7 +28,7 @@ class SubfinderPlugin(ReconPlugin):
                 params["target"] = params.get("target", {})
         return params
     
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, trigger_new_jobs: bool = True, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         command = f"subfinder -d {params.get('target', {})}"
         logger.debug(f"Running {self.name} on {params.get('target', {})} with command: {command}")
 
@@ -40,7 +40,16 @@ class SubfinderPlugin(ReconPlugin):
                 if is_valid_hostname(i):
                     logger.debug(f"Output: {i}")
                     valid_subdomains.append(i)
-            yield {"subdomain": valid_subdomains}
+            # Since no parsing is required, send the results directly to the data worker queue
+            if valid_subdomains:
+                await send_domain_data(qm=qm, 
+                                        data=valid_subdomains, 
+                                        program_id=program_id, 
+                                        execution_id=execution_id, 
+                                        trigger_new_jobs=trigger_new_jobs
+                                    )
+            
+            yield {}
   
         except Exception as e:
             logger.error(f"Error during {self.name} execution: {str(e)}")
@@ -49,10 +58,11 @@ class SubfinderPlugin(ReconPlugin):
             raise
     
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
-        for subdomain in output_msg.get("data", {}).get('subdomain', []):
-            await send_domain_data(qm=qm, 
-                                   data=subdomain, 
-                                   program_id=output_msg.get('program_id'), 
-                                   execution_id=output_msg.get('execution_id'), 
-                                   trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
+        # #for subdomain in output_msg.get("data", {}).get('subdomain', []):
+        # if output_msg.get("data", {}).get('subdomain', []):
+        #     await send_domain_data(qm=qm, 
+        #                            data=output_msg.get("data", {}).get('subdomain', []), 
+        #                            program_id=output_msg.get('program_id'), 
+        #                            execution_id=output_msg.get('execution_id'), 
+        #                            trigger_new_jobs=output_msg.get('trigger_new_jobs', True))
         return {}

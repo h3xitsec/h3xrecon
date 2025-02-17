@@ -1,9 +1,8 @@
 from typing import AsyncGenerator, Dict, Any, List
 from h3xrecon.plugins import ReconPlugin
+from h3xrecon.plugins.helper import batch_dispatch_jobs
 from loguru import logger
 import os
-from itertools import islice
-import asyncio
 
 class ExpandCIDR(ReconPlugin):
     @property
@@ -19,12 +18,7 @@ class ExpandCIDR(ReconPlugin):
     def target_types(self) -> List[str]:
         return ["cidr"]
 
-    def chunks(self, lst, n):
-        """Yield successive n-sized chunks from lst."""
-        for i in range(0, len(lst), n):
-            yield lst[i:i + n]
-
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, trigger_new_jobs: bool = True, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Expands the CIDR to individual IP addresses using prips and dispatches reverse_resolve_ip tasks.
         
@@ -50,28 +44,19 @@ class ExpandCIDR(ReconPlugin):
         stdout, stderr = self._create_subprocess_shell_sync(command)
         if stderr:
             logger.warning(f"prips stderr output: {stderr}")
-        output = stdout.split()
+        ips = stdout.split()
         
-        # Process IPs in chunks of 100
-        CHUNK_SIZE = 100
-        for ip_chunk in self.chunks(output, CHUNK_SIZE):
-            logger.debug(f"Dispatching reverse_resolve_ip tasks for {len(ip_chunk)} IPs")
-            for ip in ip_chunk:
-                logger.debug(f"Dispatching reverse_resolve_ip task for IP: {ip}")
-                await qm.publish_message(
-                    subject="recon.input.reverse_resolve_ip",
-                    stream="RECON_INPUT",
-                    message={
-                        "function_name": "reverse_resolve_ip",
-                        "program_id": program_id,
-                        "params": {"target": ip},
-                        "force": False,
-                        "trigger_new_jobs": False,
-                        "execution_id": execution_id
-                    }
-                )
-            # Add a small delay between chunks to prevent overwhelming the queue
-            await asyncio.sleep(0.1)
+        # Process IPs in chunks using the batch_dispatch_jobs helper
+        logger.debug(f"Dispatching reverse_resolve_ip tasks for {len(ips)} IPs")
+        await batch_dispatch_jobs(
+            qm=qm,
+            items=ips,
+            function_name="reverse_resolve_ip",
+            program_id=program_id,
+            execution_id=execution_id,
+            chunk_size=100,
+            delay=0.1
+        )
         
         yield {}
     

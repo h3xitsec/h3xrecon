@@ -119,7 +119,7 @@ class PureDNSPlugin(ReconPlugin):
         self.read_puredns_output()
 
     
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, trigger_new_jobs: bool = True, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         if not params.get("mode"):
             logger.error("Run mode not specified")
             return

@@ -25,7 +25,7 @@ class KatanaPlugin(ReconPlugin):
     async def is_input_valid(self, params: Dict[str, Any]) -> bool:
         return is_valid_url(params.get("target", {}))
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, trigger_new_jobs: bool = True, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} on {params.get("target", {})}")
         command = f"katana -u {params.get("target", {})} -d 5 -jc -jsl -j -ct {self.timeout}"
         process = await asyncio.create_subprocess_shell(

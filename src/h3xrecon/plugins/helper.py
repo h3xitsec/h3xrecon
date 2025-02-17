@@ -129,7 +129,7 @@ def log_sent_data(func):
             msg = {
                 "program_id": program_id,
                 "data_type": data_type,
-                "data": [data],
+                "data": data if isinstance(data, list) else [data],
                 "trigger_new_jobs": kwargs.get('trigger_new_jobs', True),
                 "execution_id": kwargs.get('execution_id', None),
                 "response_id": kwargs.get('response_id', None)

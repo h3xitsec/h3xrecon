@@ -8,7 +8,7 @@ class Sleep(ReconPlugin):
     def name(self) -> str:
         return os.path.splitext(os.path.basename(__file__))[0]
 
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, trigger_new_jobs: bool = True, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug(f"Running {self.name} for {params.get('target', {})} seconds")
         command = f"sleep {params.get('target', 45)} && echo 'sleep completed'"
         logger.debug(f"Running command: {command}")

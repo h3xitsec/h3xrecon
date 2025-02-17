@@ -24,7 +24,7 @@ class SubdomainPermutation(ReconPlugin):
                 params["target"] = params.get("target", {})
         return params
     
-    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute(self, params: Dict[str, Any], program_id: int = None, execution_id: str = None, trigger_new_jobs: bool = True, db = None, qm = None) -> AsyncGenerator[Dict[str, Any], None]:
         logger.debug("Checking if the target or its parent domain is a wildcard domain")
         target_wildcard, target_wildcard_type = await is_wildcard(params.get("target", {}))
         parent_domain = ".".join(params.get("target", {}).split(".")[1:])
