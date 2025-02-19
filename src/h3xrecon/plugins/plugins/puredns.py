@@ -19,7 +19,7 @@ class PureDNSPlugin(ReconPlugin):
     @property
     def timeout(self) -> int:
         """Timeout in seconds for the plugin execution. Default is 300 seconds (5 minutes)."""
-        return 30
+        return 900
     
     @property
     def target_types(self) -> List[str]:

@@ -38,12 +38,14 @@ class SubfinderPlugin(ReconPlugin):
             valid_subdomains = []
             for i in stdout.split("\n"):
                 if is_valid_hostname(i):
-                    logger.debug(f"Output: {i}")
                     valid_subdomains.append(i)
             # Since no parsing is required, send the results directly to the data worker queue
             if valid_subdomains:
-                await send_domain_data(qm=qm, 
-                                        data=valid_subdomains, 
+                # Split the valid subdomains into chunks of 50
+                valid_subdomains = [valid_subdomains[i:i+50] for i in range(0, len(valid_subdomains), 50)] if len(valid_subdomains) > 50 else [valid_subdomains]
+                for chunk in valid_subdomains:
+                    await send_domain_data(qm=qm, 
+                                        data=chunk, 
                                         program_id=program_id, 
                                         execution_id=execution_id, 
                                         trigger_new_jobs=trigger_new_jobs

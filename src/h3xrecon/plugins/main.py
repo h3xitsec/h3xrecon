@@ -44,39 +44,44 @@ class ReconPlugin(ABC):
         else:
             raise ValueError(f"Invalid target: {target}")
 
-    async def format_targets(self, target: str) -> List[str]:
+    async def format_targets(self, target) -> List[str]:
         """Format the targets for the plugin."""
         from h3xrecon.core.database import DatabaseManager
+        if not isinstance(target, list):
+            targets = [target]
+        else:
+            targets = target
         db = DatabaseManager()
         _fixed_targets = []
-        _target_type = self.get_target_type(target)
-        logger.debug(f"TARGET TYPE: {_target_type}")
+        for target in targets:
+            _target_type = self.get_target_type(targets[0])
+            logger.debug(f"TARGET TYPE: {_target_type}")
 
-        #If the target type is not in the target_types list, we need to fix it
-        if _target_type not in self.target_types:
-            logger.debug(f"TARGET TYPE NOT IN TARGET TYPES: {_target_type} not in {self.target_types}")
-            # URL target but need domain
-            if _target_type == "url" and 'url' not in self.target_types:
-                logger.debug(f"URL TARGET BUT NEED DOMAIN: {target}")
-                _fixed_targets.append(get_domain_from_url(target))
-                return _fixed_targets
-            # Domain target but need url, will fetch all websites with the same domain
-            elif _target_type == "domain" and 'url' in self.target_types and 'domain' not in self.target_types:
-                logger.debug(f"DOMAIN TARGET BUT NEED URL: {target}")
-                # Fetch all websites with the same domain
-                _websites = await db._fetch_records('''
-                    SELECT * FROM websites WHERE host = $1
-                ''', target)
-                if _websites.success and isinstance(_websites.data, list) and len(_websites.data) > 0:
-                    _fixed_targets += ([website.get('url') for website in _websites.data])
+            #If the target type is not in the target_types list, we need to fix it
+            if _target_type not in self.target_types:
+                logger.debug(f"TARGET TYPE NOT IN TARGET TYPES: {_target_type} not in {self.target_types}")
+                # URL target but need domain
+                if _target_type == "url" and 'url' not in self.target_types:
+                    logger.debug(f"URL TARGET BUT NEED DOMAIN: {target}")
+                    _fixed_targets.append(get_domain_from_url(target))
                     return _fixed_targets
-            elif _target_type == 'cidr':
-                logger.debug(f"CIDR TARGET: {target}")
+                # Domain target but need url, will fetch all websites with the same domain
+                elif _target_type == "domain" and 'url' in self.target_types and 'domain' not in self.target_types:
+                    logger.debug(f"DOMAIN TARGET BUT NEED URL: {target}")
+                    # Fetch all websites with the same domain
+                    _websites = await db._fetch_records('''
+                        SELECT * FROM websites WHERE host = $1
+                    ''', target)
+                    if _websites.success and isinstance(_websites.data, list) and len(_websites.data) > 0:
+                        _fixed_targets += ([website.get('url') for website in _websites.data])
+                        return _fixed_targets
+                elif _target_type == 'cidr':
+                    logger.debug(f"CIDR TARGET: {target}")
+                    _fixed_targets.append(target)
+                    return _fixed_targets
+            else:
+                logger.debug(f"TARGET TYPE IN TARGET TYPES: {_target_type} in {self.target_types}")
                 _fixed_targets.append(target)
-                return _fixed_targets
-        else:
-            logger.debug(f"TARGET TYPE IN TARGET TYPES: {_target_type} in {self.target_types}")
-            _fixed_targets.append(target)
         return _fixed_targets
 
     async def _read_subprocess_output(self, process: asyncio.subprocess.Process) -> AsyncGenerator[str, None]:

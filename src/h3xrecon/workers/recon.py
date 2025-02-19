@@ -326,7 +326,7 @@ class ReconWorker(Worker):
                 _fixed_targets = await plugin['format_targets'](recon_job_request.params['target'])
                 logger.debug(f"FIXED TARGETS: {_fixed_targets}")
             else:
-                _fixed_targets = [recon_job_request.params['target']]
+                _fixed_targets = recon_job_request.params['target'] if isinstance(recon_job_request.params['target'], list) else [recon_job_request.params['target']]
             result_count = 0
             for _target in _fixed_targets:
                 # Create a new params dictionary with the updated target
@@ -373,7 +373,7 @@ class ReconWorker(Worker):
                 await self.set_state(WorkerState.BUSY, f"{recon_job_request.function_name}:{new_recon_job_request.params.get('target')}:{recon_job_request.execution_id}")
                 try:
                     # Pass self as worker to the plugin's execute methodl
-                    execution = plugin['execute'](new_recon_job_request.params, recon_job_request.program_id, recon_job_request.execution_id, self.db, self.qm)
+                    execution = plugin['execute'](new_recon_job_request.params, recon_job_request.program_id, recon_job_request.execution_id, recon_job_request.trigger_new_jobs, self.db, self.qm)
                     if recon_job_request.debug_id:
                         debug_results = []
                     while True:

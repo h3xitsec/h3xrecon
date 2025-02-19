@@ -68,15 +68,18 @@ class SubdomainPermutation(ReconPlugin):
             to_test = [t for t in to_test if t.endswith(f".{params.get('target', '')}")]
         
         # Publish the message with the target, permutation list, and wildcard status
-        message = {
-            "target": params.get("target", {}),
-            "to_test": to_test,
-            "target_wildcard": target_wildcard,
-            "parent_wildcard": parent_wildcard,
-            "parent_domain": parent_domain
-        }
-        logger.debug(f"Publishing message: {message}")
-        yield message
+        # Split the permutation list into chunks of 50
+        to_test = [to_test[i:i+50] for i in range(0, len(to_test), 50)] if len(to_test) > 50 else [to_test]
+        for chunk in to_test:
+            message = {
+                "target": params.get("target", {}),
+                "to_test": chunk,
+                "target_wildcard": target_wildcard,
+                "parent_wildcard": parent_wildcard,
+                "parent_domain": parent_domain
+            }
+            logger.debug(f"Publishing message: {message}")
+            yield message
 
     async def process_output(self, output_msg: Dict[str, Any], db = None, qm = None) -> Dict[str, Any]:
             # Send the target and parent domain to data worker with the wildcard status

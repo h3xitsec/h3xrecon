@@ -231,19 +231,19 @@ async def batch_dispatch_jobs(qm, items: List[str], function_name: str, program_
     """
     for item_chunk in chunks(items, chunk_size):
         logger.debug(f"Dispatching {function_name} tasks for {len(item_chunk)} items")
-        for item in item_chunk:
-            logger.debug(f"Dispatching {function_name} task for item: {item}")
-            await qm.publish_message(
-                subject=f"recon.input.{function_name}",
-                stream="RECON_INPUT",
-                message={
-                    "function_name": function_name,
-                    "program_id": program_id,
-                    "params": {"target": item},
-                    "force": False,
-                    "trigger_new_jobs": False,
-                    "execution_id": execution_id
-                }
-            )
+        #for item in item_chunk:
+        logger.debug(f"Dispatching {function_name} task for item: {item_chunk}")
+        await qm.publish_message(
+            subject=f"recon.input.{function_name}",
+            stream="RECON_INPUT",
+            message={
+                "function_name": function_name,
+                "program_id": program_id,
+                "params": {"target": item_chunk},
+                "force": False,
+                "trigger_new_jobs": False,
+                "execution_id": execution_id
+            }
+        )
         # Add a small delay between chunks to prevent overwhelming the queue
         await asyncio.sleep(delay)
